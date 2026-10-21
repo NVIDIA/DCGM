@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ target_link_libraries(sysmon_interface
 target_link_libraries(sysmon_objects
     PRIVATE
         sysmon_interface
-        ${JSONCPP_STATIC_LIBS}
+        jsoncpp_static
 )
 
 set(SRCS 
@@ -49,7 +49,7 @@ target_link_libraries(dcgmmodulesysmon
         dcgm_entity_types
         dcgm_thread
         fmt::fmt
-        ${JSONCPP_STATIC_LIBS}
+        jsoncpp_static
 )
 target_sources(dcgmmodulesysmon
     PRIVATE

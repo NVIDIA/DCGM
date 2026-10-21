@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <array>
 #include <cerrno>
 #include <cstring>
 #include <dirent.h>
@@ -28,7 +29,6 @@
 #include "DcgmSystemMonitor.h"
 
 const std::string HWMON_BASE_PATH("/sys/class/hwmon");
-const std::string CPU_VENDOR_PATH("/sys/devices/soc0/soc_id");
 
 void DcgmSystemMonitor::Init()
 {
@@ -38,35 +38,56 @@ void DcgmSystemMonitor::Init()
 dcgmPowerFileInfo_t DcgmSystemMonitor::GetCpuSocketIdFromContents(const std::string &contents)
 {
     // We are looking for contents in the format: "CPU Power Socket <socketId>"
-    static const std::string CPU_POWER_SOCKET_BEGINNING("CPU Power Socket ");
-    static const std::string MODULE_POWER_SOCKET_BEGINNING("Module Power Socket ");
-    static const std::string SYSIO_POWER_SOCKET_BEGINNING("SysIO Power Socket ");
+    static const std::string GRACE_CPU_POWER_SOCKET_BEGINNING("CPU Power Socket ");
+    static const std::string GRACE_MODULE_POWER_SOCKET_BEGINNING("Module Power Socket ");
+    static const std::string GRACE_SYSIO_POWER_SOCKET_BEGINNING("SysIO Power Socket ");
     static const std::string GRACE_CAP_SOCKET_BEGINNING("Grace Power Socket ");
+    static const std::string VERA_CPU_POWER_SOCKET_BEGINNING("CPU Rail Power in uW socket ");
+    static const std::string VERA_SYSIO_POWER_SOCKET_BEGINNING("SOC Rail Power in uW socket ");
+    static const std::string VERA_CAP_SOCKET_BEGINNING("Total Power in uW socket ");
 
     std::string indexStr;
     dcgmPowerFileInfo_t info = { SYSMON_INVALID_SOCKET_ID, DCGM_POWER_USAGE_FILE, DCGM_CPU_POWER_SOCKET_FILE };
 
-    if (contents.starts_with(CPU_POWER_SOCKET_BEGINNING))
+    if (contents.starts_with(GRACE_CPU_POWER_SOCKET_BEGINNING))
     {
-        indexStr      = contents.substr(CPU_POWER_SOCKET_BEGINNING.size());
+        indexStr      = contents.substr(GRACE_CPU_POWER_SOCKET_BEGINNING.size());
         info.fileType = DCGM_POWER_USAGE_FILE;
         info.fileSrc  = DCGM_CPU_POWER_SOCKET_FILE;
     }
-    else if (contents.starts_with(MODULE_POWER_SOCKET_BEGINNING))
+    else if (contents.starts_with(GRACE_MODULE_POWER_SOCKET_BEGINNING))
     {
-        indexStr      = contents.substr(MODULE_POWER_SOCKET_BEGINNING.size());
+        indexStr      = contents.substr(GRACE_MODULE_POWER_SOCKET_BEGINNING.size());
         info.fileType = DCGM_POWER_USAGE_FILE;
         info.fileSrc  = DCGM_MODULE_POWER_SOCKET_FILE;
     }
-    else if (contents.starts_with(SYSIO_POWER_SOCKET_BEGINNING))
+    else if (contents.starts_with(GRACE_SYSIO_POWER_SOCKET_BEGINNING))
     {
-        indexStr      = contents.substr(SYSIO_POWER_SOCKET_BEGINNING.size());
+        indexStr      = contents.substr(GRACE_SYSIO_POWER_SOCKET_BEGINNING.size());
         info.fileType = DCGM_POWER_USAGE_FILE;
         info.fileSrc  = DCGM_SYSIO_POWER_SOCKET_FILE;
     }
     else if (contents.starts_with(GRACE_CAP_SOCKET_BEGINNING))
     {
         indexStr      = contents.substr(GRACE_CAP_SOCKET_BEGINNING.size());
+        info.fileType = DCGM_POWER_CAP_FILE;
+        info.fileSrc  = DCGM_CPU_POWER_SOCKET_FILE;
+    }
+    else if (contents.starts_with(VERA_CPU_POWER_SOCKET_BEGINNING))
+    {
+        indexStr      = contents.substr(VERA_CPU_POWER_SOCKET_BEGINNING.size());
+        info.fileType = DCGM_POWER_USAGE_FILE;
+        info.fileSrc  = DCGM_CPU_POWER_SOCKET_FILE;
+    }
+    else if (contents.starts_with(VERA_SYSIO_POWER_SOCKET_BEGINNING))
+    {
+        indexStr      = contents.substr(VERA_SYSIO_POWER_SOCKET_BEGINNING.size());
+        info.fileType = DCGM_POWER_USAGE_FILE;
+        info.fileSrc  = DCGM_SYSIO_POWER_SOCKET_FILE;
+    }
+    else if (contents.starts_with(VERA_CAP_SOCKET_BEGINNING))
+    {
+        indexStr      = contents.substr(VERA_CAP_SOCKET_BEGINNING.size());
         info.fileType = DCGM_POWER_CAP_FILE;
         info.fileSrc  = DCGM_CPU_POWER_SOCKET_FILE;
     }
@@ -112,6 +133,36 @@ void DcgmSystemMonitor::PopulateSocketPowerMap(const std::string &baseDir)
     static const std::string POWER_CAP_FILENAME("power1_cap");
     static const std::string POWER_OEM_INFO("power1_oem_info");
 
+    auto isPowerTelemetryPathValid = [&](std::string const &pathPrefix, dcgmPowerFileInfo_t const &info) {
+        if (info.socketId == SYSMON_INVALID_SOCKET_ID)
+        {
+            return false;
+        }
+
+        std::string_view powerFilename;
+        switch (info.fileType)
+        {
+            case DCGM_POWER_USAGE_FILE:
+                powerFilename = POWER_USAGE_FILENAME;
+                break;
+            case DCGM_POWER_CAP_FILE:
+                powerFilename = POWER_CAP_FILENAME;
+                break;
+            default:
+                return false;
+        }
+
+        auto const powerPath = fmt::format("{}/{}", pathPrefix, powerFilename);
+        std::ifstream powerFile(powerPath);
+        if (!powerFile.good())
+        {
+            SYSMON_LOG_IFSTREAM_DEBUG(powerPath, "power telemetry");
+            return false;
+        }
+
+        return true;
+    };
+
     if (m_cpuSocketToPowerUsagePath.empty() == false)
     {
         // Already populated
@@ -146,14 +197,31 @@ void DcgmSystemMonitor::PopulateSocketPowerMap(const std::string &baseDir)
             continue;
         }
 
-        auto pathPrefix = fmt::format("{}/{}/{}", baseDir, entry->d_name, POWER_PATH_EXTENSION);
+        auto const hwmonPathPrefix = fmt::format("{}/{}", baseDir, entry->d_name);
+        // Power files live under <hwmon>/device before kernel 6.15 and directly under <hwmon> from 6.15 on.
+        std::array const candidatePathPrefixes {
+            fmt::format("{}/{}", hwmonPathPrefix, POWER_PATH_EXTENSION),
+            hwmonPathPrefix,
+        };
 
-        std::string path = fmt::format("{}/{}", pathPrefix, POWER_OEM_INFO);
-
-        dcgmPowerFileInfo_t info = GetCpuSocketFileIndex(path);
-        if (info.socketId == SYSMON_INVALID_SOCKET_ID)
+        std::string pathPrefix;
+        dcgmPowerFileInfo_t info {};
+        for (auto const &candidatePathPrefix : candidatePathPrefixes)
         {
-            log_debug("Invalid socket ID. Skipping: '{}'", entry->d_name);
+            auto const candidateInfo = GetCpuSocketFileIndex(fmt::format("{}/{}", candidatePathPrefix, POWER_OEM_INFO));
+            if (!isPowerTelemetryPathValid(candidatePathPrefix, candidateInfo))
+            {
+                continue;
+            }
+
+            pathPrefix = candidatePathPrefix;
+            info       = candidateInfo;
+            break;
+        }
+
+        if (pathPrefix.empty())
+        {
+            log_debug("No complete power telemetry path found. Skipping: '{}'", entry->d_name);
             continue;
         }
 
@@ -223,6 +291,8 @@ double DcgmSystemMonitor::GetPowerValueFromFile(const std::string &path)
 
 dcgmReturn_t DcgmSystemMonitor::GetCurrentCPUPowerUsage(unsigned int socketId, double &usage)
 {
+    usage = DCGM_FP64_BLANK;
+
     if (m_cpuSocketToPowerUsagePath.count(socketId) == 0)
     {
         log_error("No path for reading power is known for socket {}", socketId);
@@ -244,6 +314,8 @@ dcgmReturn_t DcgmSystemMonitor::GetCurrentCPUPowerUsage(unsigned int socketId, d
 
 dcgmReturn_t DcgmSystemMonitor::GetCurrentSysIOPowerUsage(unsigned int socketId, double &usage)
 {
+    usage = DCGM_FP64_BLANK;
+
     if (m_sysioSocketToPowerUsagePath.count(socketId) == 0)
     {
         log_error("No path for reading power is known for socket {}", socketId);
@@ -265,6 +337,8 @@ dcgmReturn_t DcgmSystemMonitor::GetCurrentSysIOPowerUsage(unsigned int socketId,
 
 dcgmReturn_t DcgmSystemMonitor::GetCurrentModulePowerUsage(unsigned int socketId, double &usage)
 {
+    usage = DCGM_FP64_BLANK;
+
     if (m_moduleSocketToPowerUsagePath.count(socketId) == 0)
     {
         log_error("No path for reading power is known for socket {}", socketId);
@@ -286,6 +360,8 @@ dcgmReturn_t DcgmSystemMonitor::GetCurrentModulePowerUsage(unsigned int socketId
 
 dcgmReturn_t DcgmSystemMonitor::GetCurrentPowerCap(unsigned int socketId, double &cap)
 {
+    cap = DCGM_FP64_BLANK;
+
     if (m_socketToPowerCapPath.count(socketId) == 0)
     {
         log_error("No path for reading power is known for socket {}", socketId);

@@ -15,13 +15,14 @@
  */
 #include <catch2/catch_all.hpp>
 
-#include "DcgmiTestHelpers.hpp"
-#include "TestHelpers.hpp"
+#include <CerrCapture.hpp>
+#include <CoutCapture.hpp>
+#include <TempDir.hpp>
+#include <TempFile.hpp>
 
-#define DCGMI_TESTS
 #include <DcgmStringHelpers.h>
-#include <Defer.hpp>
 #include <Diag.h>
+#include <MockDcgmOps.h>
 #include <NvvsJsonStrings.h>
 #include <PluginStrings.h>
 #include <UniquePtrUtil.h>
@@ -30,20 +31,56 @@
 #include <json/json.h>
 
 #include <algorithm>
-#include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string_view>
-#include <unistd.h>
 
 std::ifstream::pos_type filesize(const std::string &filename);
 
-namespace tests
+namespace
 {
-namespace dcgmi
+/**
+ * Test adapter that exposes protected diagnostic display helpers and state.
+ */
+class TestDiag : public Diag
 {
-    Json::Value ParseJsonOutput(std::string const &jsonText)
+public:
+    using Diag::Diag;
+    using Diag::HelperBuildFailureMessage;
+    using Diag::HelperDisplayAsCli;
+    using Diag::HelperDisplayAsJson;
+    using Diag::HelperDisplayCategory;
+    using Diag::HelperDisplayCpuInfo;
+    using Diag::HelperDisplayDiagResult;
+    using Diag::HelperDisplayEntityResults;
+    using Diag::HelperDisplayFailureMessage;
+    using Diag::HelperDisplayGlobalResult;
+    using Diag::HelperDisplayMetadata;
+    using Diag::HelperDisplayTestVersions;
+    using Diag::HelperDisplayVersionAndDevIds;
+    using Diag::HelperJsonAddCategory;
+    using Diag::HelperJsonAddMetadata;
+    using Diag::HelperJsonAddTest;
+    using Diag::HelperJsonAddTestSummary;
+    using Diag::m_drd;
+    using Diag::m_embeddedHostEngine;
+    using Diag::m_hostname;
+    using Diag::m_iterations;
+    using Diag::m_jsonOutput;
+    using Diag::m_jsonTmpValue;
+
+    [[nodiscard]] std::string HelperDisplayDiagResultWarn(dcgmDiagResult_t val) const
+    {
+        return HelperDisplayDiagResult(val, DDR_DISPLAY_WARN);
+    }
+};
+
+struct DiagTestFixture
+{
+    static Json::Value ParseJsonOutput(std::string const &jsonText)
     {
         Json::Value root;
         Json::Reader reader;
@@ -52,7 +89,7 @@ namespace dcgmi
         return root;
     }
 
-    [[nodiscard]] size_t CountOccurrences(std::string_view haystack, std::string_view needle)
+    [[nodiscard]] static size_t CountOccurrences(std::string_view haystack, std::string_view needle)
     {
         size_t count = 0;
         size_t pos   = 0;
@@ -66,14 +103,14 @@ namespace dcgmi
         return count;
     }
 
-    dcgmDiagResponse_v12 MakeDiagResponse()
+    static std::unique_ptr<dcgmDiagResponse_v12> MakeDiagResponse()
     {
-        dcgmDiagResponse_v12 response {};
-        response.version = dcgmDiagResponse_version12;
+        auto response     = MakeUniqueZero<dcgmDiagResponse_v12>();
+        response->version = dcgmDiagResponse_version12;
         return response;
     }
 
-    void AddCategory(dcgmDiagResponse_v12 &response, unsigned int categoryIndex, char const *categoryName)
+    static void AddCategory(dcgmDiagResponse_v12 &response, unsigned int categoryIndex, char const *categoryName)
     {
         REQUIRE(categoryIndex < std::size(response.categories));
         SafeCopyTo(response.categories[categoryIndex], categoryName);
@@ -81,11 +118,11 @@ namespace dcgmi
             = static_cast<unsigned char>(std::max<unsigned int>(response.numCategories, categoryIndex + 1));
     }
 
-    dcgmDiagTestRun_v2 &AddTest(dcgmDiagResponse_v12 &response,
-                                unsigned int testIndex,
-                                char const *testName,
-                                unsigned int categoryIndex,
-                                dcgmDiagResult_t result)
+    static dcgmDiagTestRun_v2 &AddTest(dcgmDiagResponse_v12 &response,
+                                       unsigned int testIndex,
+                                       char const *testName,
+                                       unsigned int categoryIndex,
+                                       dcgmDiagResult_t result)
     {
         REQUIRE(testIndex < std::size(response.tests));
 
@@ -98,11 +135,11 @@ namespace dcgmi
         return test;
     }
 
-    dcgmDiagEntityResult_v1 &AddEntityResult(dcgmDiagResponse_v12 &response,
-                                             dcgmDiagTestRun_v2 &test,
-                                             unsigned int resultIndex,
-                                             dcgmGroupEntityPair_t entity,
-                                             dcgmDiagResult_t result)
+    static dcgmDiagEntityResult_v1 &AddEntityResult(dcgmDiagResponse_v12 &response,
+                                                    dcgmDiagTestRun_v2 &test,
+                                                    unsigned int resultIndex,
+                                                    dcgmGroupEntityPair_t entity,
+                                                    dcgmDiagResult_t result)
     {
         REQUIRE(resultIndex < std::size(response.results));
         REQUIRE(test.numResults < std::size(test.resultIndices));
@@ -117,12 +154,12 @@ namespace dcgmi
         return entityResult;
     }
 
-    dcgmDiagError_v1 &AddError(dcgmDiagResponse_v12 &response,
-                               dcgmDiagTestRun_v2 &test,
-                               unsigned int errorIndex,
-                               dcgmGroupEntityPair_t entity,
-                               char const *message,
-                               unsigned int code = DCGM_FR_INTERNAL)
+    static dcgmDiagError_v1 &AddError(dcgmDiagResponse_v12 &response,
+                                      dcgmDiagTestRun_v2 &test,
+                                      unsigned int errorIndex,
+                                      dcgmGroupEntityPair_t entity,
+                                      char const *message,
+                                      unsigned int code = DCGM_FR_INTERNAL)
     {
         REQUIRE(errorIndex < std::size(response.errors));
         REQUIRE(test.numErrors < std::size(test.errorIndices));
@@ -140,11 +177,11 @@ namespace dcgmi
         return error;
     }
 
-    dcgmDiagInfo_v1 &AddInfo(dcgmDiagResponse_v12 &response,
-                             dcgmDiagTestRun_v2 &test,
-                             unsigned int infoIndex,
-                             dcgmGroupEntityPair_t entity,
-                             char const *message)
+    static dcgmDiagInfo_v1 &AddInfo(dcgmDiagResponse_v12 &response,
+                                    dcgmDiagTestRun_v2 &test,
+                                    unsigned int infoIndex,
+                                    dcgmGroupEntityPair_t entity,
+                                    char const *message)
     {
         REQUIRE(infoIndex < std::size(response.info));
         REQUIRE(test.numInfo < std::size(test.infoIndices));
@@ -159,11 +196,11 @@ namespace dcgmi
         return info;
     }
 
-    dcgmDiagEntity_v1 &AddEntity(dcgmDiagResponse_v12 &response,
-                                 unsigned int entityIndex,
-                                 dcgmGroupEntityPair_t entity,
-                                 char const *skuDeviceId = "",
-                                 char const *serialNum   = DCGM_STR_BLANK)
+    static dcgmDiagEntity_v1 &AddEntity(dcgmDiagResponse_v12 &response,
+                                        unsigned int entityIndex,
+                                        dcgmGroupEntityPair_t entity,
+                                        char const *skuDeviceId = "",
+                                        char const *serialNum   = DCGM_STR_BLANK)
     {
         REQUIRE(entityIndex < std::size(response.entities));
 
@@ -177,91 +214,42 @@ namespace dcgmi
         return diagEntity;
     }
 
-    class StartDiagTestAdapter : public StartDiag
-    {
-    public:
-        using StartDiag::StartDiag;
-
-        dcgmReturn_t DoExecuteConnectedPublic()
-        {
-            return DoExecuteConnected();
-        }
-
-        dcgmReturn_t DoExecuteConnectionFailurePublic(dcgmReturn_t connectionStatus)
-        {
-            return DoExecuteConnectionFailure(connectionStatus);
-        }
-
-        void SetHandle(dcgmHandle_t handle)
-        {
-            m_dcgmHandle = handle;
-        }
-
-        [[nodiscard]] bool IsSilent() const
-        {
-            return m_silent;
-        }
-
-        [[nodiscard]] std::string const &HostName() const
-        {
-            return m_hostName;
-        }
-    };
-
-    class AbortDiagTestAdapter : public AbortDiag
-    {
-    public:
-        using AbortDiag::AbortDiag;
-
-        dcgmReturn_t DoExecuteConnectedPublic()
-        {
-            return DoExecuteConnected();
-        }
-
-        void SetHandle(dcgmHandle_t handle)
-        {
-            m_dcgmHandle = handle;
-        }
-
-        [[nodiscard]] std::string const &HostName() const
-        {
-            return m_hostName;
-        }
-    };
-} // namespace dcgmi
-} // namespace tests
+    DcgmNs::MockDcgmOps mockDcgmOps;
+    DcgmNs::DcgmOpsAnyPtr dcgmOps { &mockDcgmOps };
+};
+} // namespace
 
 TEST_CASE("Diag file helpers")
 {
     SECTION("filesize reports existing file size")
     {
-        TempFile tempFile("123456789");
+        auto tempFile = TempFile::Random("123456789");
 
-        REQUIRE(filesize(tempFile.Path()) == static_cast<std::ifstream::pos_type>(9));
+        REQUIRE(filesize(tempFile.Path().string()) == static_cast<std::ifstream::pos_type>(9));
     }
 
     SECTION("filesize reports empty file size")
     {
-        TempFile tempFile("");
+        auto tempFile = TempFile::Random("");
 
-        REQUIRE(filesize(tempFile.Path()) == static_cast<std::ifstream::pos_type>(0));
+        REQUIRE(filesize(tempFile.Path().string()) == static_cast<std::ifstream::pos_type>(0));
     }
 
     SECTION("filesize reports failure for missing file")
     {
-        std::stringstream path;
-        path << "/tmp/dcgmi_diagtests_missing_" << getpid();
-        std::remove(path.str().c_str());
+        auto tempDir    = TempDir::Random("dcgmi-diagtests-missing-");
+        auto const path = tempDir.Path() / "missing";
+        REQUIRE_FALSE(std::filesystem::exists(path));
 
-        REQUIRE(filesize(path.str()) == static_cast<std::ifstream::pos_type>(-1));
+        REQUIRE(filesize(path.string()) == static_cast<std::ifstream::pos_type>(-1));
     }
 }
 
-TEST_CASE("Diag construction and setters")
+TEST_CASE_METHOD(DiagTestFixture, "Diag construction and setters")
 {
     SECTION("Constructor initializes basic state")
     {
-        Diag diag(3, "test-host");
+        TestDiag diag(3, "test-host", dcgmOps);
 
         REQUIRE(diag.m_iterations == 3);
         REQUIRE(diag.m_hostname == "test-host");
@@ -274,8 +262,8 @@ TEST_CASE("Diag construction and setters")
 
     SECTION("Destructor handles default state")
     {
-        REQUIRE_NOTHROW([]() {
-            Diag diag(1, "localhost");
+        REQUIRE_NOTHROW([this]() {
+            TestDiag diag(1, "localhost", dcgmOps);
         }());
     }
 
@@ -290,7 +278,7 @@ TEST_CASE("Diag construction and setters")
         SafeCopyTo(drd.testNames[0], "memory");
         SafeCopyTo(drd.testParms[0], "memory.test_duration=30");
 
-        Diag diag(1, "localhost");
+        TestDiag diag(1, "localhost", dcgmOps);
         diag.setDcgmRunDiag(&drd);
 
         REQUIRE(diag.m_drd.version == dcgmRunDiag_version10);
@@ -309,7 +297,7 @@ TEST_CASE("Diag construction and setters")
 
     SECTION("setJsonOutput and SetEmbeddedHostEngine update flags")
     {
-        Diag diag(1, "localhost");
+        TestDiag diag(1, "localhost", dcgmOps);
 
         diag.setJsonOutput(true);
         diag.SetEmbeddedHostEngine(true);
@@ -323,22 +311,22 @@ TEST_CASE("Diag construction and setters")
     }
 }
 
-TEST_CASE("Diag::HelperDisplayDiagResult")
+TEST_CASE_METHOD(DiagTestFixture, "Diag::HelperDisplayDiagResult")
 {
-    Diag diag(1, "localhost");
+    TestDiag diag(1, "localhost", dcgmOps);
 
     REQUIRE(diag.HelperDisplayDiagResult(DCGM_DIAG_RESULT_PASS) == "Pass");
     REQUIRE(diag.HelperDisplayDiagResult(DCGM_DIAG_RESULT_SKIP) == "Skip");
     REQUIRE(diag.HelperDisplayDiagResult(DCGM_DIAG_RESULT_WARN) == "Fail");
-    REQUIRE(diag.HelperDisplayDiagResult(DCGM_DIAG_RESULT_WARN, Diag::DDR_DISPLAY_WARN) == "Warn");
+    REQUIRE(diag.HelperDisplayDiagResultWarn(DCGM_DIAG_RESULT_WARN) == "Warn");
     REQUIRE(diag.HelperDisplayDiagResult(DCGM_DIAG_RESULT_FAIL) == "Fail");
     REQUIRE(diag.HelperDisplayDiagResult(DCGM_DIAG_RESULT_NOT_RUN) == "Not Run");
     REQUIRE(diag.HelperDisplayDiagResult(static_cast<dcgmDiagResult_t>(99)) == "");
 }
 
-TEST_CASE("Diag JSON helper building blocks")
+TEST_CASE_METHOD(DiagTestFixture, "Diag JSON helper building blocks")
 {
-    Diag diag(1, "localhost");
+    TestDiag diag(1, "localhost", dcgmOps);
 
     SECTION("HelperJsonAddTest adds an entry at the requested index")
     {
@@ -376,17 +364,22 @@ TEST_CASE("Diag JSON helper building blocks")
 
     SECTION("HelperJsonAddMetadata emits versions only when present")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
         SafeCopyTo(response.dcgmVersion, "4.2.0");
         SafeCopyTo(response.driverVersion, "555.44");
 
-        dcgmDiagTestRun_v2 &gpuEud = tests::dcgmi::AddTest(response, 0, EUD_PLUGIN_NAME, 0, DCGM_DIAG_RESULT_PASS);
+        dcgmDiagTestRun_v2 &gpuEud = AddTest(response, 0, EUD_PLUGIN_NAME, 0, DCGM_DIAG_RESULT_PASS);
         gpuEud.auxData.version     = dcgmDiagTestAuxData_version;
         SafeCopyTo(gpuEud.auxData.data, "{\"version\":\"gpu-test\",\"eudPackageVersion\":\"gpu-package\"}");
 
-        dcgmDiagTestRun_v2 &cpuEud = tests::dcgmi::AddTest(response, 1, CPU_EUD_TEST_NAME, 0, DCGM_DIAG_RESULT_PASS);
+        dcgmDiagTestRun_v2 &cpuEud = AddTest(response, 1, CPU_EUD_TEST_NAME, 0, DCGM_DIAG_RESULT_PASS);
         cpuEud.auxData.version     = dcgmDiagTestAuxData_version;
         SafeCopyTo(cpuEud.auxData.data, "{\"version\":\"cpu-test\",\"eudPackageVersion\":\"cpu-package\"}");
+
+        dcgmDiagTestRun_v2 &cpuSdc = AddTest(response, 2, CPU_SDC_PLUGIN_NAME, 0, DCGM_DIAG_RESULT_PASS);
+        cpuSdc.auxData.version     = dcgmDiagTestAuxData_version;
+        SafeCopyTo(cpuSdc.auxData.data, "{\"version\":\"sdc-test\"}");
 
         Json::Value output;
         diag.HelperJsonAddMetadata(output, response);
@@ -397,11 +390,13 @@ TEST_CASE("Diag JSON helper building blocks")
         REQUIRE(output[NVVS_METADATA]["EUD Package Version"].asString() == "gpu-package");
         REQUIRE(output[NVVS_METADATA]["CPU EUD Test Version"].asString() == "cpu-test");
         REQUIRE(output[NVVS_METADATA]["CPU EUD Package Version"].asString() == "cpu-package");
+        REQUIRE(output[NVVS_METADATA]["CPU SDC Binary Version"].asString() == "sdc-test");
     }
 
     SECTION("HelperJsonAddMetadata leaves metadata absent when no fields are present")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
         Json::Value output;
 
         diag.HelperJsonAddMetadata(output, response);
@@ -411,11 +406,12 @@ TEST_CASE("Diag JSON helper building blocks")
 
     SECTION("HelperJsonAddTestSummary includes all test warnings")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        dcgmDiagTestRun_v2 &test      = tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_WARN);
-        tests::dcgmi::AddError(response, test, 0, { DCGM_FE_NONE, 0 }, "global warning");
-        tests::dcgmi::AddError(response, test, 1, { DCGM_FE_GPU, 0 }, "gpu warning");
-        tests::dcgmi::AddInfo(response, test, 0, { DCGM_FE_NONE, 0 }, "global info");
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        dcgmDiagTestRun_v2 &test       = AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_WARN);
+        AddError(response, test, 0, { DCGM_FE_NONE, 0 }, "global warning");
+        AddError(response, test, 1, { DCGM_FE_GPU, 0 }, "gpu warning");
+        AddInfo(response, test, 0, { DCGM_FE_NONE, 0 }, "global info");
 
         Json::Value category;
         diag.HelperJsonAddTestSummary(category, 0, test, response);
@@ -432,8 +428,9 @@ TEST_CASE("Diag JSON helper building blocks")
 
     SECTION("HelperJsonAddTestSummary skips NOT_RUN tests")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        dcgmDiagTestRun_v2 &test      = tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_NOT_RUN);
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        dcgmDiagTestRun_v2 &test       = AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_NOT_RUN);
         Json::Value category;
 
         diag.HelperJsonAddTestSummary(category, 0, test, response);
@@ -442,13 +439,15 @@ TEST_CASE("Diag JSON helper building blocks")
     }
 }
 
-SCENARIO("Diag::GetFailureResult")
+SCENARIO_METHOD(DiagTestFixture, "Diag::GetFailureResult")
 {
-    Diag d(1, "localhost");
+    mockDcgmOps.SetErrorPriorityByCode(DCGM_FR_VOLATILE_DBE_DETECTED, DCGM_ERROR_ISOLATE);
+    mockDcgmOps.SetErrorPriorityByCode(95, DCGM_ERROR_ISOLATE);
+    TestDiag d(1, "localhost", dcgmOps);
 
     SECTION("Diag::GetFailureResult")
     {
-        auto responseUptr              = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr              = MakeDiagResponse();
         dcgmDiagResponse_v12 &response = *(responseUptr.get());
         // Initialized to all zeros won't pass as no test references Software
 
@@ -562,14 +561,14 @@ SCENARIO("Diag::GetFailureResult")
     }
 }
 
-TEST_CASE("Diag::HelperJsonBuildOutput")
+TEST_CASE_METHOD(DiagTestFixture, "Diag::HelperJsonBuildOutput")
 {
     SECTION("Default Output")
     {
-        auto responseUptr                    = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr                    = MakeDiagResponse();
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);
@@ -577,9 +576,9 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
         REQUIRE(!output.isMember(NVVS_METADATA));
     }
 
-    SECTION("Has EUD and CPU EUD version")
+    SECTION("Has EUD, CPU EUD and CPU SDC version")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
@@ -592,9 +591,14 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
             response.tests[1].auxData.version = dcgmDiagTestAuxData_version;
             SafeCopyTo(response.tests[1].auxData.data, "{\"version\": \"eud_version\"}");
             response.numTests += 1;
+
+            SafeCopyTo(response.tests[2].name, "cpu_sdc");
+            response.tests[2].auxData.version = dcgmDiagTestAuxData_version;
+            SafeCopyTo(response.tests[2].auxData.data, "{\"version\": \"sdc_version\"}");
+            response.numTests += 1;
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
@@ -605,11 +609,13 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
         REQUIRE(output[NVVS_METADATA]["EUD Test Version"].asString() == "eud_version");
         REQUIRE(output[NVVS_METADATA].isMember("CPU EUD Test Version"));
         REQUIRE(output[NVVS_METADATA]["CPU EUD Test Version"].asString() == "cpu_eud_version");
+        REQUIRE(output[NVVS_METADATA].isMember("CPU SDC Binary Version"));
+        REQUIRE(output[NVVS_METADATA]["CPU SDC Binary Version"].asString() == "sdc_version");
     }
 
     SECTION("No EUD versions")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
@@ -621,7 +627,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
             SafeCopyTo(response.dcgmVersion, "4.0.0");
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
@@ -633,13 +639,13 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("Has DCGM version")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
             SafeCopyTo(response.dcgmVersion, "4.0.0");
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
@@ -652,13 +658,13 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("Has driver version")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
             SafeCopyTo(response.driverVersion, "545.29.06");
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
@@ -671,13 +677,13 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("No driver version")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
             SafeCopyTo(response.dcgmVersion, "4.2.0");
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
@@ -688,7 +694,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("Malformed EUD aux data is ignored")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
@@ -703,7 +709,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
             response.numTests += 1;
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, *responseUptr);
@@ -713,7 +719,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("Package versions are emitted independently of test versions")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
@@ -728,7 +734,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
             response.numTests += 1;
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, *responseUptr);
@@ -743,7 +749,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
     // DCGM-4396: JSON output: multiple 'null' entity groups in output
     SECTION("Non-first Entity Group")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
@@ -754,7 +760,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
             response.numEntities = 2;
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
@@ -770,7 +776,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
     // DCGM-4396: JSON output: multiple 'null' entity groups in output
     SECTION("Non-adjacent entity groups")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
@@ -781,7 +787,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
             response.numEntities = 2;
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
@@ -802,7 +808,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
     // DCGM-4396: JSON output: multiple 'null' entity groups in output
     SECTION("No entity groups in output when all entities are in group NONE")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
@@ -811,7 +817,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
             response.numEntities = 1;
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
@@ -824,7 +830,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
     // DCGM-4396: JSON output: multiple 'null' entity groups in output
     SECTION("Entities in group NONE excluded from output")
     {
-        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr = MakeDiagResponse();
         {
             dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
@@ -835,7 +841,7 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
             response.numEntities = 2;
         }
 
-        Diag d(1, "localhost");
+        TestDiag d(1, "localhost", dcgmOps);
         dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
@@ -849,13 +855,14 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
     }
 }
 
-TEST_CASE("Diag::InitializeDiagResponse")
+TEST_CASE_METHOD(DiagTestFixture, "Diag::InitializeDiagResponse")
 {
-    Diag diag(1, "localhost");
+    TestDiag diag(1, "localhost", dcgmOps);
 
     SECTION("Response is properly initialized")
     {
-        dcgmDiagResponse_v12 response;
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
         // Fill with garbage to ensure initialization works
         memset(&response, 0xFF, sizeof(response));
@@ -879,10 +886,11 @@ TEST_CASE("Diag::InitializeDiagResponse")
     }
 }
 
-TEST_CASE("Diag::HelperJsonAddResult")
+TEST_CASE_METHOD(DiagTestFixture, "Diag::HelperJsonAddResult")
 {
-    Diag diag(1, "localhost");
-    dcgmDiagResponse_v12 response  = {};
+    TestDiag diag(1, "localhost", dcgmOps);
+    auto responseUptr              = MakeDiagResponse();
+    dcgmDiagResponse_v12 &response = *(responseUptr.get());
     dcgmDiagTestRun_v2 test        = {};
     dcgmDiagEntityResult_v1 result = {};
     Json::Value resultEntry;
@@ -1077,13 +1085,13 @@ TEST_CASE("Diag::HelperJsonAddResult")
     }
 }
 
-TEST_CASE("Diag::HelperJsonAddEntities")
+TEST_CASE_METHOD(DiagTestFixture, "Diag::HelperJsonAddEntities")
 {
-    Diag diag(1, "localhost");
+    TestDiag diag(1, "localhost", dcgmOps);
 
     SECTION("Entity serials are only emitted when present")
     {
-        auto responseUptr              = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto responseUptr              = MakeDiagResponse();
         dcgmDiagResponse_v12 &response = *responseUptr;
         Json::Value output;
 
@@ -1105,12 +1113,12 @@ TEST_CASE("Diag::HelperJsonAddEntities")
     }
 }
 
-TEST_CASE("Diag::HelperDisplayFailureMessage")
+TEST_CASE_METHOD(DiagTestFixture, "Diag::HelperDisplayFailureMessage")
 {
     SECTION("Text output writes the plain failure message")
     {
-        Diag diag(1, "localhost");
-        StdoutRedirect redirect;
+        TestDiag diag(1, "localhost", dcgmOps);
+        CoutCapture redirect;
 
         diag.HelperDisplayFailureMessage("plain failure", DCGM_ST_OK);
 
@@ -1119,32 +1127,72 @@ TEST_CASE("Diag::HelperDisplayFailureMessage")
 
     SECTION("JSON output writes runtime_error")
     {
-        Diag diag(1, "localhost");
+        TestDiag diag(1, "localhost", dcgmOps);
         diag.setJsonOutput(true);
-        StdoutRedirect redirect;
+        CoutCapture redirect;
 
         diag.HelperDisplayFailureMessage("json failure", DCGM_ST_BADPARAM);
 
-        Json::Value output = tests::dcgmi::ParseJsonOutput(redirect.GetOutput());
+        Json::Value output = ParseJsonOutput(redirect.GetOutput());
         REQUIRE(output[NVVS_NAME][NVVS_RUNTIME_ERROR].asString() == "json failure");
         REQUIRE(output[NVVS_NAME].isMember(NVVS_VERSION_STR));
     }
 }
 
-TEST_CASE("Diag metadata display helpers")
+TEST_CASE_METHOD(DiagTestFixture, "Diag::HelperBuildFailureMessage")
 {
-    Diag diag(1, "localhost");
+    TestDiag diag(1, "localhost", dcgmOps);
+
+    dcgmRunDiag_v10 drd {};
+    drd.version = dcgmRunDiag_version10;
+    drd.groupId = DCGM_GROUP_NULL;
+    SafeCopyTo(drd.entityIds, "*,cpu:*");
+    diag.setDcgmRunDiag(&drd);
+
+    SECTION("system errors follow generic bad parameter text and return code")
+    {
+        auto responseUptr         = MakeDiagResponse();
+        auto &response            = *(responseUptr.get());
+        response.numErrors        = 1;
+        response.errors[0].testId = DCGM_DIAG_RESPONSE_SYSTEM_ERROR;
+        SafeCopyTo(response.errors[0].msg, "Expected 2 GPUs, but found 1 GPU selected for the diagnostic.");
+
+        auto const output = diag.HelperBuildFailureMessage(response, DCGM_ST_BADPARAM);
+
+        CHECK(output.find("Unable to complete diagnostic for entities *,cpu:*") != std::string::npos);
+        CHECK(output.find("Bad parameter passed to function") != std::string::npos);
+        CHECK(output.find("Expected 2 GPUs, but found 1 GPU selected for the diagnostic.") != std::string::npos);
+        // system error must come after the return-code line
+        CHECK(output.find("Bad parameter passed to function") < output.find("Expected 2 GPUs"));
+    }
+
+    SECTION("generic text remains the fallback without system errors")
+    {
+        auto responseUptr = MakeDiagResponse();
+        auto &response    = *(responseUptr.get());
+
+        auto const output = diag.HelperBuildFailureMessage(response, DCGM_ST_BADPARAM);
+
+        CHECK(output.find("Unable to complete diagnostic for entities *,cpu:*") != std::string::npos);
+        CHECK(output.find("Bad parameter passed to function") != std::string::npos);
+    }
+}
+
+TEST_CASE_METHOD(DiagTestFixture, "Diag metadata display helpers")
+{
+    TestDiag diag(1, "localhost", dcgmOps);
 
     SECTION("HelperDisplayVersionAndDevIds emits DCGM, driver, and entity device ids")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
         SafeCopyTo(response.dcgmVersion, "4.2.0");
         SafeCopyTo(response.driverVersion, "555.44");
-        tests::dcgmi::AddEntity(response, 0, { DCGM_FE_GPU, 0 }, "G0");
-        tests::dcgmi::AddEntity(response, 1, { DCGM_FE_GPU, 1 }, "G1");
-        tests::dcgmi::AddEntity(response, 2, { DCGM_FE_CPU, 0 }, "C0");
+        AddEntity(response, 0, { DCGM_FE_GPU, 0 }, "G0");
+        AddEntity(response, 1, { DCGM_FE_GPU, 1 }, "G1");
+        AddEntity(response, 2, { DCGM_FE_CPU, 0 }, "C0");
 
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayVersionAndDevIds(response);
 
         std::string const output = redirect.GetOutput();
@@ -1160,10 +1208,11 @@ TEST_CASE("Diag metadata display helpers")
 
     SECTION("HelperDisplayCpuInfo emits nothing when no CPUs are present")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        tests::dcgmi::AddEntity(response, 0, { DCGM_FE_GPU, 0 });
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        AddEntity(response, 0, { DCGM_FE_GPU, 0 });
 
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayCpuInfo(response);
 
         REQUIRE(redirect.GetOutput().empty());
@@ -1171,12 +1220,13 @@ TEST_CASE("Diag metadata display helpers")
 
     SECTION("HelperDisplayCpuInfo emits CPU count")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        tests::dcgmi::AddEntity(response, 0, { DCGM_FE_CPU, 0 });
-        tests::dcgmi::AddEntity(response, 1, { DCGM_FE_CPU, 1 });
-        tests::dcgmi::AddEntity(response, 2, { DCGM_FE_GPU, 0 });
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        AddEntity(response, 0, { DCGM_FE_CPU, 0 });
+        AddEntity(response, 1, { DCGM_FE_CPU, 1 });
+        AddEntity(response, 2, { DCGM_FE_GPU, 0 });
 
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayCpuInfo(response);
 
         std::string const output = redirect.GetOutput();
@@ -1184,19 +1234,24 @@ TEST_CASE("Diag metadata display helpers")
         REQUIRE(output.contains("2"));
     }
 
-    SECTION("HelperDisplayEudTestsVersion emits GPU and CPU EUD metadata")
+    SECTION("HelperDisplayTestVersions emits GPU EUD, CPU EUD, and CPU SDC metadata")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        dcgmDiagTestRun_v2 &gpuEud    = tests::dcgmi::AddTest(response, 0, EUD_PLUGIN_NAME, 0, DCGM_DIAG_RESULT_PASS);
-        gpuEud.auxData.version        = dcgmDiagTestAuxData_version;
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        dcgmDiagTestRun_v2 &gpuEud     = AddTest(response, 0, EUD_PLUGIN_NAME, 0, DCGM_DIAG_RESULT_PASS);
+        gpuEud.auxData.version         = dcgmDiagTestAuxData_version;
         SafeCopyTo(gpuEud.auxData.data, "{\"version\":\"gpu-test\",\"eudPackageVersion\":\"gpu-package\"}");
 
-        dcgmDiagTestRun_v2 &cpuEud = tests::dcgmi::AddTest(response, 1, CPU_EUD_TEST_NAME, 0, DCGM_DIAG_RESULT_PASS);
+        dcgmDiagTestRun_v2 &cpuEud = AddTest(response, 1, CPU_EUD_TEST_NAME, 0, DCGM_DIAG_RESULT_PASS);
         cpuEud.auxData.version     = dcgmDiagTestAuxData_version;
         SafeCopyTo(cpuEud.auxData.data, "{\"version\":\"cpu-test\",\"eudPackageVersion\":\"cpu-package\"}");
 
-        StdoutRedirect redirect;
-        diag.HelperDisplayEudTestsVersion(response);
+        dcgmDiagTestRun_v2 &cpuSdc = AddTest(response, 2, CPU_SDC_PLUGIN_NAME, 0, DCGM_DIAG_RESULT_PASS);
+        cpuSdc.auxData.version     = dcgmDiagTestAuxData_version;
+        SafeCopyTo(cpuSdc.auxData.data, "{\"version\":\"sdc-test\"}");
+
+        CoutCapture redirect;
+        diag.HelperDisplayTestVersions(response);
 
         std::string const output = redirect.GetOutput();
         REQUIRE(output.contains("EUD Test Version"));
@@ -1207,18 +1262,21 @@ TEST_CASE("Diag metadata display helpers")
         REQUIRE(output.contains("cpu-test"));
         REQUIRE(output.contains("CPU EUD Package Version"));
         REQUIRE(output.contains("cpu-package"));
+        REQUIRE(output.contains("CPU SDC Binary Version"));
+        REQUIRE(output.contains("sdc-test"));
     }
 
     SECTION("HelperDisplayMetadata combines version, CPU, and EUD sections")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
         SafeCopyTo(response.dcgmVersion, "4.2.0");
-        tests::dcgmi::AddEntity(response, 0, { DCGM_FE_CPU, 0 });
-        dcgmDiagTestRun_v2 &gpuEud = tests::dcgmi::AddTest(response, 0, EUD_PLUGIN_NAME, 0, DCGM_DIAG_RESULT_PASS);
+        AddEntity(response, 0, { DCGM_FE_CPU, 0 });
+        dcgmDiagTestRun_v2 &gpuEud = AddTest(response, 0, EUD_PLUGIN_NAME, 0, DCGM_DIAG_RESULT_PASS);
         gpuEud.auxData.version     = dcgmDiagTestAuxData_version;
         SafeCopyTo(gpuEud.auxData.data, "{\"version\":\"gpu-test\"}");
 
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayMetadata(response);
 
         std::string const output = redirect.GetOutput();
@@ -1231,20 +1289,21 @@ TEST_CASE("Diag metadata display helpers")
     }
 }
 
-TEST_CASE("Diag result display helpers")
+TEST_CASE_METHOD(DiagTestFixture, "Diag result display helpers")
 {
-    Diag diag(1, "localhost");
+    TestDiag diag(1, "localhost", dcgmOps);
 
     SECTION("HelperDisplayGlobalResult emits global warnings and hides info when not verbose")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        dcgmDiagTestRun_v2 &test      = tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_WARN);
-        tests::dcgmi::AddError(response, test, 0, { DCGM_FE_NONE, 0 }, "global warning");
-        tests::dcgmi::AddError(response, test, 1, { DCGM_FE_GPU, 0 }, "gpu warning should be hidden");
-        tests::dcgmi::AddInfo(response, test, 0, { DCGM_FE_NONE, 0 }, "global info should be hidden");
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        dcgmDiagTestRun_v2 &test       = AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_WARN);
+        AddError(response, test, 0, { DCGM_FE_NONE, 0 }, "global warning");
+        AddError(response, test, 1, { DCGM_FE_GPU, 0 }, "gpu warning should be hidden");
+        AddInfo(response, test, 0, { DCGM_FE_NONE, 0 }, "global info should be hidden");
 
         CommandOutputController view;
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayGlobalResult(view, response, test, false);
 
         std::string const output = redirect.GetOutput();
@@ -1257,13 +1316,14 @@ TEST_CASE("Diag result display helpers")
 
     SECTION("HelperDisplayGlobalResult emits global info when verbose")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        dcgmDiagTestRun_v2 &test      = tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
-        tests::dcgmi::AddInfo(response, test, 0, { DCGM_FE_NONE, 0 }, "global info");
-        tests::dcgmi::AddInfo(response, test, 1, { DCGM_FE_GPU, 0 }, "gpu info should be hidden");
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        dcgmDiagTestRun_v2 &test       = AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
+        AddInfo(response, test, 0, { DCGM_FE_NONE, 0 }, "global info");
+        AddInfo(response, test, 1, { DCGM_FE_GPU, 0 }, "gpu info should be hidden");
 
         CommandOutputController view;
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayGlobalResult(view, response, test, true);
 
         std::string const output = redirect.GetOutput();
@@ -1275,16 +1335,17 @@ TEST_CASE("Diag result display helpers")
 
     SECTION("HelperDisplayEntityResults emits entity-specific warnings and hides info when not verbose")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        dcgmDiagTestRun_v2 &test      = tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_FAIL);
-        tests::dcgmi::AddEntityResult(response, test, 0, { DCGM_FE_GPU, 0 }, DCGM_DIAG_RESULT_FAIL);
-        tests::dcgmi::AddEntityResult(response, test, 1, { DCGM_FE_GPU, 1 }, DCGM_DIAG_RESULT_PASS);
-        tests::dcgmi::AddError(response, test, 0, { DCGM_FE_GPU, 0 }, "gpu0 warning");
-        tests::dcgmi::AddError(response, test, 1, { DCGM_FE_GPU, 1 }, "gpu1 warning");
-        tests::dcgmi::AddInfo(response, test, 0, { DCGM_FE_GPU, 0 }, "gpu0 info should be hidden");
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        dcgmDiagTestRun_v2 &test       = AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_FAIL);
+        AddEntityResult(response, test, 0, { DCGM_FE_GPU, 0 }, DCGM_DIAG_RESULT_FAIL);
+        AddEntityResult(response, test, 1, { DCGM_FE_GPU, 1 }, DCGM_DIAG_RESULT_PASS);
+        AddError(response, test, 0, { DCGM_FE_GPU, 0 }, "gpu0 warning");
+        AddError(response, test, 1, { DCGM_FE_GPU, 1 }, "gpu1 warning");
+        AddInfo(response, test, 0, { DCGM_FE_GPU, 0 }, "gpu0 info should be hidden");
 
         CommandOutputController view;
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayEntityResults(view, response, test, false);
 
         std::string const output = redirect.GetOutput();
@@ -1297,14 +1358,15 @@ TEST_CASE("Diag result display helpers")
 
     SECTION("HelperDisplayEntityResults emits entity-specific info when verbose")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        dcgmDiagTestRun_v2 &test      = tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
-        tests::dcgmi::AddEntityResult(response, test, 0, { DCGM_FE_GPU, 0 }, DCGM_DIAG_RESULT_PASS);
-        tests::dcgmi::AddInfo(response, test, 0, { DCGM_FE_GPU, 0 }, "gpu0 info");
-        tests::dcgmi::AddInfo(response, test, 1, { DCGM_FE_GPU, 1 }, "gpu1 info should be hidden");
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        dcgmDiagTestRun_v2 &test       = AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
+        AddEntityResult(response, test, 0, { DCGM_FE_GPU, 0 }, DCGM_DIAG_RESULT_PASS);
+        AddInfo(response, test, 0, { DCGM_FE_GPU, 0 }, "gpu0 info");
+        AddInfo(response, test, 1, { DCGM_FE_GPU, 1 }, "gpu1 info should be hidden");
 
         CommandOutputController view;
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayEntityResults(view, response, test, true);
 
         std::string const output = redirect.GetOutput();
@@ -1315,17 +1377,18 @@ TEST_CASE("Diag result display helpers")
 
     SECTION("HelperDisplayGlobalResult and HelperDisplayEntityResults ignore out-of-range indices")
     {
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        dcgmDiagTestRun_v2 &test      = tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
-        test.errorIndices[0]          = DCGM_DIAG_RESPONSE_ERRORS_MAX;
-        test.numErrors                = 1;
-        test.infoIndices[0]           = DCGM_DIAG_RESPONSE_INFO_MAX_V2;
-        test.numInfo                  = 1;
-        test.resultIndices[0]         = DCGM_DIAG_RESPONSE_RESULTS_MAX;
-        test.numResults               = 1;
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        dcgmDiagTestRun_v2 &test       = AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
+        test.errorIndices[0]           = DCGM_DIAG_RESPONSE_ERRORS_MAX;
+        test.numErrors                 = 1;
+        test.infoIndices[0]            = DCGM_DIAG_RESPONSE_INFO_MAX_V2;
+        test.numInfo                   = 1;
+        test.resultIndices[0]          = DCGM_DIAG_RESPONSE_RESULTS_MAX;
+        test.numResults                = 1;
 
         CommandOutputController view;
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayGlobalResult(view, response, test, true);
         diag.HelperDisplayEntityResults(view, response, test, true);
 
@@ -1337,21 +1400,22 @@ TEST_CASE("Diag result display helpers")
     }
 }
 
-TEST_CASE("Diag category and top-level display helpers")
+TEST_CASE_METHOD(DiagTestFixture, "Diag category and top-level display helpers")
 {
     SECTION("HelperDisplayCategory emits matching category header once")
     {
-        Diag diag(1, "localhost");
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        tests::dcgmi::AddCategory(response, 0, PLUGIN_CATEGORY_HW);
-        tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
-        tests::dcgmi::AddTest(response, 1, "diagnostic", 0, DCGM_DIAG_RESULT_SKIP);
+        TestDiag diag(1, "localhost", dcgmOps);
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        AddCategory(response, 0, PLUGIN_CATEGORY_HW);
+        AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
+        AddTest(response, 1, "diagnostic", 0, DCGM_DIAG_RESULT_SKIP);
 
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayCategory(PLUGIN_CATEGORY_HW, "Category Header\n", response);
 
         std::string const output = redirect.GetOutput();
-        REQUIRE(tests::dcgmi::CountOccurrences(output, "Category Header") == 1);
+        REQUIRE(CountOccurrences(output, "Category Header") == 1);
         REQUIRE(output.contains("memory"));
         REQUIRE(output.contains("diagnostic"));
         REQUIRE(output.contains("Pass"));
@@ -1360,12 +1424,13 @@ TEST_CASE("Diag category and top-level display helpers")
 
     SECTION("HelperDisplayCategory emits nothing for non-matching category")
     {
-        Diag diag(1, "localhost");
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        tests::dcgmi::AddCategory(response, 0, PLUGIN_CATEGORY_HW);
-        tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
+        TestDiag diag(1, "localhost", dcgmOps);
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        AddCategory(response, 0, PLUGIN_CATEGORY_HW);
+        AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
 
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         diag.HelperDisplayCategory(PLUGIN_CATEGORY_STRESS, "Category Header\n", response);
 
         REQUIRE(redirect.GetOutput().empty());
@@ -1373,13 +1438,14 @@ TEST_CASE("Diag category and top-level display helpers")
 
     SECTION("HelperDisplayAsCli emits complete CLI output")
     {
-        Diag diag(1, "localhost");
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
+        TestDiag diag(1, "localhost", dcgmOps);
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
         SafeCopyTo(response.dcgmVersion, "4.2.0");
-        tests::dcgmi::AddCategory(response, 0, PLUGIN_CATEGORY_HW);
-        tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
+        AddCategory(response, 0, PLUGIN_CATEGORY_HW);
+        AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
 
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         dcgmReturn_t result = diag.HelperDisplayAsCli(response);
 
         std::string const output = redirect.GetOutput();
@@ -1393,16 +1459,17 @@ TEST_CASE("Diag category and top-level display helpers")
 
     SECTION("HelperDisplayAsJson writes JSON for a single iteration")
     {
-        Diag diag(1, "localhost");
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        tests::dcgmi::AddCategory(response, 0, PLUGIN_CATEGORY_HW);
-        dcgmDiagTestRun_v2 &test = tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
-        tests::dcgmi::AddEntityResult(response, test, 0, { DCGM_FE_GPU, 0 }, DCGM_DIAG_RESULT_PASS);
+        TestDiag diag(1, "localhost", dcgmOps);
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        AddCategory(response, 0, PLUGIN_CATEGORY_HW);
+        dcgmDiagTestRun_v2 &test = AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
+        AddEntityResult(response, test, 0, { DCGM_FE_GPU, 0 }, DCGM_DIAG_RESULT_PASS);
 
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         dcgmReturn_t result = diag.HelperDisplayAsJson(response);
 
-        Json::Value output = tests::dcgmi::ParseJsonOutput(redirect.GetOutput());
+        Json::Value output = ParseJsonOutput(redirect.GetOutput());
         REQUIRE(result == DCGM_ST_OK);
         REQUIRE(output[NVVS_NAME][NVVS_HEADERS].size() == 1);
         REQUIRE(output[NVVS_NAME][NVVS_HEADERS][0][NVVS_HEADER].asString() == PLUGIN_CATEGORY_HW);
@@ -1412,12 +1479,13 @@ TEST_CASE("Diag category and top-level display helpers")
 
     SECTION("HelperDisplayAsJson stores JSON for iterative output")
     {
-        Diag diag(2, "localhost");
-        dcgmDiagResponse_v12 response = tests::dcgmi::MakeDiagResponse();
-        tests::dcgmi::AddCategory(response, 0, PLUGIN_CATEGORY_HW);
-        tests::dcgmi::AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
+        TestDiag diag(2, "localhost", dcgmOps);
+        auto responseUptr              = MakeDiagResponse();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
+        AddCategory(response, 0, PLUGIN_CATEGORY_HW);
+        AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
 
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         dcgmReturn_t result = diag.HelperDisplayAsJson(response);
 
         REQUIRE(result == DCGM_ST_OK);
@@ -1434,7 +1502,7 @@ TEST_CASE("Diag::DisplayVerboseInfo")
 
     SECTION("Whitespace-only content produces no output")
     {
-        StdoutRedirect redirect;
+        CoutCapture redirect;
 
         Diag::DisplayVerboseInfo(cmdView, "Info", " \n\t\r ");
 
@@ -1443,7 +1511,7 @@ TEST_CASE("Diag::DisplayVerboseInfo")
 
     SECTION("Long content is sanitized and wrapped across multiple rows")
     {
-        StdoutRedirect redirect;
+        CoutCapture redirect;
         std::string const rawMessage = "prefix*** 01234567890123456789012345678901234567890123456789 ";
 
         Diag::DisplayVerboseInfo(cmdView, "Warning", rawMessage);
@@ -1456,28 +1524,20 @@ TEST_CASE("Diag::DisplayVerboseInfo")
     }
 }
 
-SCENARIO("StartDiag constructor: config file is populated when both -p and -c are provided")
+SCENARIO_METHOD(DiagTestFixture, "StartDiag constructor: config file is populated when both -p and -c are provided")
 {
-    constexpr std::string_view c_tmpPath        = "/tmp/dcgmi_test_startdiag_config.yaml";
     constexpr std::string_view c_configContents = "globals:\n  logfile: /tmp/nvvs.log\n";
     constexpr std::string_view c_validParms     = "memory.test_duration=30";
 
     GIVEN("both a valid params string and a config file")
     {
-        std::ofstream f(c_tmpPath.data());
-        if (!f.is_open())
-        {
-            FAIL("could not create temp config file: " << c_tmpPath);
-        }
-        f << c_configContents;
-        f.close();
-        DcgmNs::Defer cleanup([&]() { std::remove(c_tmpPath.data()); });
-        dcgmRunDiag_v10 drd = {};
+        auto configFile = TempFile::Random(c_configContents, "dcgmi-test-startdiag-config-");
+        dcgmRunDiag_v10 drd {};
 
         WHEN("StartDiag is constructed")
         {
-            REQUIRE_NOTHROW(
-                StartDiag("localhost", false, std::string(c_validParms), std::string(c_tmpPath), false, drd, 1));
+            REQUIRE_NOTHROW(StartDiag(
+                "localhost", false, std::string(c_validParms), configFile.Path().string(), false, drd, 1, dcgmOps));
             THEN("configFileContents is populated")
             {
                 CHECK(std::string(drd.configFileContents) == c_configContents);

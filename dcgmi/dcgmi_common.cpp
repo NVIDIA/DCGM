@@ -38,7 +38,8 @@
 dcgmReturn_t dcgmi_create_entity_group(dcgmHandle_t dcgmHandle,
                                        dcgmGroupType_t groupType,
                                        dcgmGpuGrp_t *groupId,
-                                       std::vector<dcgmGroupEntityPair_t> &entityList)
+                                       std::vector<dcgmGroupEntityPair_t> &entityList,
+                                       DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t dcgmReturn;
     static int numGroupsCreated = 0;
@@ -48,7 +49,7 @@ dcgmReturn_t dcgmi_create_entity_group(dcgmHandle_t dcgmHandle,
 
     snprintf(groupName, sizeof(groupName) - 1, "dcgmi_%u_%d", myPid, ++numGroupsCreated);
 
-    dcgmReturn = dcgmGroupCreate(dcgmHandle, groupType, groupName, groupId);
+    dcgmReturn = dcgmOps->dcgmGroupCreate(dcgmHandle, groupType, groupName, groupId);
     if (dcgmReturn != DCGM_ST_OK)
     {
         SHOW_AND_LOG_ERROR << "Got error while creating a GPU group: " << dcgmReturn << " " << errorString(dcgmReturn);
@@ -57,7 +58,8 @@ dcgmReturn_t dcgmi_create_entity_group(dcgmHandle_t dcgmHandle,
 
     for (i = 0; i < entityList.size(); i++)
     {
-        dcgmReturn = dcgmGroupAddEntity(dcgmHandle, *groupId, entityList[i].entityGroupId, entityList[i].entityId);
+        dcgmReturn
+            = dcgmOps->dcgmGroupAddEntity(dcgmHandle, *groupId, entityList[i].entityGroupId, entityList[i].entityId);
         if (dcgmReturn != DCGM_ST_OK)
         {
             SHOW_AND_LOG_ERROR << "Error: Got error " << dcgmReturn << " " << errorString(dcgmReturn) << " while "
@@ -134,16 +136,23 @@ dcgmReturn_t dcgmi_parse_field_id_list_string(std::string input, std::vector<uns
 /*******************************************************************************/
 dcgmReturn_t dcgmi_create_field_group(dcgmHandle_t dcgmHandle,
                                       dcgmFieldGrp_t *groupId,
-                                      std::vector<unsigned short> &fieldIds)
+                                      std::vector<unsigned short> const &fieldIds,
+                                      DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t dcgmReturn;
     static int numGroupsCreated = 0;
     unsigned int myPid          = (unsigned int)getpid();
     char groupName[32]          = { 0 };
 
+    if (fieldIds.empty())
+    {
+        SHOW_AND_LOG_ERROR << "Error: Cannot create a Field Group with no field IDs.";
+        return DCGM_ST_BADPARAM;
+    }
+
     snprintf(groupName, sizeof(groupName) - 1, "dcgmi_%u_%d", myPid, ++numGroupsCreated);
 
-    dcgmReturn = dcgmFieldGroupCreate(dcgmHandle, fieldIds.size(), &fieldIds[0], groupName, groupId);
+    dcgmReturn = dcgmOps->dcgmFieldGroupCreate(dcgmHandle, fieldIds.size(), fieldIds.data(), groupName, groupId);
     if (dcgmReturn != DCGM_ST_OK)
     {
         SHOW_AND_LOG_ERROR << "Got error while creating a Field Group: " << errorString(dcgmReturn);

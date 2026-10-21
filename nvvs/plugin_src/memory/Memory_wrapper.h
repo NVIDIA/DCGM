@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,14 @@
 #include <string>
 #include <vector>
 
-#include "CudaCommon.h"
+#include "CudaCommonAnyUniquePtr.hpp"
 #include "Plugin.h"
 #include "PluginCommon.h"
 #include "TestParameters.h"
 
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <NvvsStructs.h>
 #include <PluginInterface.h>
 #include <dcgm_structs.h>
@@ -33,7 +36,11 @@
 class Memory : public Plugin
 {
 public:
-    Memory(dcgmHandle_t handle);
+    Memory(dcgmHandle_t handle,
+           DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+           CudaOpsAnyUniquePtr cudaOps,
+           CudaCommonAnyUniquePtr cudaCommon,
+           NvvsCommon *nvvsCommon);
     ~Memory()
     {}
 
@@ -43,9 +50,13 @@ public:
             dcgmDiagPluginTestParameter_t const *testParameters) override;
 
     std::string GetMemoryTestName() const;
-    dcgmHandle_t GetHandle();
 
 private:
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique; //!< Owned DCGM API interface.
+    CudaOpsAnyUniquePtr m_cudaOps;
+    CudaCommonAnyUniquePtr m_cudaCommon;
+    //! NVVS common state
+    NvvsCommon *m_nvvsCommon;
     dcgmHandle_t m_handle;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
     std::unique_ptr<TestParameters> m_defaultTestParameters;

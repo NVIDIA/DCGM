@@ -1,0 +1,5 @@
+/usr/bin/nv-hostengine
+/usr/lib/systemd/system/nvidia-dcgm.service
+/usr/sbin/gather-dcgm-logs.sh
+/usr/share/licenses/nv-hostengine-<BASEPACKAGEVERSION>
+/usr/share/licenses/nv-hostengine-<BASEPACKAGEVERSION>/LICENSE

@@ -14,18 +14,24 @@
  * limitations under the License.
  */
 #include "DcgmiSettings.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
+
 #include "dcgmi_common.h"
+
 #include <DcgmLogging.h>
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
+
 #include <sstream>
+#include <utility>
 
 
 /*****************************************************************************/
 DcgmiSettingsSetLoggingSeverity::DcgmiSettingsSetLoggingSeverity(const std::string &hostname,
                                                                  const std::string &targetLogger,
                                                                  const std::string &targetSeverity,
-                                                                 const bool outputAsJson)
+                                                                 const bool outputAsJson,
+                                                                 DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
 {
     m_hostName      = hostname;
     mTargetLogger   = targetLogger;
@@ -55,10 +61,13 @@ dcgmReturn_t DcgmiSettingsSetLoggingSeverity::DoExecuteConnected()
     logging.targetSeverity
         = (DcgmLoggingSeverity_t)LoggingSeverityFromString(mTargetSeverity.c_str(), DcgmLoggingSeverityWarning);
 
-    return dcgmHostengineSetLoggingSeverity(m_dcgmHandle, &logging);
+    return m_dcgmOps->dcgmHostengineSetLoggingSeverity(m_dcgmHandle, &logging);
 }
 
-DcgmiSettingsAttachDetachDriver::DcgmiSettingsAttachDetachDriver(std::string hostname, bool attach)
+DcgmiSettingsAttachDetachDriver::DcgmiSettingsAttachDetachDriver(std::string hostname,
+                                                                 bool attach,
+                                                                 DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
 {
     m_hostName = std::move(hostname);
     m_attach   = attach;
@@ -68,10 +77,10 @@ dcgmReturn_t DcgmiSettingsAttachDetachDriver::DoExecuteConnected()
 {
     if (m_attach)
     {
-        return dcgmAttachDriver(m_dcgmHandle);
+        return m_dcgmOps->dcgmAttachDriver(m_dcgmHandle);
     }
     else
     {
-        return dcgmDetachDriver(m_dcgmHandle);
+        return m_dcgmOps->dcgmDetachDriver(m_dcgmHandle);
     }
 }

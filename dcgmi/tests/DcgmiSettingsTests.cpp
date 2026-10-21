@@ -16,35 +16,20 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "TestHelpers.hpp"
+#include <CerrCapture.hpp>
+#include <CoutCapture.hpp>
 
 #include <DcgmLogging.h>
 #include <DcgmiSettings.h>
+#include <MockDcgmOps.h>
 #include <dcgm_agent.h>
+
+#include <catch2/catch_all.hpp>
+
+#include <memory>
 
 namespace
 {
-struct SettingsApiState
-{
-    dcgmReturn_t setLoggingReturn = DCGM_ST_OK;
-    dcgmReturn_t attachReturn     = DCGM_ST_OK;
-    dcgmReturn_t detachReturn     = DCGM_ST_OK;
-
-    int setLoggingCallCount = 0;
-    int attachCallCount     = 0;
-    int detachCallCount     = 0;
-
-    dcgmHandle_t lastHandle {};
-    dcgmSettingsSetLoggingSeverity_t lastLogging {};
-};
-
-SettingsApiState g_settingsApi;
-
-void ResetSettingsApi()
-{
-    g_settingsApi = {};
-}
-
 class TestSetLoggingSeverity : public DcgmiSettingsSetLoggingSeverity
 {
 public:
@@ -70,38 +55,16 @@ public:
 };
 } //namespace
 
-extern "C" dcgmReturn_t dcgmHostengineSetLoggingSeverity(dcgmHandle_t handle, dcgmSettingsSetLoggingSeverity_t *logging)
-{
-    g_settingsApi.setLoggingCallCount++;
-    g_settingsApi.lastHandle  = handle;
-    g_settingsApi.lastLogging = *logging;
-    return g_settingsApi.setLoggingReturn;
-}
-
-extern "C" dcgmReturn_t dcgmAttachDriver(dcgmHandle_t handle)
-{
-    g_settingsApi.attachCallCount++;
-    g_settingsApi.lastHandle = handle;
-    return g_settingsApi.attachReturn;
-}
-
-extern "C" dcgmReturn_t dcgmDetachDriver(dcgmHandle_t handle)
-{
-    g_settingsApi.detachCallCount++;
-    g_settingsApi.lastHandle = handle;
-    return g_settingsApi.detachReturn;
-}
-
 TEST_CASE("DcgmiSettings")
 {
-    ResetSettingsApi();
+    DcgmNs::MockDcgmOps mockDcgmOps;
     auto handle = static_cast<dcgmHandle_t>(0x5e);
 
     SECTION("logging severity")
     {
         GIVEN("a valid logger and severity")
         {
-            TestSetLoggingSeverity command("localhost", DCGM_LOGGING_LOGGER_STRING_BASE, "WARN", false);
+            TestSetLoggingSeverity command("localhost", DCGM_LOGGING_LOGGER_STRING_BASE, "WARN", false, &mockDcgmOps);
 
             WHEN("the command runs")
             {
@@ -110,18 +73,19 @@ TEST_CASE("DcgmiSettings")
                 THEN("the hostengine logging API receives translated settings")
                 {
                     CHECK(result == DCGM_ST_OK);
-                    CHECK(g_settingsApi.setLoggingCallCount == 1);
-                    CHECK(g_settingsApi.lastHandle == handle);
-                    CHECK(g_settingsApi.lastLogging.version == dcgmSettingsSetLoggingSeverity_version);
-                    CHECK(g_settingsApi.lastLogging.targetLogger == BASE_LOGGER);
-                    CHECK(g_settingsApi.lastLogging.targetSeverity == DcgmLoggingSeverityWarning);
+                    CHECK(mockDcgmOps.m_hostEngineState.setLoggingCallCount == 1);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastSettingsHandle == handle);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastLogging.version == dcgmSettingsSetLoggingSeverity_version);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastLogging.targetLogger == BASE_LOGGER);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastLogging.targetSeverity == DcgmLoggingSeverityWarning);
                 }
             }
         }
 
         GIVEN("an invalid severity")
         {
-            TestSetLoggingSeverity command("localhost", DCGM_LOGGING_LOGGER_STRING_BASE, "very-loud", false);
+            TestSetLoggingSeverity command(
+                "localhost", DCGM_LOGGING_LOGGER_STRING_BASE, "very-loud", false, &mockDcgmOps);
 
             WHEN("the command runs")
             {
@@ -131,7 +95,7 @@ TEST_CASE("DcgmiSettings")
                 THEN("bad parameter is returned before the hostengine call")
                 {
                     CHECK(result == DCGM_ST_BADPARAM);
-                    CHECK(g_settingsApi.setLoggingCallCount == 0);
+                    CHECK(mockDcgmOps.m_hostEngineState.setLoggingCallCount == 0);
                     CHECK(capture.str().find("Invalid severity string") != std::string::npos);
                 }
             }
@@ -139,7 +103,7 @@ TEST_CASE("DcgmiSettings")
 
         GIVEN("an invalid logger")
         {
-            TestSetLoggingSeverity command("localhost", "CONSOLE", "WARN", false);
+            TestSetLoggingSeverity command("localhost", "CONSOLE", "WARN", false, &mockDcgmOps);
 
             WHEN("the command runs")
             {
@@ -149,7 +113,7 @@ TEST_CASE("DcgmiSettings")
                 THEN("bad parameter is returned before the hostengine call")
                 {
                     CHECK(result == DCGM_ST_BADPARAM);
-                    CHECK(g_settingsApi.setLoggingCallCount == 0);
+                    CHECK(mockDcgmOps.m_hostEngineState.setLoggingCallCount == 0);
                     CHECK(capture.str().find("Invalid logger string") != std::string::npos);
                 }
             }
@@ -157,8 +121,8 @@ TEST_CASE("DcgmiSettings")
 
         GIVEN("the hostengine rejects a valid logging request")
         {
-            g_settingsApi.setLoggingReturn = DCGM_ST_NOT_SUPPORTED;
-            TestSetLoggingSeverity command("localhost", DCGM_LOGGING_LOGGER_STRING_SYSLOG, "ERROR", true);
+            mockDcgmOps.m_hostEngineState.setLoggingReturn = DCGM_ST_NOT_SUPPORTED;
+            TestSetLoggingSeverity command("localhost", DCGM_LOGGING_LOGGER_STRING_SYSLOG, "ERROR", true, &mockDcgmOps);
 
             WHEN("the command runs")
             {
@@ -167,9 +131,9 @@ TEST_CASE("DcgmiSettings")
                 THEN("the hostengine return code is propagated")
                 {
                     CHECK(result == DCGM_ST_NOT_SUPPORTED);
-                    CHECK(g_settingsApi.setLoggingCallCount == 1);
-                    CHECK(g_settingsApi.lastLogging.targetLogger == SYSLOG_LOGGER);
-                    CHECK(g_settingsApi.lastLogging.targetSeverity == DcgmLoggingSeverityError);
+                    CHECK(mockDcgmOps.m_hostEngineState.setLoggingCallCount == 1);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastLogging.targetLogger == SYSLOG_LOGGER);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastLogging.targetSeverity == DcgmLoggingSeverityError);
                 }
             }
         }
@@ -179,7 +143,7 @@ TEST_CASE("DcgmiSettings")
     {
         GIVEN("an attach command")
         {
-            TestAttachDetachDriver command("localhost", true);
+            TestAttachDetachDriver command("localhost", true, &mockDcgmOps);
 
             WHEN("the command runs")
             {
@@ -188,17 +152,17 @@ TEST_CASE("DcgmiSettings")
                 THEN("dcgmAttachDriver is called")
                 {
                     CHECK(result == DCGM_ST_OK);
-                    CHECK(g_settingsApi.attachCallCount == 1);
-                    CHECK(g_settingsApi.detachCallCount == 0);
-                    CHECK(g_settingsApi.lastHandle == handle);
+                    CHECK(mockDcgmOps.m_hostEngineState.attachCallCount == 1);
+                    CHECK(mockDcgmOps.m_hostEngineState.detachCallCount == 0);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastSettingsHandle == handle);
                 }
             }
         }
 
         GIVEN("a detach command")
         {
-            g_settingsApi.detachReturn = DCGM_ST_GENERIC_ERROR;
-            TestAttachDetachDriver command("localhost", false);
+            mockDcgmOps.m_hostEngineState.detachReturn = DCGM_ST_GENERIC_ERROR;
+            TestAttachDetachDriver command("localhost", false, &mockDcgmOps);
 
             WHEN("the command runs")
             {
@@ -207,9 +171,9 @@ TEST_CASE("DcgmiSettings")
                 THEN("dcgmDetachDriver is called and its result is returned")
                 {
                     CHECK(result == DCGM_ST_GENERIC_ERROR);
-                    CHECK(g_settingsApi.attachCallCount == 0);
-                    CHECK(g_settingsApi.detachCallCount == 1);
-                    CHECK(g_settingsApi.lastHandle == handle);
+                    CHECK(mockDcgmOps.m_hostEngineState.attachCallCount == 0);
+                    CHECK(mockDcgmOps.m_hostEngineState.detachCallCount == 1);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastSettingsHandle == handle);
                 }
             }
         }

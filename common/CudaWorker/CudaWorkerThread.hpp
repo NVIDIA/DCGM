@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,11 @@
 #pragma once
 
 #include <chrono>
+#include <memory>
 
+#include "FieldWorkerFactoryAnyUniquePtr.hpp"
 #include "FieldWorkers.hpp"
+#include <CudaOpsAnyPtr.hpp>
 #include <DcgmTaskRunner.h>
 
 using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
@@ -28,9 +31,12 @@ class CudaWorkerThread : DcgmTaskRunner
 public:
     /*************************************************************************/
     /**
-     * Constructor
+     * Construct a CUDA worker thread.
+     *
+     * @param[in] cudaOps Borrowed CUDA API interface.
+     * @param[in] fieldWorkerFactory Factory used to create profiling-field workers.
      */
-    CudaWorkerThread();
+    CudaWorkerThread(CudaOpsAnyPtr cudaOps, FieldWorkerFactoryAnyUniquePtr fieldWorkerFactory);
 
     /*************************************************************************/
     /**
@@ -183,10 +189,12 @@ private:
     std::chrono::milliseconds m_runInterval {}; /*!< Last result of the latest successful DoOneDutyCycle() function call
                                                  * made in the TryRunOnce method. */
 
-    std::unique_ptr<FieldWorkerBase> m_fieldWorker; /* Currently active Per-fieldId Worker class */
+    std::string m_cudaPeerBusId; /* PCI bus ID of our peer GPU */
+
+    CudaOpsAnyPtr m_cudaOps;                             //!< Borrowed CUDA API interface.
+    FieldWorkerFactoryAnyUniquePtr m_fieldWorkerFactory; //!< Factory used to create profiling-field workers.
+    std::unique_ptr<FieldWorkerBase> m_fieldWorker;      /* Currently active per-field worker. */
 
     std::atomic<double> m_achievedLoad
         = 0.0; /* Currently achieved workload snapshotted from m_fieldWorker->GetAchievedLoad() */
-
-    std::string m_cudaPeerBusId; /* PCI bus ID of our peer GPU */
 };

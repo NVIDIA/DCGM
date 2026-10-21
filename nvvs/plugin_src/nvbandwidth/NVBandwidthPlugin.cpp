@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 #include "NVBandwidthPlugin.h"
-#include "NVBandwidthResult.h"
 #include "NvvsCommon.h"
 #include "dcgm_structs.h"
 
+#include <CudaCompatibility.h>
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <DcgmStringHelpers.h>
 #include <HangDetectMonitor.h>
+#include <NvBandwidthOutputParser.hpp>
 #include <PluginCommon.h>
-#include <TestFramework.h>
 #include <chrono>
 #include <dlfcn.h>
 #include <errno.h>
@@ -32,82 +34,17 @@
 #include <sys/wait.h>
 #include <system_error>
 #include <thread>
-
-namespace
-{
-/*************************************************************************/
-/*
- * Sanitize the output from the nvbandwidth binary
- */
-std::string_view sanitizeOutput(std::string_view output)
-{
-    auto isOnlyCharInLine = [](std::string_view line, char c) {
-        if (line.empty())
-        {
-            return false;
-        }
-        return line.find_first_not_of("\t") == line.find(c) && line.find_last_not_of("\t\n") == line.find(c);
-    };
-
-    size_t start = std::string_view::npos;
-    size_t end   = std::string_view::npos;
-    size_t pos   = 0;
-
-    // Find the start position of the valid json object
-    while (pos < output.length())
-    {
-        size_t newlinePos = output.find('\n', pos);
-        if (newlinePos == std::string_view::npos)
-        {
-            break;
-        }
-        std::string_view line = output.substr(pos, newlinePos - pos + 1);
-        if (isOnlyCharInLine(line, '{'))
-        {
-            start = pos;
-            break;
-        }
-        pos = newlinePos + 1;
-    }
-
-    if (start == std::string_view::npos)
-    {
-        return {};
-    }
-
-    // Find the end position of the valid json object
-    pos = output.length() - 1;
-    while (pos > 0)
-    {
-        size_t newlinePos = output.rfind('\n', pos);
-        if (newlinePos == std::string_view::npos)
-        {
-            break;
-        }
-        std::string_view line = output.substr(newlinePos + 1, pos - newlinePos);
-        if (isOnlyCharInLine(line, '}'))
-        {
-            end = newlinePos + 1;
-            break;
-        }
-        pos = newlinePos - 1;
-    }
-
-    if (end != std::string_view::npos && start < end)
-    {
-        return output.substr(start, end - start + 1);
-    }
-    return {};
-}
-} // namespace
+#include <utility>
 
 namespace DcgmNs::Nvvs::Plugins::NVBandwidth
 {
 
 constexpr int DEFAULT_CUDA_DRIVER_MAJOR_VERSION = 12;
 
-NVBandwidthPlugin::NVBandwidthPlugin(dcgmHandle_t handle)
-    : m_dcgmRecorder(handle)
+NVBandwidthPlugin::NVBandwidthPlugin(dcgmHandle_t handle, DcgmNs::DcgmOpsAnyUniquePtr dcgmOps, NvvsCommon *nvvsCommon)
+    : Plugin(dcgmOps.AsAnyPtr())
+    , m_dcgmOpsUnique(std::move(dcgmOps))
+    , m_dcgmRecorder(handle, m_dcgmOps, nvvsCommon)
     , m_handle(handle)
     , m_cudaDriverMajorVersion(DEFAULT_CUDA_DRIVER_MAJOR_VERSION)
     , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
@@ -278,18 +215,17 @@ void NVBandwidthPlugin::Go(std::string const &testName,
     }
 
     auto const &gpuList = m_tests.at(GetNvBandwidthTestName()).GetGpuList();
-    SetCudaDriverVersions(m_dcgmRecorder,
-                          gpuList[0],
-                          DEFAULT_CUDA_DRIVER_MAJOR_VERSION,
-                          0,
-                          m_cudaDriverMajorVersion,
-                          m_cudaDriverMinorVersion);
 
-    // Determine compatible CUDA version based on GPU architecture
     if (!gpuList.empty())
     {
-        m_cudaDriverMajorVersion = TestFramework::GetCompatibleCudaMajorVersion(
-            gpuList[0], m_cudaDriverMajorVersion, m_cudaDriverMinorVersion);
+        SetCudaDriverVersions(m_dcgmRecorder,
+                              gpuList[0],
+                              DEFAULT_CUDA_DRIVER_MAJOR_VERSION,
+                              0,
+                              m_cudaDriverMajorVersion,
+                              m_cudaDriverMinorVersion);
+        m_cudaDriverMajorVersion = GetCompatibleCudaMajorVersionForGpu(
+            m_dcgmOps, m_handle, gpuList[0], m_cudaDriverMajorVersion, m_cudaDriverMinorVersion);
     }
     std::ostringstream visibleDevices;
     for (unsigned int entityIdx = 0; entityIdx < entityInfo->numEntities; entityIdx++)
@@ -379,24 +315,31 @@ void NVBandwidthPlugin::Go(std::string const &testName,
     return;
 }
 
-std::pair<bool, std::optional<NVBandwidthResult>> NVBandwidthPlugin::AttemptToReadOutput(std::string_view output)
+std::pair<bool, std::optional<DcgmNs::NvBandwidth::NVBandwidthResult>> NVBandwidthPlugin::AttemptToReadOutput(
+    std::string_view output)
 {
-    std::string_view jsonObj = sanitizeOutput(output);
-    log_debug("Sanitized nvbandwidth stdout string: \n{}", jsonObj);
-    if (jsonObj.empty())
+    using CommonNVBandwidthResult = DcgmNs::NvBandwidth::NVBandwidthResult;
+    using CommonTestCase          = DcgmNs::NvBandwidth::TestCase;
+    using CommonTestCaseStatus    = DcgmNs::NvBandwidth::TestCaseStatus;
+
+    auto jsonRoot = DcgmNs::NvBandwidth::ParseJsonFromOutput(output);
+    if (!jsonRoot.has_value())
     {
         log_error("The nvbandwidth binary output doesn't contain valid JSON object.");
         return std::make_pair(true, std::nullopt);
     }
+    log_debug("Parsed nvbandwidth JSON output: \n{}", jsonRoot->toStyledString());
+
     bool errorFound { false };
-    auto resultOpt = DcgmNs::JsonSerialize::TryDeserialize<NVBandwidthResult>(jsonObj);
+    auto resultOpt = DcgmNs::JsonSerialize::TryDeserialize<CommonNVBandwidthResult>(*jsonRoot);
     if (!resultOpt.has_value())
     {
         errorFound = true;
         return std::make_pair(errorFound, std::nullopt);
     }
     auto &tcs = resultOpt.value().testCases;
-    if (std::any_of(tcs.begin(), tcs.end(), [](TestCase const &tc) { return tc.status == TestCaseStatus::ERROR; }))
+    if (std::any_of(
+            tcs.begin(), tcs.end(), [](CommonTestCase const &tc) { return tc.status == CommonTestCaseStatus::ERROR; }))
     {
         errorFound = true;
     }

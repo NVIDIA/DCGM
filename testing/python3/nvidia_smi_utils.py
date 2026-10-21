@@ -23,6 +23,7 @@ import dcgm_fields
 import dcgm_agent
 import shlex
 import subprocess
+import re
 
 ##########################################################################
 # XML tags to search for
@@ -585,6 +586,40 @@ def get_gpu_pci_bus_ids():
     for node in tree.iter('gpu'):
         pciBusIds.append(node.attrib['id'])
     return pciBusIds
+
+
+def get_nvlink_active_counts_by_uuid():
+    """
+    Returns {gpuUuid: active_nvlink_count} parsed from `nvidia-smi nvlink -s`.
+
+    A link is counted as active when it reports a numeric bandwidth value
+    (e.g. "53.125 GB/s"); inactive links report a non-numeric marker such as
+    "<inactive>" instead. The unit is ignored -- only the presence of a numeric
+    value matters. Returns an empty dict if nvidia-smi cannot be run.
+    """
+    cmd = "nvidia-smi nvlink -s"
+    try:
+        output = subprocess.check_output(shlex.split(cmd)).decode('utf-8')
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        logger.error("Failed to run %r: %s" % (cmd, e))
+        return {}
+
+    counts = {}
+    uuid = None
+    gpuRegex = re.compile(r"^GPU\s+\d+:.*\(UUID:\s+(GPU-[0-9a-fA-F-]+)\)")
+    linkRegex = re.compile(r"^\s+Link\s+\d+:\s+(.*\S)\s*$")
+    bandwidthRegex = re.compile(r"\d+(?:\.\d+)?")
+    for line in output.splitlines():
+        gpuMatch = gpuRegex.match(line)
+        if gpuMatch:
+            uuid = gpuMatch.group(1)
+            counts[uuid] = 0
+            continue
+        if uuid is not None:
+            linkMatch = linkRegex.match(line)
+            if linkMatch and bandwidthRegex.search(linkMatch.group(1)):
+                counts[uuid] += 1
+    return counts
 
 
 def get_output():

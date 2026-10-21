@@ -1,0 +1,40 @@
+[package]
+name = "fslock"
+version = "0.2.1"
+edition = "2018"
+description = "A library to use files as locks"
+repository = "https://github.com/brunoczim/fslock"
+readme = "README.md"
+keywords = ["file", "lock", "lockfile", "filelock", "lock-file"]
+categories = ["filesystem", "no-std", "concurrency"]
+license = "MIT"
+
+[badges]
+maintenance = { status = "passively-maintained" }
+
+[badges.travis-ci]
+repository = "https://github.com/brunoczim/fslock"
+branch = "master"
+
+[target.'cfg(unix)'.dependencies.libc]
+version = "^0.2.66"
+default-features = false
+
+[target.'cfg(windows)'.dependencies.winapi]
+version = "^0.3.8"
+features = [
+    "minwindef", 
+    "minwinbase",
+    "winbase",
+    "errhandlingapi",
+    "winerror",
+    "winnt",
+    "synchapi",
+    "handleapi",
+    "fileapi",
+    "processthreadsapi"
+]
+
+[features]
+default = ["std"]
+std = []

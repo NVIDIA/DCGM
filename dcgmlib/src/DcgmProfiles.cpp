@@ -23,6 +23,7 @@
 
 #include <bitset>
 #include <condition_variable>
+#include <cstring>
 #include <dcgm_nvml.h>
 #include <map>
 #include <set>
@@ -30,7 +31,43 @@
 #include <unordered_map>
 #include <vector>
 
+namespace
+{
+class NvmlTaskRunnerWorkloadPowerProfileReader final : public DcgmWorkloadPowerProfileReader
+{
+public:
+    explicit NvmlTaskRunnerWorkloadPowerProfileReader(NvmlTaskRunner &nvmlDriver)
+        : m_nvmlDriver(nvmlDriver)
+    {}
+
+    nvmlReturn_t GetWorkloadPowerProfileProfilesInfo(
+        SafeNvmlHandle device,
+        nvmlWorkloadPowerProfileProfilesInfo_t *profilesInfo) noexcept override
+    {
+        return m_nvmlDriver.NvmlDeviceWorkloadPowerProfileGetProfilesInfo(device, profilesInfo);
+    }
+
+    nvmlReturn_t GetWorkloadPowerProfileCurrentProfiles(
+        SafeNvmlHandle device,
+        nvmlWorkloadPowerProfileCurrentProfiles_t *currentProfiles) noexcept override
+    {
+        return m_nvmlDriver.NvmlDeviceWorkloadPowerProfileGetCurrentProfiles(device, currentProfiles);
+    }
+
+private:
+    NvmlTaskRunner &m_nvmlDriver;
+};
+} // namespace
+
 dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(NvmlTaskRunner &nvmlDriver,
+                                              dcgm_power_profile_helper_t const *gpuInfo,
+                                              dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo)
+{
+    NvmlTaskRunnerWorkloadPowerProfileReader profileReader(nvmlDriver);
+    return DcgmGetWorkloadPowerProfilesInfo(profileReader, gpuInfo, profilesInfo);
+}
+
+dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(DcgmWorkloadPowerProfileReader &profileReader,
                                               dcgm_power_profile_helper_t const *gpuInfo,
                                               dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo)
 {
@@ -43,8 +80,7 @@ dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(NvmlTaskRunner &nvmlDriver,
 
     nvmlProfilesInfo.version = nvmlWorkloadPowerProfileProfilesInfo_v1;
 
-    nvmlReturn_t nvmlSt
-        = nvmlDriver.NvmlDeviceWorkloadPowerProfileGetProfilesInfo(gpuInfo->nvmlDevice, &nvmlProfilesInfo);
+    nvmlReturn_t nvmlSt = profileReader.GetWorkloadPowerProfileProfilesInfo(gpuInfo->nvmlDevice, &nvmlProfilesInfo);
 
     if (nvmlSt == NVML_ERROR_NOT_SUPPORTED)
     {
@@ -85,6 +121,14 @@ dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(NvmlTaskRunner &nvmlDriver,
                                                 dcgm_power_profile_helper_t const *gpuInfo,
                                                 dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus)
 {
+    NvmlTaskRunnerWorkloadPowerProfileReader profileReader(nvmlDriver);
+    return DcgmGetWorkloadPowerProfilesStatus(profileReader, gpuInfo, profilesStatus);
+}
+
+dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(DcgmWorkloadPowerProfileReader &profileReader,
+                                                dcgm_power_profile_helper_t const *gpuInfo,
+                                                dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus)
+{
     if ((gpuInfo == nullptr) || (profilesStatus == nullptr))
     {
         return DCGM_ST_BADPARAM;
@@ -94,7 +138,7 @@ dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(NvmlTaskRunner &nvmlDriver,
 
     profiles.version = nvmlWorkloadPowerProfileCurrentProfiles_v1;
 
-    nvmlReturn_t nvmlSt = nvmlDriver.NvmlDeviceWorkloadPowerProfileGetCurrentProfiles(gpuInfo->nvmlDevice, &profiles);
+    nvmlReturn_t nvmlSt = profileReader.GetWorkloadPowerProfileCurrentProfiles(gpuInfo->nvmlDevice, &profiles);
 
     if (nvmlSt == NVML_ERROR_NOT_SUPPORTED)
     {

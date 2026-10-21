@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,7 +91,8 @@ public:
                   int fieldGroupId,
                   std::chrono::milliseconds updateDelay,
                   int numOfIterations,
-                  bool listOptionMentioned);
+                  bool listOptionMentioned,
+                  DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
     using EntityStats = std::unordered_map<dcgmi_entity_pair_t, std::vector<EntityStatItem>>;
 

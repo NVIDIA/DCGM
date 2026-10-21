@@ -17,11 +17,25 @@
 #include "Memtest.h"
 #include "PluginStrings.h"
 #include "dcgm_fields.h"
+#include <CudaCommonAnyUniquePtr.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <PluginCommon.h>
 
+#include <utility>
+
 /*****************************************************************************/
-MemtestPlugin::MemtestPlugin(dcgmHandle_t handle)
-    : m_handle(handle)
+MemtestPlugin::MemtestPlugin(dcgmHandle_t handle,
+                             DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                             CudaOpsAnyUniquePtr cudaOps,
+                             CudaCommonAnyUniquePtr cudaCommon,
+                             NvvsCommon *nvvsCommon)
+    : Plugin(dcgmOps.AsAnyPtr())
+    , m_dcgmOpsUnique(std::move(dcgmOps))
+    , m_cudaOpsUnique(std::move(cudaOps))
+    , m_cudaCommonUnique(std::move(cudaCommon))
+    , m_nvvsCommon(nvvsCommon)
+    , m_handle(handle)
 {
     m_infoStruct.testIndex        = DCGM_MEMTEST_INDEX;
     m_infoStruct.shortDescription = "This plugin will test the memory of a given GPU.";
@@ -118,9 +132,15 @@ void MemtestPlugin::Go(std::string const &testName,
 
     if (numGpus)
     {
-        auto memtest = std::make_unique<Memtest>(&testParameters, this);
+        auto memtest = std::make_unique<Memtest>(&testParameters,
+                                                 this,
+                                                 m_handle,
+                                                 m_dcgmOps,
+                                                 m_cudaOpsUnique.AsAnyPtr(),
+                                                 m_cudaCommonUnique.AsAnyPtr(),
+                                                 m_nvvsCommon);
 
-        st = memtest->Run(GetHandle(), *entityInfo);
+        st = memtest->Run(*entityInfo);
         if (main_should_stop)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
@@ -141,12 +161,6 @@ void MemtestPlugin::Go(std::string const &testName,
         AddError(testName, d);
         SetResult(testName, NVVS_RESULT_FAIL);
     }
-}
-
-/*****************************************************************************/
-dcgmHandle_t MemtestPlugin::GetHandle() const
-{
-    return m_handle;
 }
 
 std::string MemtestPlugin::GetMmeTestTestName() const

@@ -24,7 +24,9 @@
 #pragma GCC diagnostic ignored "-Wunused-function"
 #include "NvmlReturnDeserializer.h"
 
+#include <cstdlib>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <unordered_map>
 
@@ -101,6 +103,10 @@ nvmlUnitInfo_t *nvmlUnitInfo_tDeserializer(const YAML::Node &node);
 nvmlPSUInfo_t *nvmlPSUInfo_tDeserializer(const YAML::Node &node);
 nvmlUnitFanInfo_t *nvmlUnitFanInfo_tDeserializer(const YAML::Node &node);
 nvmlUnitFanSpeeds_t *nvmlUnitFanSpeeds_tDeserializer(const YAML::Node &node);
+nvmlEventSetGetContextCount_v1_t *nvmlEventSetGetContextCount_v1_tDeserializer(const YAML::Node &node);
+nvmlEventSetGetContextInfo_v1_t *nvmlEventSetGetContextInfo_v1_tDeserializer(const YAML::Node &node);
+nvmlEventSetGetContextData_v1_t *nvmlEventSetGetContextData_v1_tDeserializer(const YAML::Node &node);
+nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_tDeserializer(const YAML::Node &node);
 nvmlSystemEventData_v1_t *nvmlSystemEventData_v1_tDeserializer(const YAML::Node &node);
 nvmlAccountingStats_t *nvmlAccountingStats_tDeserializer(const YAML::Node &node);
 nvmlEncoderSessionInfo_t *nvmlEncoderSessionInfo_tDeserializer(const YAML::Node &node);
@@ -117,6 +123,8 @@ nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *nvmlConfComputeGetKeyRotationTh
 nvmlGpuFabricInfo_t *nvmlGpuFabricInfo_tDeserializer(const YAML::Node &node);
 nvmlGpuFabricInfo_v2_t *nvmlGpuFabricInfo_v2_tDeserializer(const YAML::Node &node);
 nvmlGpuFabricInfoV_t *nvmlGpuFabricInfoV_tDeserializer(const YAML::Node &node);
+nvmlGpuOperationalEventConfig_v1_t *nvmlGpuOperationalEventConfig_v1_tDeserializer(const YAML::Node &node);
+nvmlEventSetWait_v3_t *nvmlEventSetWait_v3_tDeserializer(const YAML::Node &node);
 nvmlSystemDriverBranchInfo_t *nvmlSystemDriverBranchInfo_tDeserializer(const YAML::Node &node);
 nvmlTemperature_t *nvmlTemperature_tDeserializer(const YAML::Node &node);
 nvmlNvlinkSupportedBwModes_t *nvmlNvlinkSupportedBwModes_tDeserializer(const YAML::Node &node);
@@ -149,12 +157,12 @@ nvmlWorkloadPowerProfileUpdateProfiles_v1_t *nvmlWorkloadPowerProfileUpdateProfi
 // The following snippet is generated from write_deserializer_definition
 nvmlPciInfoExt_t *nvmlPciInfoExt_tDeserializer(const YAML::Node &node)
 {
-    auto *pciInfoExt = reinterpret_cast<nvmlPciInfoExt_t *>(malloc(sizeof(nvmlPciInfoExt_t)));
+    std::unique_ptr<nvmlPciInfoExt_t, decltype(&free)> pciInfoExt(reinterpret_cast<nvmlPciInfoExt_t *>(malloc(sizeof(nvmlPciInfoExt_t))), free);
     if (pciInfoExt == nullptr)
     {
         return nullptr;
     }
-    memset(pciInfoExt, 0, sizeof(*pciInfoExt));
+    memset(pciInfoExt.get(), 0, sizeof(*pciInfoExt));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -237,18 +245,18 @@ nvmlPciInfoExt_t *nvmlPciInfoExt_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing busId for struct nvmlPciInfoExt_t");
     }
-    return pciInfoExt;
+    return pciInfoExt.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlPciInfo_t *nvmlPciInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *pciInfo = reinterpret_cast<nvmlPciInfo_t *>(malloc(sizeof(nvmlPciInfo_t)));
+    std::unique_ptr<nvmlPciInfo_t, decltype(&free)> pciInfo(reinterpret_cast<nvmlPciInfo_t *>(malloc(sizeof(nvmlPciInfo_t))), free);
     if (pciInfo == nullptr)
     {
         return nullptr;
     }
-    memset(pciInfo, 0, sizeof(*pciInfo));
+    memset(pciInfo.get(), 0, sizeof(*pciInfo));
     if (node["busIdLegacy"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -314,18 +322,18 @@ nvmlPciInfo_t *nvmlPciInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing busId for struct nvmlPciInfo_t");
     }
-    return pciInfo;
+    return pciInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlEccErrorCounts_t *nvmlEccErrorCounts_tDeserializer(const YAML::Node &node)
 {
-    auto *eccErrorCounts = reinterpret_cast<nvmlEccErrorCounts_t *>(malloc(sizeof(nvmlEccErrorCounts_t)));
+    std::unique_ptr<nvmlEccErrorCounts_t, decltype(&free)> eccErrorCounts(reinterpret_cast<nvmlEccErrorCounts_t *>(malloc(sizeof(nvmlEccErrorCounts_t))), free);
     if (eccErrorCounts == nullptr)
     {
         return nullptr;
     }
-    memset(eccErrorCounts, 0, sizeof(*eccErrorCounts));
+    memset(eccErrorCounts.get(), 0, sizeof(*eccErrorCounts));
     if (node["l1Cache"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -362,18 +370,18 @@ nvmlEccErrorCounts_t *nvmlEccErrorCounts_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing registerFile for struct nvmlEccErrorCounts_t");
     }
-    return eccErrorCounts;
+    return eccErrorCounts.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlUnrepairableMemoryStatus_t *nvmlUnrepairableMemoryStatus_tDeserializer(const YAML::Node &node)
 {
-    auto *unrepairableMemoryStatus = reinterpret_cast<nvmlUnrepairableMemoryStatus_t *>(malloc(sizeof(nvmlUnrepairableMemoryStatus_t)));
+    std::unique_ptr<nvmlUnrepairableMemoryStatus_t, decltype(&free)> unrepairableMemoryStatus(reinterpret_cast<nvmlUnrepairableMemoryStatus_t *>(malloc(sizeof(nvmlUnrepairableMemoryStatus_t))), free);
     if (unrepairableMemoryStatus == nullptr)
     {
         return nullptr;
     }
-    memset(unrepairableMemoryStatus, 0, sizeof(*unrepairableMemoryStatus));
+    memset(unrepairableMemoryStatus.get(), 0, sizeof(*unrepairableMemoryStatus));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -392,18 +400,18 @@ nvmlUnrepairableMemoryStatus_t *nvmlUnrepairableMemoryStatus_tDeserializer(const
     {
         NVML_LOG_ERR("missing bUnrepairableMemory for struct nvmlUnrepairableMemoryStatus_t");
     }
-    return unrepairableMemoryStatus;
+    return unrepairableMemoryStatus.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlUtilization_t *nvmlUtilization_tDeserializer(const YAML::Node &node)
 {
-    auto *utilization = reinterpret_cast<nvmlUtilization_t *>(malloc(sizeof(nvmlUtilization_t)));
+    std::unique_ptr<nvmlUtilization_t, decltype(&free)> utilization(reinterpret_cast<nvmlUtilization_t *>(malloc(sizeof(nvmlUtilization_t))), free);
     if (utilization == nullptr)
     {
         return nullptr;
     }
-    memset(utilization, 0, sizeof(*utilization));
+    memset(utilization.get(), 0, sizeof(*utilization));
     if (node["gpu"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -422,18 +430,18 @@ nvmlUtilization_t *nvmlUtilization_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing memory for struct nvmlUtilization_t");
     }
-    return utilization;
+    return utilization.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlMemory_t *nvmlMemory_tDeserializer(const YAML::Node &node)
 {
-    auto *memory = reinterpret_cast<nvmlMemory_t *>(malloc(sizeof(nvmlMemory_t)));
+    std::unique_ptr<nvmlMemory_t, decltype(&free)> memory(reinterpret_cast<nvmlMemory_t *>(malloc(sizeof(nvmlMemory_t))), free);
     if (memory == nullptr)
     {
         return nullptr;
     }
-    memset(memory, 0, sizeof(*memory));
+    memset(memory.get(), 0, sizeof(*memory));
     if (node["total"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -461,18 +469,18 @@ nvmlMemory_t *nvmlMemory_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing used for struct nvmlMemory_t");
     }
-    return memory;
+    return memory.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlMemory_v2_t *nvmlMemory_v2_tDeserializer(const YAML::Node &node)
 {
-    auto *memory_v2 = reinterpret_cast<nvmlMemory_v2_t *>(malloc(sizeof(nvmlMemory_v2_t)));
+    std::unique_ptr<nvmlMemory_v2_t, decltype(&free)> memory_v2(reinterpret_cast<nvmlMemory_v2_t *>(malloc(sizeof(nvmlMemory_v2_t))), free);
     if (memory_v2 == nullptr)
     {
         return nullptr;
     }
-    memset(memory_v2, 0, sizeof(*memory_v2));
+    memset(memory_v2.get(), 0, sizeof(*memory_v2));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -510,18 +518,18 @@ nvmlMemory_v2_t *nvmlMemory_v2_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing used for struct nvmlMemory_v2_t");
     }
-    return memory_v2;
+    return memory_v2.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlBAR1Memory_t *nvmlBAR1Memory_tDeserializer(const YAML::Node &node)
 {
-    auto *bAR1Memory = reinterpret_cast<nvmlBAR1Memory_t *>(malloc(sizeof(nvmlBAR1Memory_t)));
+    std::unique_ptr<nvmlBAR1Memory_t, decltype(&free)> bAR1Memory(reinterpret_cast<nvmlBAR1Memory_t *>(malloc(sizeof(nvmlBAR1Memory_t))), free);
     if (bAR1Memory == nullptr)
     {
         return nullptr;
     }
-    memset(bAR1Memory, 0, sizeof(*bAR1Memory));
+    memset(bAR1Memory.get(), 0, sizeof(*bAR1Memory));
     if (node["bar1Total"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -549,18 +557,18 @@ nvmlBAR1Memory_t *nvmlBAR1Memory_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing bar1Used for struct nvmlBAR1Memory_t");
     }
-    return bAR1Memory;
+    return bAR1Memory.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlProcessInfo_v1_t *nvmlProcessInfo_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *processInfo_v1 = reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t)));
+    std::unique_ptr<nvmlProcessInfo_v1_t, decltype(&free)> processInfo_v1(reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t))), free);
     if (processInfo_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(processInfo_v1, 0, sizeof(*processInfo_v1));
+    memset(processInfo_v1.get(), 0, sizeof(*processInfo_v1));
     if (node["pid"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -579,18 +587,18 @@ nvmlProcessInfo_v1_t *nvmlProcessInfo_v1_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing usedGpuMemory for struct nvmlProcessInfo_v1_t");
     }
-    return processInfo_v1;
+    return processInfo_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlProcessInfo_t *nvmlProcessInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *processInfo = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t)));
+    std::unique_ptr<nvmlProcessInfo_t, decltype(&free)> processInfo(reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t))), free);
     if (processInfo == nullptr)
     {
         return nullptr;
     }
-    memset(processInfo, 0, sizeof(*processInfo));
+    memset(processInfo.get(), 0, sizeof(*processInfo));
     if (node["pid"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -627,18 +635,18 @@ nvmlProcessInfo_t *nvmlProcessInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing computeInstanceId for struct nvmlProcessInfo_t");
     }
-    return processInfo;
+    return processInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlProcessDetail_v1_t *nvmlProcessDetail_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *processDetail_v1 = reinterpret_cast<nvmlProcessDetail_v1_t *>(malloc(sizeof(nvmlProcessDetail_v1_t)));
+    std::unique_ptr<nvmlProcessDetail_v1_t, decltype(&free)> processDetail_v1(reinterpret_cast<nvmlProcessDetail_v1_t *>(malloc(sizeof(nvmlProcessDetail_v1_t))), free);
     if (processDetail_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(processDetail_v1, 0, sizeof(*processDetail_v1));
+    memset(processDetail_v1.get(), 0, sizeof(*processDetail_v1));
     if (node["pid"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -684,18 +692,18 @@ nvmlProcessDetail_v1_t *nvmlProcessDetail_v1_tDeserializer(const YAML::Node &nod
     {
         NVML_LOG_ERR("missing usedGpuCcProtectedMemory for struct nvmlProcessDetail_v1_t");
     }
-    return processDetail_v1;
+    return processDetail_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlProcessDetailList_t *nvmlProcessDetailList_tDeserializer(const YAML::Node &node)
 {
-    auto *processDetailList = reinterpret_cast<nvmlProcessDetailList_t *>(malloc(sizeof(nvmlProcessDetailList_t)));
+    std::unique_ptr<nvmlProcessDetailList_t, decltype(&free)> processDetailList(reinterpret_cast<nvmlProcessDetailList_t *>(malloc(sizeof(nvmlProcessDetailList_t))), free);
     if (processDetailList == nullptr)
     {
         return nullptr;
     }
-    memset(processDetailList, 0, sizeof(*processDetailList));
+    memset(processDetailList.get(), 0, sizeof(*processDetailList));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -729,7 +737,6 @@ nvmlProcessDetailList_t *nvmlProcessDetailList_tDeserializer(const YAML::Node &n
         auto *tmp0 = nvmlProcessDetail_v1_tDeserializer(node["procArray"]);
         if (!tmp0)
         {
-            free(processDetailList);
             return nullptr;
         }
         std::memcpy(processDetailList->procArray, tmp0, sizeof(nvmlProcessDetail_v1_t));
@@ -739,18 +746,18 @@ nvmlProcessDetailList_t *nvmlProcessDetailList_tDeserializer(const YAML::Node &n
     {
         NVML_LOG_ERR("missing procArray for struct nvmlProcessDetailList_t");
     }
-    return processDetailList;
+    return processDetailList.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlDeviceAttributes_t *nvmlDeviceAttributes_tDeserializer(const YAML::Node &node)
 {
-    auto *deviceAttributes = reinterpret_cast<nvmlDeviceAttributes_t *>(malloc(sizeof(nvmlDeviceAttributes_t)));
+    std::unique_ptr<nvmlDeviceAttributes_t, decltype(&free)> deviceAttributes(reinterpret_cast<nvmlDeviceAttributes_t *>(malloc(sizeof(nvmlDeviceAttributes_t))), free);
     if (deviceAttributes == nullptr)
     {
         return nullptr;
     }
-    memset(deviceAttributes, 0, sizeof(*deviceAttributes));
+    memset(deviceAttributes.get(), 0, sizeof(*deviceAttributes));
     if (node["multiprocessorCount"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -832,18 +839,18 @@ nvmlDeviceAttributes_t *nvmlDeviceAttributes_tDeserializer(const YAML::Node &nod
     {
         NVML_LOG_ERR("missing memorySizeMB for struct nvmlDeviceAttributes_t");
     }
-    return deviceAttributes;
+    return deviceAttributes.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlC2cModeInfo_v1_t *nvmlC2cModeInfo_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *c2cModeInfo_v1 = reinterpret_cast<nvmlC2cModeInfo_v1_t *>(malloc(sizeof(nvmlC2cModeInfo_v1_t)));
+    std::unique_ptr<nvmlC2cModeInfo_v1_t, decltype(&free)> c2cModeInfo_v1(reinterpret_cast<nvmlC2cModeInfo_v1_t *>(malloc(sizeof(nvmlC2cModeInfo_v1_t))), free);
     if (c2cModeInfo_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(c2cModeInfo_v1, 0, sizeof(*c2cModeInfo_v1));
+    memset(c2cModeInfo_v1.get(), 0, sizeof(*c2cModeInfo_v1));
     if (node["isC2cEnabled"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -853,18 +860,18 @@ nvmlC2cModeInfo_v1_t *nvmlC2cModeInfo_v1_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing isC2cEnabled for struct nvmlC2cModeInfo_v1_t");
     }
-    return c2cModeInfo_v1;
+    return c2cModeInfo_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlRowRemapperHistogramValues_t *nvmlRowRemapperHistogramValues_tDeserializer(const YAML::Node &node)
 {
-    auto *rowRemapperHistogramValues = reinterpret_cast<nvmlRowRemapperHistogramValues_t *>(malloc(sizeof(nvmlRowRemapperHistogramValues_t)));
+    std::unique_ptr<nvmlRowRemapperHistogramValues_t, decltype(&free)> rowRemapperHistogramValues(reinterpret_cast<nvmlRowRemapperHistogramValues_t *>(malloc(sizeof(nvmlRowRemapperHistogramValues_t))), free);
     if (rowRemapperHistogramValues == nullptr)
     {
         return nullptr;
     }
-    memset(rowRemapperHistogramValues, 0, sizeof(*rowRemapperHistogramValues));
+    memset(rowRemapperHistogramValues.get(), 0, sizeof(*rowRemapperHistogramValues));
     if (node["max"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -910,18 +917,18 @@ nvmlRowRemapperHistogramValues_t *nvmlRowRemapperHistogramValues_tDeserializer(c
     {
         NVML_LOG_ERR("missing none for struct nvmlRowRemapperHistogramValues_t");
     }
-    return rowRemapperHistogramValues;
+    return rowRemapperHistogramValues.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlNvLinkUtilizationControl_t *nvmlNvLinkUtilizationControl_tDeserializer(const YAML::Node &node)
 {
-    auto *nvLinkUtilizationControl = reinterpret_cast<nvmlNvLinkUtilizationControl_t *>(malloc(sizeof(nvmlNvLinkUtilizationControl_t)));
+    std::unique_ptr<nvmlNvLinkUtilizationControl_t, decltype(&free)> nvLinkUtilizationControl(reinterpret_cast<nvmlNvLinkUtilizationControl_t *>(malloc(sizeof(nvmlNvLinkUtilizationControl_t))), free);
     if (nvLinkUtilizationControl == nullptr)
     {
         return nullptr;
     }
-    memset(nvLinkUtilizationControl, 0, sizeof(*nvLinkUtilizationControl));
+    memset(nvLinkUtilizationControl.get(), 0, sizeof(*nvLinkUtilizationControl));
     if (node["units"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -940,18 +947,18 @@ nvmlNvLinkUtilizationControl_t *nvmlNvLinkUtilizationControl_tDeserializer(const
     {
         NVML_LOG_ERR("missing pktfilter for struct nvmlNvLinkUtilizationControl_t");
     }
-    return nvLinkUtilizationControl;
+    return nvLinkUtilizationControl.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlBridgeChipInfo_t *nvmlBridgeChipInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *bridgeChipInfo = reinterpret_cast<nvmlBridgeChipInfo_t *>(malloc(sizeof(nvmlBridgeChipInfo_t)));
+    std::unique_ptr<nvmlBridgeChipInfo_t, decltype(&free)> bridgeChipInfo(reinterpret_cast<nvmlBridgeChipInfo_t *>(malloc(sizeof(nvmlBridgeChipInfo_t))), free);
     if (bridgeChipInfo == nullptr)
     {
         return nullptr;
     }
-    memset(bridgeChipInfo, 0, sizeof(*bridgeChipInfo));
+    memset(bridgeChipInfo.get(), 0, sizeof(*bridgeChipInfo));
     if (node["type"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -970,18 +977,18 @@ nvmlBridgeChipInfo_t *nvmlBridgeChipInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing fwVersion for struct nvmlBridgeChipInfo_t");
     }
-    return bridgeChipInfo;
+    return bridgeChipInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlBridgeChipHierarchy_t *nvmlBridgeChipHierarchy_tDeserializer(const YAML::Node &node)
 {
-    auto *bridgeChipHierarchy = reinterpret_cast<nvmlBridgeChipHierarchy_t *>(malloc(sizeof(nvmlBridgeChipHierarchy_t)));
+    std::unique_ptr<nvmlBridgeChipHierarchy_t, decltype(&free)> bridgeChipHierarchy(reinterpret_cast<nvmlBridgeChipHierarchy_t *>(malloc(sizeof(nvmlBridgeChipHierarchy_t))), free);
     if (bridgeChipHierarchy == nullptr)
     {
         return nullptr;
     }
-    memset(bridgeChipHierarchy, 0, sizeof(*bridgeChipHierarchy));
+    memset(bridgeChipHierarchy.get(), 0, sizeof(*bridgeChipHierarchy));
     if (node["bridgeCount"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -998,15 +1005,14 @@ nvmlBridgeChipHierarchy_t *nvmlBridgeChipHierarchy_tDeserializer(const YAML::Nod
         int size = std::min(node["bridgeChipInfo"].size(), sizeof(bridgeChipHierarchy->bridgeChipInfo) / sizeof(nvmlBridgeChipInfo_t));
         for (YAML::const_iterator it = node["bridgeChipInfo"].begin(); it != node["bridgeChipInfo"].end(); ++it)
         {
-            auto *tmp = nvmlBridgeChipInfo_tDeserializer(*it);
-            if (!tmp)
-            {
-                free(bridgeChipHierarchy);
-                return nullptr;
-            }
             if (idx >= size)
             {
                 break;
+            }
+            auto *tmp = nvmlBridgeChipInfo_tDeserializer(*it);
+            if (!tmp)
+            {
+                return nullptr;
             }
             std::memcpy(&bridgeChipHierarchy->bridgeChipInfo[idx++], tmp, sizeof(nvmlBridgeChipInfo_t));
             free(tmp);
@@ -1016,18 +1022,18 @@ nvmlBridgeChipHierarchy_t *nvmlBridgeChipHierarchy_tDeserializer(const YAML::Nod
     {
         NVML_LOG_ERR("missing bridgeChipInfo for struct nvmlBridgeChipHierarchy_t");
     }
-    return bridgeChipHierarchy;
+    return bridgeChipHierarchy.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlViolationTime_t *nvmlViolationTime_tDeserializer(const YAML::Node &node)
 {
-    auto *violationTime = reinterpret_cast<nvmlViolationTime_t *>(malloc(sizeof(nvmlViolationTime_t)));
+    std::unique_ptr<nvmlViolationTime_t, decltype(&free)> violationTime(reinterpret_cast<nvmlViolationTime_t *>(malloc(sizeof(nvmlViolationTime_t))), free);
     if (violationTime == nullptr)
     {
         return nullptr;
     }
-    memset(violationTime, 0, sizeof(*violationTime));
+    memset(violationTime.get(), 0, sizeof(*violationTime));
     if (node["referenceTime"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1046,18 +1052,18 @@ nvmlViolationTime_t *nvmlViolationTime_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing violationTime for struct nvmlViolationTime_t");
     }
-    return violationTime;
+    return violationTime.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlCoolerInfo_t *nvmlCoolerInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *coolerInfo = reinterpret_cast<nvmlCoolerInfo_t *>(malloc(sizeof(nvmlCoolerInfo_t)));
+    std::unique_ptr<nvmlCoolerInfo_t, decltype(&free)> coolerInfo(reinterpret_cast<nvmlCoolerInfo_t *>(malloc(sizeof(nvmlCoolerInfo_t))), free);
     if (coolerInfo == nullptr)
     {
         return nullptr;
     }
-    memset(coolerInfo, 0, sizeof(*coolerInfo));
+    memset(coolerInfo.get(), 0, sizeof(*coolerInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1094,18 +1100,18 @@ nvmlCoolerInfo_t *nvmlCoolerInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing target for struct nvmlCoolerInfo_t");
     }
-    return coolerInfo;
+    return coolerInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlDramEncryptionInfo_t *nvmlDramEncryptionInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *dramEncryptionInfo = reinterpret_cast<nvmlDramEncryptionInfo_t *>(malloc(sizeof(nvmlDramEncryptionInfo_t)));
+    std::unique_ptr<nvmlDramEncryptionInfo_t, decltype(&free)> dramEncryptionInfo(reinterpret_cast<nvmlDramEncryptionInfo_t *>(malloc(sizeof(nvmlDramEncryptionInfo_t))), free);
     if (dramEncryptionInfo == nullptr)
     {
         return nullptr;
     }
-    memset(dramEncryptionInfo, 0, sizeof(*dramEncryptionInfo));
+    memset(dramEncryptionInfo.get(), 0, sizeof(*dramEncryptionInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1124,18 +1130,18 @@ nvmlDramEncryptionInfo_t *nvmlDramEncryptionInfo_tDeserializer(const YAML::Node 
     {
         NVML_LOG_ERR("missing encryptionState for struct nvmlDramEncryptionInfo_t");
     }
-    return dramEncryptionInfo;
+    return dramEncryptionInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlMarginTemperature_t *nvmlMarginTemperature_tDeserializer(const YAML::Node &node)
 {
-    auto *marginTemperature = reinterpret_cast<nvmlMarginTemperature_t *>(malloc(sizeof(nvmlMarginTemperature_t)));
+    std::unique_ptr<nvmlMarginTemperature_t, decltype(&free)> marginTemperature(reinterpret_cast<nvmlMarginTemperature_t *>(malloc(sizeof(nvmlMarginTemperature_t))), free);
     if (marginTemperature == nullptr)
     {
         return nullptr;
     }
-    memset(marginTemperature, 0, sizeof(*marginTemperature));
+    memset(marginTemperature.get(), 0, sizeof(*marginTemperature));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1154,18 +1160,18 @@ nvmlMarginTemperature_t *nvmlMarginTemperature_tDeserializer(const YAML::Node &n
     {
         NVML_LOG_ERR("missing marginTemperature for struct nvmlMarginTemperature_t");
     }
-    return marginTemperature;
+    return marginTemperature.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlClkMonFaultInfo_t *nvmlClkMonFaultInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *clkMonFaultInfo = reinterpret_cast<nvmlClkMonFaultInfo_t *>(malloc(sizeof(nvmlClkMonFaultInfo_t)));
+    std::unique_ptr<nvmlClkMonFaultInfo_t, decltype(&free)> clkMonFaultInfo(reinterpret_cast<nvmlClkMonFaultInfo_t *>(malloc(sizeof(nvmlClkMonFaultInfo_t))), free);
     if (clkMonFaultInfo == nullptr)
     {
         return nullptr;
     }
-    memset(clkMonFaultInfo, 0, sizeof(*clkMonFaultInfo));
+    memset(clkMonFaultInfo.get(), 0, sizeof(*clkMonFaultInfo));
     if (node["clkApiDomain"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1184,18 +1190,18 @@ nvmlClkMonFaultInfo_t *nvmlClkMonFaultInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing clkDomainFaultMask for struct nvmlClkMonFaultInfo_t");
     }
-    return clkMonFaultInfo;
+    return clkMonFaultInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlClkMonStatus_t *nvmlClkMonStatus_tDeserializer(const YAML::Node &node)
 {
-    auto *clkMonStatus = reinterpret_cast<nvmlClkMonStatus_t *>(malloc(sizeof(nvmlClkMonStatus_t)));
+    std::unique_ptr<nvmlClkMonStatus_t, decltype(&free)> clkMonStatus(reinterpret_cast<nvmlClkMonStatus_t *>(malloc(sizeof(nvmlClkMonStatus_t))), free);
     if (clkMonStatus == nullptr)
     {
         return nullptr;
     }
-    memset(clkMonStatus, 0, sizeof(*clkMonStatus));
+    memset(clkMonStatus.get(), 0, sizeof(*clkMonStatus));
     if (node["bGlobalStatus"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1221,15 +1227,14 @@ nvmlClkMonStatus_t *nvmlClkMonStatus_tDeserializer(const YAML::Node &node)
         int size = std::min(node["clkMonList"].size(), sizeof(clkMonStatus->clkMonList) / sizeof(nvmlClkMonFaultInfo_t));
         for (YAML::const_iterator it = node["clkMonList"].begin(); it != node["clkMonList"].end(); ++it)
         {
-            auto *tmp = nvmlClkMonFaultInfo_tDeserializer(*it);
-            if (!tmp)
-            {
-                free(clkMonStatus);
-                return nullptr;
-            }
             if (idx >= size)
             {
                 break;
+            }
+            auto *tmp = nvmlClkMonFaultInfo_tDeserializer(*it);
+            if (!tmp)
+            {
+                return nullptr;
             }
             std::memcpy(&clkMonStatus->clkMonList[idx++], tmp, sizeof(nvmlClkMonFaultInfo_t));
             free(tmp);
@@ -1239,18 +1244,18 @@ nvmlClkMonStatus_t *nvmlClkMonStatus_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing clkMonList for struct nvmlClkMonStatus_t");
     }
-    return clkMonStatus;
+    return clkMonStatus.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlClockOffset_t *nvmlClockOffset_tDeserializer(const YAML::Node &node)
 {
-    auto *clockOffset = reinterpret_cast<nvmlClockOffset_t *>(malloc(sizeof(nvmlClockOffset_t)));
+    std::unique_ptr<nvmlClockOffset_t, decltype(&free)> clockOffset(reinterpret_cast<nvmlClockOffset_t *>(malloc(sizeof(nvmlClockOffset_t))), free);
     if (clockOffset == nullptr)
     {
         return nullptr;
     }
-    memset(clockOffset, 0, sizeof(*clockOffset));
+    memset(clockOffset.get(), 0, sizeof(*clockOffset));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1305,18 +1310,18 @@ nvmlClockOffset_t *nvmlClockOffset_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing maxClockOffsetMHz for struct nvmlClockOffset_t");
     }
-    return clockOffset;
+    return clockOffset.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlFanSpeedInfo_t *nvmlFanSpeedInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *fanSpeedInfo = reinterpret_cast<nvmlFanSpeedInfo_t *>(malloc(sizeof(nvmlFanSpeedInfo_t)));
+    std::unique_ptr<nvmlFanSpeedInfo_t, decltype(&free)> fanSpeedInfo(reinterpret_cast<nvmlFanSpeedInfo_t *>(malloc(sizeof(nvmlFanSpeedInfo_t))), free);
     if (fanSpeedInfo == nullptr)
     {
         return nullptr;
     }
-    memset(fanSpeedInfo, 0, sizeof(*fanSpeedInfo));
+    memset(fanSpeedInfo.get(), 0, sizeof(*fanSpeedInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1344,18 +1349,18 @@ nvmlFanSpeedInfo_t *nvmlFanSpeedInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing speed for struct nvmlFanSpeedInfo_t");
     }
-    return fanSpeedInfo;
+    return fanSpeedInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlDevicePerfModes_t *nvmlDevicePerfModes_tDeserializer(const YAML::Node &node)
 {
-    auto *devicePerfModes = reinterpret_cast<nvmlDevicePerfModes_t *>(malloc(sizeof(nvmlDevicePerfModes_t)));
+    std::unique_ptr<nvmlDevicePerfModes_t, decltype(&free)> devicePerfModes(reinterpret_cast<nvmlDevicePerfModes_t *>(malloc(sizeof(nvmlDevicePerfModes_t))), free);
     if (devicePerfModes == nullptr)
     {
         return nullptr;
     }
-    memset(devicePerfModes, 0, sizeof(*devicePerfModes));
+    memset(devicePerfModes.get(), 0, sizeof(*devicePerfModes));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1375,18 +1380,18 @@ nvmlDevicePerfModes_t *nvmlDevicePerfModes_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing str for struct nvmlDevicePerfModes_t");
     }
-    return devicePerfModes;
+    return devicePerfModes.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlDeviceCurrentClockFreqs_t *nvmlDeviceCurrentClockFreqs_tDeserializer(const YAML::Node &node)
 {
-    auto *deviceCurrentClockFreqs = reinterpret_cast<nvmlDeviceCurrentClockFreqs_t *>(malloc(sizeof(nvmlDeviceCurrentClockFreqs_t)));
+    std::unique_ptr<nvmlDeviceCurrentClockFreqs_t, decltype(&free)> deviceCurrentClockFreqs(reinterpret_cast<nvmlDeviceCurrentClockFreqs_t *>(malloc(sizeof(nvmlDeviceCurrentClockFreqs_t))), free);
     if (deviceCurrentClockFreqs == nullptr)
     {
         return nullptr;
     }
-    memset(deviceCurrentClockFreqs, 0, sizeof(*deviceCurrentClockFreqs));
+    memset(deviceCurrentClockFreqs.get(), 0, sizeof(*deviceCurrentClockFreqs));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1406,18 +1411,18 @@ nvmlDeviceCurrentClockFreqs_t *nvmlDeviceCurrentClockFreqs_tDeserializer(const Y
     {
         NVML_LOG_ERR("missing str for struct nvmlDeviceCurrentClockFreqs_t");
     }
-    return deviceCurrentClockFreqs;
+    return deviceCurrentClockFreqs.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlProcessUtilizationSample_t *nvmlProcessUtilizationSample_tDeserializer(const YAML::Node &node)
 {
-    auto *processUtilizationSample = reinterpret_cast<nvmlProcessUtilizationSample_t *>(malloc(sizeof(nvmlProcessUtilizationSample_t)));
+    std::unique_ptr<nvmlProcessUtilizationSample_t, decltype(&free)> processUtilizationSample(reinterpret_cast<nvmlProcessUtilizationSample_t *>(malloc(sizeof(nvmlProcessUtilizationSample_t))), free);
     if (processUtilizationSample == nullptr)
     {
         return nullptr;
     }
-    memset(processUtilizationSample, 0, sizeof(*processUtilizationSample));
+    memset(processUtilizationSample.get(), 0, sizeof(*processUtilizationSample));
     if (node["pid"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1472,18 +1477,18 @@ nvmlProcessUtilizationSample_t *nvmlProcessUtilizationSample_tDeserializer(const
     {
         NVML_LOG_ERR("missing decUtil for struct nvmlProcessUtilizationSample_t");
     }
-    return processUtilizationSample;
+    return processUtilizationSample.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlProcessUtilizationInfo_v1_t *nvmlProcessUtilizationInfo_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *processUtilizationInfo_v1 = reinterpret_cast<nvmlProcessUtilizationInfo_v1_t *>(malloc(sizeof(nvmlProcessUtilizationInfo_v1_t)));
+    std::unique_ptr<nvmlProcessUtilizationInfo_v1_t, decltype(&free)> processUtilizationInfo_v1(reinterpret_cast<nvmlProcessUtilizationInfo_v1_t *>(malloc(sizeof(nvmlProcessUtilizationInfo_v1_t))), free);
     if (processUtilizationInfo_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(processUtilizationInfo_v1, 0, sizeof(*processUtilizationInfo_v1));
+    memset(processUtilizationInfo_v1.get(), 0, sizeof(*processUtilizationInfo_v1));
     if (node["timeStamp"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1556,18 +1561,18 @@ nvmlProcessUtilizationInfo_v1_t *nvmlProcessUtilizationInfo_v1_tDeserializer(con
     {
         NVML_LOG_ERR("missing ofaUtil for struct nvmlProcessUtilizationInfo_v1_t");
     }
-    return processUtilizationInfo_v1;
+    return processUtilizationInfo_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlProcessesUtilizationInfo_t *nvmlProcessesUtilizationInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *processesUtilizationInfo = reinterpret_cast<nvmlProcessesUtilizationInfo_t *>(malloc(sizeof(nvmlProcessesUtilizationInfo_t)));
+    std::unique_ptr<nvmlProcessesUtilizationInfo_t, decltype(&free)> processesUtilizationInfo(reinterpret_cast<nvmlProcessesUtilizationInfo_t *>(malloc(sizeof(nvmlProcessesUtilizationInfo_t))), free);
     if (processesUtilizationInfo == nullptr)
     {
         return nullptr;
     }
-    memset(processesUtilizationInfo, 0, sizeof(*processesUtilizationInfo));
+    memset(processesUtilizationInfo.get(), 0, sizeof(*processesUtilizationInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1601,7 +1606,6 @@ nvmlProcessesUtilizationInfo_t *nvmlProcessesUtilizationInfo_tDeserializer(const
         auto *tmp0 = nvmlProcessUtilizationInfo_v1_tDeserializer(node["procUtilArray"]);
         if (!tmp0)
         {
-            free(processesUtilizationInfo);
             return nullptr;
         }
         std::memcpy(processesUtilizationInfo->procUtilArray, tmp0, sizeof(nvmlProcessUtilizationInfo_v1_t));
@@ -1611,18 +1615,18 @@ nvmlProcessesUtilizationInfo_t *nvmlProcessesUtilizationInfo_tDeserializer(const
     {
         NVML_LOG_ERR("missing procUtilArray for struct nvmlProcessesUtilizationInfo_t");
     }
-    return processesUtilizationInfo;
+    return processesUtilizationInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlEccSramErrorStatus_t *nvmlEccSramErrorStatus_tDeserializer(const YAML::Node &node)
 {
-    auto *eccSramErrorStatus = reinterpret_cast<nvmlEccSramErrorStatus_t *>(malloc(sizeof(nvmlEccSramErrorStatus_t)));
+    std::unique_ptr<nvmlEccSramErrorStatus_t, decltype(&free)> eccSramErrorStatus(reinterpret_cast<nvmlEccSramErrorStatus_t *>(malloc(sizeof(nvmlEccSramErrorStatus_t))), free);
     if (eccSramErrorStatus == nullptr)
     {
         return nullptr;
     }
-    memset(eccSramErrorStatus, 0, sizeof(*eccSramErrorStatus));
+    memset(eccSramErrorStatus.get(), 0, sizeof(*eccSramErrorStatus));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1740,18 +1744,18 @@ nvmlEccSramErrorStatus_t *nvmlEccSramErrorStatus_tDeserializer(const YAML::Node 
     {
         NVML_LOG_ERR("missing bThresholdExceeded for struct nvmlEccSramErrorStatus_t");
     }
-    return eccSramErrorStatus;
+    return eccSramErrorStatus.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlPlatformInfo_v1_t *nvmlPlatformInfo_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *platformInfo_v1 = reinterpret_cast<nvmlPlatformInfo_v1_t *>(malloc(sizeof(nvmlPlatformInfo_v1_t)));
+    std::unique_ptr<nvmlPlatformInfo_v1_t, decltype(&free)> platformInfo_v1(reinterpret_cast<nvmlPlatformInfo_v1_t *>(malloc(sizeof(nvmlPlatformInfo_v1_t))), free);
     if (platformInfo_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(platformInfo_v1, 0, sizeof(*platformInfo_v1));
+    memset(platformInfo_v1.get(), 0, sizeof(*platformInfo_v1));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1826,18 +1830,18 @@ nvmlPlatformInfo_v1_t *nvmlPlatformInfo_v1_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing moduleId for struct nvmlPlatformInfo_v1_t");
     }
-    return platformInfo_v1;
+    return platformInfo_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlPlatformInfo_t *nvmlPlatformInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *platformInfo = reinterpret_cast<nvmlPlatformInfo_t *>(malloc(sizeof(nvmlPlatformInfo_t)));
+    std::unique_ptr<nvmlPlatformInfo_t, decltype(&free)> platformInfo(reinterpret_cast<nvmlPlatformInfo_t *>(malloc(sizeof(nvmlPlatformInfo_t))), free);
     if (platformInfo == nullptr)
     {
         return nullptr;
     }
-    memset(platformInfo, 0, sizeof(*platformInfo));
+    memset(platformInfo.get(), 0, sizeof(*platformInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1912,18 +1916,18 @@ nvmlPlatformInfo_t *nvmlPlatformInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing moduleId for struct nvmlPlatformInfo_t");
     }
-    return platformInfo;
+    return platformInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlPowerValue_v2_t *nvmlPowerValue_v2_tDeserializer(const YAML::Node &node)
 {
-    auto *powerValue_v2 = reinterpret_cast<nvmlPowerValue_v2_t *>(malloc(sizeof(nvmlPowerValue_v2_t)));
+    std::unique_ptr<nvmlPowerValue_v2_t, decltype(&free)> powerValue_v2(reinterpret_cast<nvmlPowerValue_v2_t *>(malloc(sizeof(nvmlPowerValue_v2_t))), free);
     if (powerValue_v2 == nullptr)
     {
         return nullptr;
     }
-    memset(powerValue_v2, 0, sizeof(*powerValue_v2));
+    memset(powerValue_v2.get(), 0, sizeof(*powerValue_v2));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1951,18 +1955,18 @@ nvmlPowerValue_v2_t *nvmlPowerValue_v2_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing powerValueMw for struct nvmlPowerValue_v2_t");
     }
-    return powerValue_v2;
+    return powerValue_v2.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuHeterogeneousMode_t *nvmlVgpuHeterogeneousMode_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuHeterogeneousMode = reinterpret_cast<nvmlVgpuHeterogeneousMode_t *>(malloc(sizeof(nvmlVgpuHeterogeneousMode_t)));
+    std::unique_ptr<nvmlVgpuHeterogeneousMode_t, decltype(&free)> vgpuHeterogeneousMode(reinterpret_cast<nvmlVgpuHeterogeneousMode_t *>(malloc(sizeof(nvmlVgpuHeterogeneousMode_t))), free);
     if (vgpuHeterogeneousMode == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuHeterogeneousMode, 0, sizeof(*vgpuHeterogeneousMode));
+    memset(vgpuHeterogeneousMode.get(), 0, sizeof(*vgpuHeterogeneousMode));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -1981,18 +1985,18 @@ nvmlVgpuHeterogeneousMode_t *nvmlVgpuHeterogeneousMode_tDeserializer(const YAML:
     {
         NVML_LOG_ERR("missing mode for struct nvmlVgpuHeterogeneousMode_t");
     }
-    return vgpuHeterogeneousMode;
+    return vgpuHeterogeneousMode.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuPlacementId_t *nvmlVgpuPlacementId_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuPlacementId = reinterpret_cast<nvmlVgpuPlacementId_t *>(malloc(sizeof(nvmlVgpuPlacementId_t)));
+    std::unique_ptr<nvmlVgpuPlacementId_t, decltype(&free)> vgpuPlacementId(reinterpret_cast<nvmlVgpuPlacementId_t *>(malloc(sizeof(nvmlVgpuPlacementId_t))), free);
     if (vgpuPlacementId == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuPlacementId, 0, sizeof(*vgpuPlacementId));
+    memset(vgpuPlacementId.get(), 0, sizeof(*vgpuPlacementId));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2011,18 +2015,18 @@ nvmlVgpuPlacementId_t *nvmlVgpuPlacementId_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing placementId for struct nvmlVgpuPlacementId_t");
     }
-    return vgpuPlacementId;
+    return vgpuPlacementId.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuPlacementList_v1_t *nvmlVgpuPlacementList_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuPlacementList_v1 = reinterpret_cast<nvmlVgpuPlacementList_v1_t *>(malloc(sizeof(nvmlVgpuPlacementList_v1_t)));
+    std::unique_ptr<nvmlVgpuPlacementList_v1_t, decltype(&free)> vgpuPlacementList_v1(reinterpret_cast<nvmlVgpuPlacementList_v1_t *>(malloc(sizeof(nvmlVgpuPlacementList_v1_t))), free);
     if (vgpuPlacementList_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuPlacementList_v1, 0, sizeof(*vgpuPlacementList_v1));
+    memset(vgpuPlacementList_v1.get(), 0, sizeof(*vgpuPlacementList_v1));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2050,11 +2054,13 @@ nvmlVgpuPlacementList_v1_t *nvmlVgpuPlacementList_v1_tDeserializer(const YAML::N
     {
         NVML_LOG_ERR("missing count for struct nvmlVgpuPlacementList_v1_t");
     }
+    std::unique_ptr<unsigned int, decltype(&free)> placementIdsGuard(nullptr, free);
     if (node["placementIds"])
     {
         // The following snippet is generated from write_deserializer_definition
         auto const tmp0 = node["placementIds"].as<std::vector<unsigned int>>();
-        vgpuPlacementList_v1->placementIds = reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * tmp0.size()));
+        placementIdsGuard = std::unique_ptr<unsigned int, decltype(&free)>(reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * tmp0.size())), free);
+        vgpuPlacementList_v1->placementIds = placementIdsGuard.get();
         for (unsigned int ii = 0; ii < tmp0.size(); ++ii)
         {
             vgpuPlacementList_v1->placementIds[ii] = tmp0[ii];
@@ -2064,18 +2070,19 @@ nvmlVgpuPlacementList_v1_t *nvmlVgpuPlacementList_v1_tDeserializer(const YAML::N
     {
         NVML_LOG_ERR("missing placementIds for struct nvmlVgpuPlacementList_v1_t");
     }
-    return vgpuPlacementList_v1;
+    [[maybe_unused]] auto *placementIds = placementIdsGuard.release();
+    return vgpuPlacementList_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuPlacementList_t *nvmlVgpuPlacementList_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuPlacementList = reinterpret_cast<nvmlVgpuPlacementList_t *>(malloc(sizeof(nvmlVgpuPlacementList_t)));
+    std::unique_ptr<nvmlVgpuPlacementList_t, decltype(&free)> vgpuPlacementList(reinterpret_cast<nvmlVgpuPlacementList_t *>(malloc(sizeof(nvmlVgpuPlacementList_t))), free);
     if (vgpuPlacementList == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuPlacementList, 0, sizeof(*vgpuPlacementList));
+    memset(vgpuPlacementList.get(), 0, sizeof(*vgpuPlacementList));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2103,11 +2110,13 @@ nvmlVgpuPlacementList_t *nvmlVgpuPlacementList_tDeserializer(const YAML::Node &n
     {
         NVML_LOG_ERR("missing count for struct nvmlVgpuPlacementList_t");
     }
+    std::unique_ptr<unsigned int, decltype(&free)> placementIdsGuard(nullptr, free);
     if (node["placementIds"])
     {
         // The following snippet is generated from write_deserializer_definition
         auto const tmp0 = node["placementIds"].as<std::vector<unsigned int>>();
-        vgpuPlacementList->placementIds = reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * tmp0.size()));
+        placementIdsGuard = std::unique_ptr<unsigned int, decltype(&free)>(reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * tmp0.size())), free);
+        vgpuPlacementList->placementIds = placementIdsGuard.get();
         for (unsigned int ii = 0; ii < tmp0.size(); ++ii)
         {
             vgpuPlacementList->placementIds[ii] = tmp0[ii];
@@ -2126,18 +2135,19 @@ nvmlVgpuPlacementList_t *nvmlVgpuPlacementList_tDeserializer(const YAML::Node &n
     {
         NVML_LOG_ERR("missing mode for struct nvmlVgpuPlacementList_t");
     }
-    return vgpuPlacementList;
+    [[maybe_unused]] auto *placementIds = placementIdsGuard.release();
+    return vgpuPlacementList.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuTypeBar1Info_t *nvmlVgpuTypeBar1Info_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuTypeBar1Info = reinterpret_cast<nvmlVgpuTypeBar1Info_t *>(malloc(sizeof(nvmlVgpuTypeBar1Info_t)));
+    std::unique_ptr<nvmlVgpuTypeBar1Info_t, decltype(&free)> vgpuTypeBar1Info(reinterpret_cast<nvmlVgpuTypeBar1Info_t *>(malloc(sizeof(nvmlVgpuTypeBar1Info_t))), free);
     if (vgpuTypeBar1Info == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuTypeBar1Info, 0, sizeof(*vgpuTypeBar1Info));
+    memset(vgpuTypeBar1Info.get(), 0, sizeof(*vgpuTypeBar1Info));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2156,18 +2166,18 @@ nvmlVgpuTypeBar1Info_t *nvmlVgpuTypeBar1Info_tDeserializer(const YAML::Node &nod
     {
         NVML_LOG_ERR("missing bar1Size for struct nvmlVgpuTypeBar1Info_t");
     }
-    return vgpuTypeBar1Info;
+    return vgpuTypeBar1Info.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuInstancesUtilizationInfo_t *nvmlVgpuInstancesUtilizationInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuInstancesUtilizationInfo = reinterpret_cast<nvmlVgpuInstancesUtilizationInfo_t *>(malloc(sizeof(nvmlVgpuInstancesUtilizationInfo_t)));
+    std::unique_ptr<nvmlVgpuInstancesUtilizationInfo_t, decltype(&free)> vgpuInstancesUtilizationInfo(reinterpret_cast<nvmlVgpuInstancesUtilizationInfo_t *>(malloc(sizeof(nvmlVgpuInstancesUtilizationInfo_t))), free);
     if (vgpuInstancesUtilizationInfo == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuInstancesUtilizationInfo, 0, sizeof(*vgpuInstancesUtilizationInfo));
+    memset(vgpuInstancesUtilizationInfo.get(), 0, sizeof(*vgpuInstancesUtilizationInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2213,18 +2223,18 @@ nvmlVgpuInstancesUtilizationInfo_t *nvmlVgpuInstancesUtilizationInfo_tDeserializ
     {
         NVML_LOG_ERR("missing vgpuUtilArray for struct nvmlVgpuInstancesUtilizationInfo_t");
     }
-    return vgpuInstancesUtilizationInfo;
+    return vgpuInstancesUtilizationInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuProcessUtilizationSample_t *nvmlVgpuProcessUtilizationSample_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuProcessUtilizationSample = reinterpret_cast<nvmlVgpuProcessUtilizationSample_t *>(malloc(sizeof(nvmlVgpuProcessUtilizationSample_t)));
+    std::unique_ptr<nvmlVgpuProcessUtilizationSample_t, decltype(&free)> vgpuProcessUtilizationSample(reinterpret_cast<nvmlVgpuProcessUtilizationSample_t *>(malloc(sizeof(nvmlVgpuProcessUtilizationSample_t))), free);
     if (vgpuProcessUtilizationSample == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuProcessUtilizationSample, 0, sizeof(*vgpuProcessUtilizationSample));
+    memset(vgpuProcessUtilizationSample.get(), 0, sizeof(*vgpuProcessUtilizationSample));
     if (node["vgpuInstance"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2298,18 +2308,18 @@ nvmlVgpuProcessUtilizationSample_t *nvmlVgpuProcessUtilizationSample_tDeserializ
     {
         NVML_LOG_ERR("missing decUtil for struct nvmlVgpuProcessUtilizationSample_t");
     }
-    return vgpuProcessUtilizationSample;
+    return vgpuProcessUtilizationSample.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuProcessUtilizationInfo_v1_t *nvmlVgpuProcessUtilizationInfo_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuProcessUtilizationInfo_v1 = reinterpret_cast<nvmlVgpuProcessUtilizationInfo_v1_t *>(malloc(sizeof(nvmlVgpuProcessUtilizationInfo_v1_t)));
+    std::unique_ptr<nvmlVgpuProcessUtilizationInfo_v1_t, decltype(&free)> vgpuProcessUtilizationInfo_v1(reinterpret_cast<nvmlVgpuProcessUtilizationInfo_v1_t *>(malloc(sizeof(nvmlVgpuProcessUtilizationInfo_v1_t))), free);
     if (vgpuProcessUtilizationInfo_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuProcessUtilizationInfo_v1, 0, sizeof(*vgpuProcessUtilizationInfo_v1));
+    memset(vgpuProcessUtilizationInfo_v1.get(), 0, sizeof(*vgpuProcessUtilizationInfo_v1));
     if (node["processName"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2401,18 +2411,18 @@ nvmlVgpuProcessUtilizationInfo_v1_t *nvmlVgpuProcessUtilizationInfo_v1_tDeserial
     {
         NVML_LOG_ERR("missing ofaUtil for struct nvmlVgpuProcessUtilizationInfo_v1_t");
     }
-    return vgpuProcessUtilizationInfo_v1;
+    return vgpuProcessUtilizationInfo_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuProcessesUtilizationInfo_t *nvmlVgpuProcessesUtilizationInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuProcessesUtilizationInfo = reinterpret_cast<nvmlVgpuProcessesUtilizationInfo_t *>(malloc(sizeof(nvmlVgpuProcessesUtilizationInfo_t)));
+    std::unique_ptr<nvmlVgpuProcessesUtilizationInfo_t, decltype(&free)> vgpuProcessesUtilizationInfo(reinterpret_cast<nvmlVgpuProcessesUtilizationInfo_t *>(malloc(sizeof(nvmlVgpuProcessesUtilizationInfo_t))), free);
     if (vgpuProcessesUtilizationInfo == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuProcessesUtilizationInfo, 0, sizeof(*vgpuProcessesUtilizationInfo));
+    memset(vgpuProcessesUtilizationInfo.get(), 0, sizeof(*vgpuProcessesUtilizationInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2446,7 +2456,6 @@ nvmlVgpuProcessesUtilizationInfo_t *nvmlVgpuProcessesUtilizationInfo_tDeserializ
         auto *tmp0 = nvmlVgpuProcessUtilizationInfo_v1_tDeserializer(node["vgpuProcUtilArray"]);
         if (!tmp0)
         {
-            free(vgpuProcessesUtilizationInfo);
             return nullptr;
         }
         std::memcpy(vgpuProcessesUtilizationInfo->vgpuProcUtilArray, tmp0, sizeof(nvmlVgpuProcessUtilizationInfo_v1_t));
@@ -2456,18 +2465,18 @@ nvmlVgpuProcessesUtilizationInfo_t *nvmlVgpuProcessesUtilizationInfo_tDeserializ
     {
         NVML_LOG_ERR("missing vgpuProcUtilArray for struct nvmlVgpuProcessesUtilizationInfo_t");
     }
-    return vgpuProcessesUtilizationInfo;
+    return vgpuProcessesUtilizationInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuRuntimeState_t *nvmlVgpuRuntimeState_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuRuntimeState = reinterpret_cast<nvmlVgpuRuntimeState_t *>(malloc(sizeof(nvmlVgpuRuntimeState_t)));
+    std::unique_ptr<nvmlVgpuRuntimeState_t, decltype(&free)> vgpuRuntimeState(reinterpret_cast<nvmlVgpuRuntimeState_t *>(malloc(sizeof(nvmlVgpuRuntimeState_t))), free);
     if (vgpuRuntimeState == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuRuntimeState, 0, sizeof(*vgpuRuntimeState));
+    memset(vgpuRuntimeState.get(), 0, sizeof(*vgpuRuntimeState));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2486,18 +2495,18 @@ nvmlVgpuRuntimeState_t *nvmlVgpuRuntimeState_tDeserializer(const YAML::Node &nod
     {
         NVML_LOG_ERR("missing size for struct nvmlVgpuRuntimeState_t");
     }
-    return vgpuRuntimeState;
+    return vgpuRuntimeState.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuSchedulerLogEntry_t *nvmlVgpuSchedulerLogEntry_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuSchedulerLogEntry = reinterpret_cast<nvmlVgpuSchedulerLogEntry_t *>(malloc(sizeof(nvmlVgpuSchedulerLogEntry_t)));
+    std::unique_ptr<nvmlVgpuSchedulerLogEntry_t, decltype(&free)> vgpuSchedulerLogEntry(reinterpret_cast<nvmlVgpuSchedulerLogEntry_t *>(malloc(sizeof(nvmlVgpuSchedulerLogEntry_t))), free);
     if (vgpuSchedulerLogEntry == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuSchedulerLogEntry, 0, sizeof(*vgpuSchedulerLogEntry));
+    memset(vgpuSchedulerLogEntry.get(), 0, sizeof(*vgpuSchedulerLogEntry));
     if (node["timestamp"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2552,18 +2561,18 @@ nvmlVgpuSchedulerLogEntry_t *nvmlVgpuSchedulerLogEntry_tDeserializer(const YAML:
     {
         NVML_LOG_ERR("missing cumulativePreemptionTime for struct nvmlVgpuSchedulerLogEntry_t");
     }
-    return vgpuSchedulerLogEntry;
+    return vgpuSchedulerLogEntry.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuSchedulerLog_t *nvmlVgpuSchedulerLog_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuSchedulerLog = reinterpret_cast<nvmlVgpuSchedulerLog_t *>(malloc(sizeof(nvmlVgpuSchedulerLog_t)));
+    std::unique_ptr<nvmlVgpuSchedulerLog_t, decltype(&free)> vgpuSchedulerLog(reinterpret_cast<nvmlVgpuSchedulerLog_t *>(malloc(sizeof(nvmlVgpuSchedulerLog_t))), free);
     if (vgpuSchedulerLog == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuSchedulerLog, 0, sizeof(*vgpuSchedulerLog));
+    memset(vgpuSchedulerLog.get(), 0, sizeof(*vgpuSchedulerLog));
     if (node["engineId"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2616,15 +2625,14 @@ nvmlVgpuSchedulerLog_t *nvmlVgpuSchedulerLog_tDeserializer(const YAML::Node &nod
         int size = std::min(node["logEntries"].size(), sizeof(vgpuSchedulerLog->logEntries) / sizeof(nvmlVgpuSchedulerLogEntry_t));
         for (YAML::const_iterator it = node["logEntries"].begin(); it != node["logEntries"].end(); ++it)
         {
-            auto *tmp = nvmlVgpuSchedulerLogEntry_tDeserializer(*it);
-            if (!tmp)
-            {
-                free(vgpuSchedulerLog);
-                return nullptr;
-            }
             if (idx >= size)
             {
                 break;
+            }
+            auto *tmp = nvmlVgpuSchedulerLogEntry_tDeserializer(*it);
+            if (!tmp)
+            {
+                return nullptr;
             }
             std::memcpy(&vgpuSchedulerLog->logEntries[idx++], tmp, sizeof(nvmlVgpuSchedulerLogEntry_t));
             free(tmp);
@@ -2634,18 +2642,18 @@ nvmlVgpuSchedulerLog_t *nvmlVgpuSchedulerLog_tDeserializer(const YAML::Node &nod
     {
         NVML_LOG_ERR("missing logEntries for struct nvmlVgpuSchedulerLog_t");
     }
-    return vgpuSchedulerLog;
+    return vgpuSchedulerLog.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuSchedulerGetState_t *nvmlVgpuSchedulerGetState_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuSchedulerGetState = reinterpret_cast<nvmlVgpuSchedulerGetState_t *>(malloc(sizeof(nvmlVgpuSchedulerGetState_t)));
+    std::unique_ptr<nvmlVgpuSchedulerGetState_t, decltype(&free)> vgpuSchedulerGetState(reinterpret_cast<nvmlVgpuSchedulerGetState_t *>(malloc(sizeof(nvmlVgpuSchedulerGetState_t))), free);
     if (vgpuSchedulerGetState == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuSchedulerGetState, 0, sizeof(*vgpuSchedulerGetState));
+    memset(vgpuSchedulerGetState.get(), 0, sizeof(*vgpuSchedulerGetState));
     if (node["schedulerPolicy"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2673,18 +2681,18 @@ nvmlVgpuSchedulerGetState_t *nvmlVgpuSchedulerGetState_tDeserializer(const YAML:
     {
         NVML_LOG_ERR("missing schedulerParams for struct nvmlVgpuSchedulerGetState_t");
     }
-    return vgpuSchedulerGetState;
+    return vgpuSchedulerGetState.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuSchedulerSetState_t *nvmlVgpuSchedulerSetState_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuSchedulerSetState = reinterpret_cast<nvmlVgpuSchedulerSetState_t *>(malloc(sizeof(nvmlVgpuSchedulerSetState_t)));
+    std::unique_ptr<nvmlVgpuSchedulerSetState_t, decltype(&free)> vgpuSchedulerSetState(reinterpret_cast<nvmlVgpuSchedulerSetState_t *>(malloc(sizeof(nvmlVgpuSchedulerSetState_t))), free);
     if (vgpuSchedulerSetState == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuSchedulerSetState, 0, sizeof(*vgpuSchedulerSetState));
+    memset(vgpuSchedulerSetState.get(), 0, sizeof(*vgpuSchedulerSetState));
     if (node["schedulerPolicy"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2712,25 +2720,26 @@ nvmlVgpuSchedulerSetState_t *nvmlVgpuSchedulerSetState_tDeserializer(const YAML:
     {
         NVML_LOG_ERR("missing schedulerParams for struct nvmlVgpuSchedulerSetState_t");
     }
-    return vgpuSchedulerSetState;
+    return vgpuSchedulerSetState.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuSchedulerCapabilities_t *nvmlVgpuSchedulerCapabilities_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuSchedulerCapabilities = reinterpret_cast<nvmlVgpuSchedulerCapabilities_t *>(malloc(sizeof(nvmlVgpuSchedulerCapabilities_t)));
+    std::unique_ptr<nvmlVgpuSchedulerCapabilities_t, decltype(&free)> vgpuSchedulerCapabilities(reinterpret_cast<nvmlVgpuSchedulerCapabilities_t *>(malloc(sizeof(nvmlVgpuSchedulerCapabilities_t))), free);
     if (vgpuSchedulerCapabilities == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuSchedulerCapabilities, 0, sizeof(*vgpuSchedulerCapabilities));
+    memset(vgpuSchedulerCapabilities.get(), 0, sizeof(*vgpuSchedulerCapabilities));
     if (node["supportedSchedulers"])
     {
         // The following snippet is generated from write_deserializer_definition
-        auto const tmp0 = node["supportedSchedulers"].as<std::vector<unsigned int>>();
-        for (unsigned int ii = 0; ii < tmp0.size(); ++ii)
+        auto const size = sizeof(vgpuSchedulerCapabilities->supportedSchedulers) / sizeof(vgpuSchedulerCapabilities->supportedSchedulers[0]);
+        unsigned int ii = 0;
+        for (YAML::const_iterator it = node["supportedSchedulers"].begin(); it != node["supportedSchedulers"].end() && ii < size; ++it)
         {
-            vgpuSchedulerCapabilities->supportedSchedulers[ii] = tmp0[ii];
+            vgpuSchedulerCapabilities->supportedSchedulers[ii++] = it->as<unsigned int>();
         }
     }
     else
@@ -2800,18 +2809,18 @@ nvmlVgpuSchedulerCapabilities_t *nvmlVgpuSchedulerCapabilities_tDeserializer(con
     {
         NVML_LOG_ERR("missing minAvgFactorForARR for struct nvmlVgpuSchedulerCapabilities_t");
     }
-    return vgpuSchedulerCapabilities;
+    return vgpuSchedulerCapabilities.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuLicenseExpiry_t *nvmlVgpuLicenseExpiry_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuLicenseExpiry = reinterpret_cast<nvmlVgpuLicenseExpiry_t *>(malloc(sizeof(nvmlVgpuLicenseExpiry_t)));
+    std::unique_ptr<nvmlVgpuLicenseExpiry_t, decltype(&free)> vgpuLicenseExpiry(reinterpret_cast<nvmlVgpuLicenseExpiry_t *>(malloc(sizeof(nvmlVgpuLicenseExpiry_t))), free);
     if (vgpuLicenseExpiry == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuLicenseExpiry, 0, sizeof(*vgpuLicenseExpiry));
+    memset(vgpuLicenseExpiry.get(), 0, sizeof(*vgpuLicenseExpiry));
     if (node["year"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2875,18 +2884,18 @@ nvmlVgpuLicenseExpiry_t *nvmlVgpuLicenseExpiry_tDeserializer(const YAML::Node &n
     {
         NVML_LOG_ERR("missing status for struct nvmlVgpuLicenseExpiry_t");
     }
-    return vgpuLicenseExpiry;
+    return vgpuLicenseExpiry.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuLicenseInfo_t *nvmlVgpuLicenseInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuLicenseInfo = reinterpret_cast<nvmlVgpuLicenseInfo_t *>(malloc(sizeof(nvmlVgpuLicenseInfo_t)));
+    std::unique_ptr<nvmlVgpuLicenseInfo_t, decltype(&free)> vgpuLicenseInfo(reinterpret_cast<nvmlVgpuLicenseInfo_t *>(malloc(sizeof(nvmlVgpuLicenseInfo_t))), free);
     if (vgpuLicenseInfo == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuLicenseInfo, 0, sizeof(*vgpuLicenseInfo));
+    memset(vgpuLicenseInfo.get(), 0, sizeof(*vgpuLicenseInfo));
     if (node["isLicensed"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2902,7 +2911,6 @@ nvmlVgpuLicenseInfo_t *nvmlVgpuLicenseInfo_tDeserializer(const YAML::Node &node)
         auto *tmp0 = nvmlVgpuLicenseExpiry_tDeserializer(node["licenseExpiry"]);
         if (!tmp0)
         {
-            free(vgpuLicenseInfo);
             return nullptr;
         }
         std::memcpy(&vgpuLicenseInfo->licenseExpiry, tmp0, sizeof(nvmlVgpuLicenseExpiry_t));
@@ -2921,18 +2929,18 @@ nvmlVgpuLicenseInfo_t *nvmlVgpuLicenseInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing currentState for struct nvmlVgpuLicenseInfo_t");
     }
-    return vgpuLicenseInfo;
+    return vgpuLicenseInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGridLicenseExpiry_t *nvmlGridLicenseExpiry_tDeserializer(const YAML::Node &node)
 {
-    auto *gridLicenseExpiry = reinterpret_cast<nvmlGridLicenseExpiry_t *>(malloc(sizeof(nvmlGridLicenseExpiry_t)));
+    std::unique_ptr<nvmlGridLicenseExpiry_t, decltype(&free)> gridLicenseExpiry(reinterpret_cast<nvmlGridLicenseExpiry_t *>(malloc(sizeof(nvmlGridLicenseExpiry_t))), free);
     if (gridLicenseExpiry == nullptr)
     {
         return nullptr;
     }
-    memset(gridLicenseExpiry, 0, sizeof(*gridLicenseExpiry));
+    memset(gridLicenseExpiry.get(), 0, sizeof(*gridLicenseExpiry));
     if (node["year"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -2996,18 +3004,18 @@ nvmlGridLicenseExpiry_t *nvmlGridLicenseExpiry_tDeserializer(const YAML::Node &n
     {
         NVML_LOG_ERR("missing status for struct nvmlGridLicenseExpiry_t");
     }
-    return gridLicenseExpiry;
+    return gridLicenseExpiry.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGridLicensableFeature_t *nvmlGridLicensableFeature_tDeserializer(const YAML::Node &node)
 {
-    auto *gridLicensableFeature = reinterpret_cast<nvmlGridLicensableFeature_t *>(malloc(sizeof(nvmlGridLicensableFeature_t)));
+    std::unique_ptr<nvmlGridLicensableFeature_t, decltype(&free)> gridLicensableFeature(reinterpret_cast<nvmlGridLicensableFeature_t *>(malloc(sizeof(nvmlGridLicensableFeature_t))), free);
     if (gridLicensableFeature == nullptr)
     {
         return nullptr;
     }
-    memset(gridLicensableFeature, 0, sizeof(*gridLicensableFeature));
+    memset(gridLicensableFeature.get(), 0, sizeof(*gridLicensableFeature));
     if (node["featureCode"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3061,7 +3069,6 @@ nvmlGridLicensableFeature_t *nvmlGridLicensableFeature_tDeserializer(const YAML:
         auto *tmp0 = nvmlGridLicenseExpiry_tDeserializer(node["licenseExpiry"]);
         if (!tmp0)
         {
-            free(gridLicensableFeature);
             return nullptr;
         }
         std::memcpy(&gridLicensableFeature->licenseExpiry, tmp0, sizeof(nvmlGridLicenseExpiry_t));
@@ -3071,18 +3078,18 @@ nvmlGridLicensableFeature_t *nvmlGridLicensableFeature_tDeserializer(const YAML:
     {
         NVML_LOG_ERR("missing licenseExpiry for struct nvmlGridLicensableFeature_t");
     }
-    return gridLicensableFeature;
+    return gridLicensableFeature.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGridLicensableFeatures_t *nvmlGridLicensableFeatures_tDeserializer(const YAML::Node &node)
 {
-    auto *gridLicensableFeatures = reinterpret_cast<nvmlGridLicensableFeatures_t *>(malloc(sizeof(nvmlGridLicensableFeatures_t)));
+    std::unique_ptr<nvmlGridLicensableFeatures_t, decltype(&free)> gridLicensableFeatures(reinterpret_cast<nvmlGridLicensableFeatures_t *>(malloc(sizeof(nvmlGridLicensableFeatures_t))), free);
     if (gridLicensableFeatures == nullptr)
     {
         return nullptr;
     }
-    memset(gridLicensableFeatures, 0, sizeof(*gridLicensableFeatures));
+    memset(gridLicensableFeatures.get(), 0, sizeof(*gridLicensableFeatures));
     if (node["isGridLicenseSupported"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3108,15 +3115,14 @@ nvmlGridLicensableFeatures_t *nvmlGridLicensableFeatures_tDeserializer(const YAM
         int size = std::min(node["gridLicensableFeatures"].size(), sizeof(gridLicensableFeatures->gridLicensableFeatures) / sizeof(nvmlGridLicensableFeature_t));
         for (YAML::const_iterator it = node["gridLicensableFeatures"].begin(); it != node["gridLicensableFeatures"].end(); ++it)
         {
-            auto *tmp = nvmlGridLicensableFeature_tDeserializer(*it);
-            if (!tmp)
-            {
-                free(gridLicensableFeatures);
-                return nullptr;
-            }
             if (idx >= size)
             {
                 break;
+            }
+            auto *tmp = nvmlGridLicensableFeature_tDeserializer(*it);
+            if (!tmp)
+            {
+                return nullptr;
             }
             std::memcpy(&gridLicensableFeatures->gridLicensableFeatures[idx++], tmp, sizeof(nvmlGridLicensableFeature_t));
             free(tmp);
@@ -3126,18 +3132,18 @@ nvmlGridLicensableFeatures_t *nvmlGridLicensableFeatures_tDeserializer(const YAM
     {
         NVML_LOG_ERR("missing gridLicensableFeatures for struct nvmlGridLicensableFeatures_t");
     }
-    return gridLicensableFeatures;
+    return gridLicensableFeatures.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlNvLinkPowerThres_t *nvmlNvLinkPowerThres_tDeserializer(const YAML::Node &node)
 {
-    auto *nvLinkPowerThres = reinterpret_cast<nvmlNvLinkPowerThres_t *>(malloc(sizeof(nvmlNvLinkPowerThres_t)));
+    std::unique_ptr<nvmlNvLinkPowerThres_t, decltype(&free)> nvLinkPowerThres(reinterpret_cast<nvmlNvLinkPowerThres_t *>(malloc(sizeof(nvmlNvLinkPowerThres_t))), free);
     if (nvLinkPowerThres == nullptr)
     {
         return nullptr;
     }
-    memset(nvLinkPowerThres, 0, sizeof(*nvLinkPowerThres));
+    memset(nvLinkPowerThres.get(), 0, sizeof(*nvLinkPowerThres));
     if (node["lowPwrThreshold"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3147,18 +3153,18 @@ nvmlNvLinkPowerThres_t *nvmlNvLinkPowerThres_tDeserializer(const YAML::Node &nod
     {
         NVML_LOG_ERR("missing lowPwrThreshold for struct nvmlNvLinkPowerThres_t");
     }
-    return nvLinkPowerThres;
+    return nvLinkPowerThres.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlHwbcEntry_t *nvmlHwbcEntry_tDeserializer(const YAML::Node &node)
 {
-    auto *hwbcEntry = reinterpret_cast<nvmlHwbcEntry_t *>(malloc(sizeof(nvmlHwbcEntry_t)));
+    std::unique_ptr<nvmlHwbcEntry_t, decltype(&free)> hwbcEntry(reinterpret_cast<nvmlHwbcEntry_t *>(malloc(sizeof(nvmlHwbcEntry_t))), free);
     if (hwbcEntry == nullptr)
     {
         return nullptr;
     }
-    memset(hwbcEntry, 0, sizeof(*hwbcEntry));
+    memset(hwbcEntry.get(), 0, sizeof(*hwbcEntry));
     if (node["hwbcId"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3178,18 +3184,18 @@ nvmlHwbcEntry_t *nvmlHwbcEntry_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing firmwareVersion for struct nvmlHwbcEntry_t");
     }
-    return hwbcEntry;
+    return hwbcEntry.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlLedState_t *nvmlLedState_tDeserializer(const YAML::Node &node)
 {
-    auto *ledState = reinterpret_cast<nvmlLedState_t *>(malloc(sizeof(nvmlLedState_t)));
+    std::unique_ptr<nvmlLedState_t, decltype(&free)> ledState(reinterpret_cast<nvmlLedState_t *>(malloc(sizeof(nvmlLedState_t))), free);
     if (ledState == nullptr)
     {
         return nullptr;
     }
-    memset(ledState, 0, sizeof(*ledState));
+    memset(ledState.get(), 0, sizeof(*ledState));
     if (node["cause"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3209,18 +3215,18 @@ nvmlLedState_t *nvmlLedState_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing color for struct nvmlLedState_t");
     }
-    return ledState;
+    return ledState.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlUnitInfo_t *nvmlUnitInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *unitInfo = reinterpret_cast<nvmlUnitInfo_t *>(malloc(sizeof(nvmlUnitInfo_t)));
+    std::unique_ptr<nvmlUnitInfo_t, decltype(&free)> unitInfo(reinterpret_cast<nvmlUnitInfo_t *>(malloc(sizeof(nvmlUnitInfo_t))), free);
     if (unitInfo == nullptr)
     {
         return nullptr;
     }
-    memset(unitInfo, 0, sizeof(*unitInfo));
+    memset(unitInfo.get(), 0, sizeof(*unitInfo));
     if (node["name"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3261,18 +3267,18 @@ nvmlUnitInfo_t *nvmlUnitInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing firmwareVersion for struct nvmlUnitInfo_t");
     }
-    return unitInfo;
+    return unitInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlPSUInfo_t *nvmlPSUInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *pSUInfo = reinterpret_cast<nvmlPSUInfo_t *>(malloc(sizeof(nvmlPSUInfo_t)));
+    std::unique_ptr<nvmlPSUInfo_t, decltype(&free)> pSUInfo(reinterpret_cast<nvmlPSUInfo_t *>(malloc(sizeof(nvmlPSUInfo_t))), free);
     if (pSUInfo == nullptr)
     {
         return nullptr;
     }
-    memset(pSUInfo, 0, sizeof(*pSUInfo));
+    memset(pSUInfo.get(), 0, sizeof(*pSUInfo));
     if (node["state"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3310,18 +3316,18 @@ nvmlPSUInfo_t *nvmlPSUInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing power for struct nvmlPSUInfo_t");
     }
-    return pSUInfo;
+    return pSUInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlUnitFanInfo_t *nvmlUnitFanInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *unitFanInfo = reinterpret_cast<nvmlUnitFanInfo_t *>(malloc(sizeof(nvmlUnitFanInfo_t)));
+    std::unique_ptr<nvmlUnitFanInfo_t, decltype(&free)> unitFanInfo(reinterpret_cast<nvmlUnitFanInfo_t *>(malloc(sizeof(nvmlUnitFanInfo_t))), free);
     if (unitFanInfo == nullptr)
     {
         return nullptr;
     }
-    memset(unitFanInfo, 0, sizeof(*unitFanInfo));
+    memset(unitFanInfo.get(), 0, sizeof(*unitFanInfo));
     if (node["speed"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3340,18 +3346,18 @@ nvmlUnitFanInfo_t *nvmlUnitFanInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing state for struct nvmlUnitFanInfo_t");
     }
-    return unitFanInfo;
+    return unitFanInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlUnitFanSpeeds_t *nvmlUnitFanSpeeds_tDeserializer(const YAML::Node &node)
 {
-    auto *unitFanSpeeds = reinterpret_cast<nvmlUnitFanSpeeds_t *>(malloc(sizeof(nvmlUnitFanSpeeds_t)));
+    std::unique_ptr<nvmlUnitFanSpeeds_t, decltype(&free)> unitFanSpeeds(reinterpret_cast<nvmlUnitFanSpeeds_t *>(malloc(sizeof(nvmlUnitFanSpeeds_t))), free);
     if (unitFanSpeeds == nullptr)
     {
         return nullptr;
     }
-    memset(unitFanSpeeds, 0, sizeof(*unitFanSpeeds));
+    memset(unitFanSpeeds.get(), 0, sizeof(*unitFanSpeeds));
     if (node["fans"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3359,15 +3365,14 @@ nvmlUnitFanSpeeds_t *nvmlUnitFanSpeeds_tDeserializer(const YAML::Node &node)
         int size = std::min(node["fans"].size(), sizeof(unitFanSpeeds->fans) / sizeof(nvmlUnitFanInfo_t));
         for (YAML::const_iterator it = node["fans"].begin(); it != node["fans"].end(); ++it)
         {
-            auto *tmp = nvmlUnitFanInfo_tDeserializer(*it);
-            if (!tmp)
-            {
-                free(unitFanSpeeds);
-                return nullptr;
-            }
             if (idx >= size)
             {
                 break;
+            }
+            auto *tmp = nvmlUnitFanInfo_tDeserializer(*it);
+            if (!tmp)
+            {
+                return nullptr;
             }
             std::memcpy(&unitFanSpeeds->fans[idx++], tmp, sizeof(nvmlUnitFanInfo_t));
             free(tmp);
@@ -3386,18 +3391,165 @@ nvmlUnitFanSpeeds_t *nvmlUnitFanSpeeds_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing count for struct nvmlUnitFanSpeeds_t");
     }
-    return unitFanSpeeds;
+    return unitFanSpeeds.release();
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlEventSetGetContextCount_v1_t *nvmlEventSetGetContextCount_v1_tDeserializer(const YAML::Node &node)
+{
+    std::unique_ptr<nvmlEventSetGetContextCount_v1_t, decltype(&free)> eventSetGetContextCount_v1(reinterpret_cast<nvmlEventSetGetContextCount_v1_t *>(malloc(sizeof(nvmlEventSetGetContextCount_v1_t))), free);
+    if (eventSetGetContextCount_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(eventSetGetContextCount_v1.get(), 0, sizeof(*eventSetGetContextCount_v1));
+    if (node["count"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetContextCount_v1->count = node["count"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing count for struct nvmlEventSetGetContextCount_v1_t");
+    }
+    return eventSetGetContextCount_v1.release();
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlEventSetGetContextInfo_v1_t *nvmlEventSetGetContextInfo_v1_tDeserializer(const YAML::Node &node)
+{
+    std::unique_ptr<nvmlEventSetGetContextInfo_v1_t, decltype(&free)> eventSetGetContextInfo_v1(reinterpret_cast<nvmlEventSetGetContextInfo_v1_t *>(malloc(sizeof(nvmlEventSetGetContextInfo_v1_t))), free);
+    if (eventSetGetContextInfo_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(eventSetGetContextInfo_v1.get(), 0, sizeof(*eventSetGetContextInfo_v1));
+    if (node["index"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetContextInfo_v1->index = node["index"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing index for struct nvmlEventSetGetContextInfo_v1_t");
+    }
+    if (node["nvmlGpuOperationalEventContextType"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetContextInfo_v1->nvmlGpuOperationalEventContextType = node["nvmlGpuOperationalEventContextType"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing nvmlGpuOperationalEventContextType for struct nvmlEventSetGetContextInfo_v1_t");
+    }
+    if (node["sourceEventContextType"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetContextInfo_v1->sourceEventContextType = node["sourceEventContextType"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing sourceEventContextType for struct nvmlEventSetGetContextInfo_v1_t");
+    }
+    if (node["dataSize"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetContextInfo_v1->dataSize = node["dataSize"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing dataSize for struct nvmlEventSetGetContextInfo_v1_t");
+    }
+    if (node["dataFormatVersion"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetContextInfo_v1->dataFormatVersion = node["dataFormatVersion"].as<unsigned short>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing dataFormatVersion for struct nvmlEventSetGetContextInfo_v1_t");
+    }
+    return eventSetGetContextInfo_v1.release();
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlEventSetGetContextData_v1_t *nvmlEventSetGetContextData_v1_tDeserializer(const YAML::Node &node)
+{
+    std::unique_ptr<nvmlEventSetGetContextData_v1_t, decltype(&free)> eventSetGetContextData_v1(reinterpret_cast<nvmlEventSetGetContextData_v1_t *>(malloc(sizeof(nvmlEventSetGetContextData_v1_t))), free);
+    if (eventSetGetContextData_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(eventSetGetContextData_v1.get(), 0, sizeof(*eventSetGetContextData_v1));
+    if (node["data"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        NVML_LOG_ERR("Skipping loading data for struct nvmlEventSetGetContextData_v1_t");
+    }
+    else
+    {
+        NVML_LOG_ERR("missing data for struct nvmlEventSetGetContextData_v1_t");
+    }
+    if (node["index"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetContextData_v1->index = node["index"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing index for struct nvmlEventSetGetContextData_v1_t");
+    }
+    if (node["dataSize"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetContextData_v1->dataSize = node["dataSize"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing dataSize for struct nvmlEventSetGetContextData_v1_t");
+    }
+    return eventSetGetContextData_v1.release();
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_tDeserializer(const YAML::Node &node)
+{
+    std::unique_ptr<nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t, decltype(&free)> eventSetGetGpuOperationalEventContextLegacyXid_v1(reinterpret_cast<nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *>(malloc(sizeof(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t))), free);
+    if (eventSetGetGpuOperationalEventContextLegacyXid_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(eventSetGetGpuOperationalEventContextLegacyXid_v1.get(), 0, sizeof(*eventSetGetGpuOperationalEventContextLegacyXid_v1));
+    if (node["index"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetGpuOperationalEventContextLegacyXid_v1->index = node["index"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing index for struct nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t");
+    }
+    if (node["xidCode"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetGetGpuOperationalEventContextLegacyXid_v1->xidCode = node["xidCode"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing xidCode for struct nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t");
+    }
+    return eventSetGetGpuOperationalEventContextLegacyXid_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlSystemEventData_v1_t *nvmlSystemEventData_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *systemEventData_v1 = reinterpret_cast<nvmlSystemEventData_v1_t *>(malloc(sizeof(nvmlSystemEventData_v1_t)));
+    std::unique_ptr<nvmlSystemEventData_v1_t, decltype(&free)> systemEventData_v1(reinterpret_cast<nvmlSystemEventData_v1_t *>(malloc(sizeof(nvmlSystemEventData_v1_t))), free);
     if (systemEventData_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(systemEventData_v1, 0, sizeof(*systemEventData_v1));
+    memset(systemEventData_v1.get(), 0, sizeof(*systemEventData_v1));
     if (node["eventType"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3416,18 +3568,18 @@ nvmlSystemEventData_v1_t *nvmlSystemEventData_v1_tDeserializer(const YAML::Node 
     {
         NVML_LOG_ERR("missing gpuId for struct nvmlSystemEventData_v1_t");
     }
-    return systemEventData_v1;
+    return systemEventData_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlAccountingStats_t *nvmlAccountingStats_tDeserializer(const YAML::Node &node)
 {
-    auto *accountingStats = reinterpret_cast<nvmlAccountingStats_t *>(malloc(sizeof(nvmlAccountingStats_t)));
+    std::unique_ptr<nvmlAccountingStats_t, decltype(&free)> accountingStats(reinterpret_cast<nvmlAccountingStats_t *>(malloc(sizeof(nvmlAccountingStats_t))), free);
     if (accountingStats == nullptr)
     {
         return nullptr;
     }
-    memset(accountingStats, 0, sizeof(*accountingStats));
+    memset(accountingStats.get(), 0, sizeof(*accountingStats));
     if (node["gpuUtilization"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3482,18 +3634,18 @@ nvmlAccountingStats_t *nvmlAccountingStats_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing isRunning for struct nvmlAccountingStats_t");
     }
-    return accountingStats;
+    return accountingStats.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlEncoderSessionInfo_t *nvmlEncoderSessionInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *encoderSessionInfo = reinterpret_cast<nvmlEncoderSessionInfo_t *>(malloc(sizeof(nvmlEncoderSessionInfo_t)));
+    std::unique_ptr<nvmlEncoderSessionInfo_t, decltype(&free)> encoderSessionInfo(reinterpret_cast<nvmlEncoderSessionInfo_t *>(malloc(sizeof(nvmlEncoderSessionInfo_t))), free);
     if (encoderSessionInfo == nullptr)
     {
         return nullptr;
     }
-    memset(encoderSessionInfo, 0, sizeof(*encoderSessionInfo));
+    memset(encoderSessionInfo.get(), 0, sizeof(*encoderSessionInfo));
     if (node["sessionId"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3566,18 +3718,18 @@ nvmlEncoderSessionInfo_t *nvmlEncoderSessionInfo_tDeserializer(const YAML::Node 
     {
         NVML_LOG_ERR("missing averageLatency for struct nvmlEncoderSessionInfo_t");
     }
-    return encoderSessionInfo;
+    return encoderSessionInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlFBCStats_t *nvmlFBCStats_tDeserializer(const YAML::Node &node)
 {
-    auto *fBCStats = reinterpret_cast<nvmlFBCStats_t *>(malloc(sizeof(nvmlFBCStats_t)));
+    std::unique_ptr<nvmlFBCStats_t, decltype(&free)> fBCStats(reinterpret_cast<nvmlFBCStats_t *>(malloc(sizeof(nvmlFBCStats_t))), free);
     if (fBCStats == nullptr)
     {
         return nullptr;
     }
-    memset(fBCStats, 0, sizeof(*fBCStats));
+    memset(fBCStats.get(), 0, sizeof(*fBCStats));
     if (node["sessionsCount"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3605,18 +3757,18 @@ nvmlFBCStats_t *nvmlFBCStats_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing averageLatency for struct nvmlFBCStats_t");
     }
-    return fBCStats;
+    return fBCStats.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlFBCSessionInfo_t *nvmlFBCSessionInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *fBCSessionInfo = reinterpret_cast<nvmlFBCSessionInfo_t *>(malloc(sizeof(nvmlFBCSessionInfo_t)));
+    std::unique_ptr<nvmlFBCSessionInfo_t, decltype(&free)> fBCSessionInfo(reinterpret_cast<nvmlFBCSessionInfo_t *>(malloc(sizeof(nvmlFBCSessionInfo_t))), free);
     if (fBCSessionInfo == nullptr)
     {
         return nullptr;
     }
-    memset(fBCSessionInfo, 0, sizeof(*fBCSessionInfo));
+    memset(fBCSessionInfo.get(), 0, sizeof(*fBCSessionInfo));
     if (node["sessionId"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3725,18 +3877,18 @@ nvmlFBCSessionInfo_t *nvmlFBCSessionInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing averageLatency for struct nvmlFBCSessionInfo_t");
     }
-    return fBCSessionInfo;
+    return fBCSessionInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlConfComputeSystemCaps_t *nvmlConfComputeSystemCaps_tDeserializer(const YAML::Node &node)
 {
-    auto *confComputeSystemCaps = reinterpret_cast<nvmlConfComputeSystemCaps_t *>(malloc(sizeof(nvmlConfComputeSystemCaps_t)));
+    std::unique_ptr<nvmlConfComputeSystemCaps_t, decltype(&free)> confComputeSystemCaps(reinterpret_cast<nvmlConfComputeSystemCaps_t *>(malloc(sizeof(nvmlConfComputeSystemCaps_t))), free);
     if (confComputeSystemCaps == nullptr)
     {
         return nullptr;
     }
-    memset(confComputeSystemCaps, 0, sizeof(*confComputeSystemCaps));
+    memset(confComputeSystemCaps.get(), 0, sizeof(*confComputeSystemCaps));
     if (node["cpuCaps"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3755,18 +3907,18 @@ nvmlConfComputeSystemCaps_t *nvmlConfComputeSystemCaps_tDeserializer(const YAML:
     {
         NVML_LOG_ERR("missing gpusCaps for struct nvmlConfComputeSystemCaps_t");
     }
-    return confComputeSystemCaps;
+    return confComputeSystemCaps.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlConfComputeSystemState_t *nvmlConfComputeSystemState_tDeserializer(const YAML::Node &node)
 {
-    auto *confComputeSystemState = reinterpret_cast<nvmlConfComputeSystemState_t *>(malloc(sizeof(nvmlConfComputeSystemState_t)));
+    std::unique_ptr<nvmlConfComputeSystemState_t, decltype(&free)> confComputeSystemState(reinterpret_cast<nvmlConfComputeSystemState_t *>(malloc(sizeof(nvmlConfComputeSystemState_t))), free);
     if (confComputeSystemState == nullptr)
     {
         return nullptr;
     }
-    memset(confComputeSystemState, 0, sizeof(*confComputeSystemState));
+    memset(confComputeSystemState.get(), 0, sizeof(*confComputeSystemState));
     if (node["environment"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3794,18 +3946,18 @@ nvmlConfComputeSystemState_t *nvmlConfComputeSystemState_tDeserializer(const YAM
     {
         NVML_LOG_ERR("missing devToolsMode for struct nvmlConfComputeSystemState_t");
     }
-    return confComputeSystemState;
+    return confComputeSystemState.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlSystemConfComputeSettings_t *nvmlSystemConfComputeSettings_tDeserializer(const YAML::Node &node)
 {
-    auto *systemConfComputeSettings = reinterpret_cast<nvmlSystemConfComputeSettings_t *>(malloc(sizeof(nvmlSystemConfComputeSettings_t)));
+    std::unique_ptr<nvmlSystemConfComputeSettings_t, decltype(&free)> systemConfComputeSettings(reinterpret_cast<nvmlSystemConfComputeSettings_t *>(malloc(sizeof(nvmlSystemConfComputeSettings_t))), free);
     if (systemConfComputeSettings == nullptr)
     {
         return nullptr;
     }
-    memset(systemConfComputeSettings, 0, sizeof(*systemConfComputeSettings));
+    memset(systemConfComputeSettings.get(), 0, sizeof(*systemConfComputeSettings));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3851,18 +4003,18 @@ nvmlSystemConfComputeSettings_t *nvmlSystemConfComputeSettings_tDeserializer(con
     {
         NVML_LOG_ERR("missing multiGpuMode for struct nvmlSystemConfComputeSettings_t");
     }
-    return systemConfComputeSettings;
+    return systemConfComputeSettings.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlConfComputeMemSizeInfo_t *nvmlConfComputeMemSizeInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *confComputeMemSizeInfo = reinterpret_cast<nvmlConfComputeMemSizeInfo_t *>(malloc(sizeof(nvmlConfComputeMemSizeInfo_t)));
+    std::unique_ptr<nvmlConfComputeMemSizeInfo_t, decltype(&free)> confComputeMemSizeInfo(reinterpret_cast<nvmlConfComputeMemSizeInfo_t *>(malloc(sizeof(nvmlConfComputeMemSizeInfo_t))), free);
     if (confComputeMemSizeInfo == nullptr)
     {
         return nullptr;
     }
-    memset(confComputeMemSizeInfo, 0, sizeof(*confComputeMemSizeInfo));
+    memset(confComputeMemSizeInfo.get(), 0, sizeof(*confComputeMemSizeInfo));
     if (node["protectedMemSizeKib"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3881,18 +4033,18 @@ nvmlConfComputeMemSizeInfo_t *nvmlConfComputeMemSizeInfo_tDeserializer(const YAM
     {
         NVML_LOG_ERR("missing unprotectedMemSizeKib for struct nvmlConfComputeMemSizeInfo_t");
     }
-    return confComputeMemSizeInfo;
+    return confComputeMemSizeInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlConfComputeGpuCertificate_t *nvmlConfComputeGpuCertificate_tDeserializer(const YAML::Node &node)
 {
-    auto *confComputeGpuCertificate = reinterpret_cast<nvmlConfComputeGpuCertificate_t *>(malloc(sizeof(nvmlConfComputeGpuCertificate_t)));
+    std::unique_ptr<nvmlConfComputeGpuCertificate_t, decltype(&free)> confComputeGpuCertificate(reinterpret_cast<nvmlConfComputeGpuCertificate_t *>(malloc(sizeof(nvmlConfComputeGpuCertificate_t))), free);
     if (confComputeGpuCertificate == nullptr)
     {
         return nullptr;
     }
-    memset(confComputeGpuCertificate, 0, sizeof(*confComputeGpuCertificate));
+    memset(confComputeGpuCertificate.get(), 0, sizeof(*confComputeGpuCertificate));
     if (node["certChainSize"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -3931,18 +4083,18 @@ nvmlConfComputeGpuCertificate_t *nvmlConfComputeGpuCertificate_tDeserializer(con
     {
         NVML_LOG_ERR("missing attestationCertChain for struct nvmlConfComputeGpuCertificate_t");
     }
-    return confComputeGpuCertificate;
+    return confComputeGpuCertificate.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlConfComputeGpuAttestationReport_t *nvmlConfComputeGpuAttestationReport_tDeserializer(const YAML::Node &node)
 {
-    auto *confComputeGpuAttestationReport = reinterpret_cast<nvmlConfComputeGpuAttestationReport_t *>(malloc(sizeof(nvmlConfComputeGpuAttestationReport_t)));
+    std::unique_ptr<nvmlConfComputeGpuAttestationReport_t, decltype(&free)> confComputeGpuAttestationReport(reinterpret_cast<nvmlConfComputeGpuAttestationReport_t *>(malloc(sizeof(nvmlConfComputeGpuAttestationReport_t))), free);
     if (confComputeGpuAttestationReport == nullptr)
     {
         return nullptr;
     }
-    memset(confComputeGpuAttestationReport, 0, sizeof(*confComputeGpuAttestationReport));
+    memset(confComputeGpuAttestationReport.get(), 0, sizeof(*confComputeGpuAttestationReport));
     if (node["isCecAttestationReportPresent"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4000,18 +4152,18 @@ nvmlConfComputeGpuAttestationReport_t *nvmlConfComputeGpuAttestationReport_tDese
     {
         NVML_LOG_ERR("missing cecAttestationReport for struct nvmlConfComputeGpuAttestationReport_t");
     }
-    return confComputeGpuAttestationReport;
+    return confComputeGpuAttestationReport.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlConfComputeSetKeyRotationThresholdInfo_v1_t *nvmlConfComputeSetKeyRotationThresholdInfo_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *confComputeSetKeyRotationThresholdInfo_v1 = reinterpret_cast<nvmlConfComputeSetKeyRotationThresholdInfo_v1_t *>(malloc(sizeof(nvmlConfComputeSetKeyRotationThresholdInfo_v1_t)));
+    std::unique_ptr<nvmlConfComputeSetKeyRotationThresholdInfo_v1_t, decltype(&free)> confComputeSetKeyRotationThresholdInfo_v1(reinterpret_cast<nvmlConfComputeSetKeyRotationThresholdInfo_v1_t *>(malloc(sizeof(nvmlConfComputeSetKeyRotationThresholdInfo_v1_t))), free);
     if (confComputeSetKeyRotationThresholdInfo_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(confComputeSetKeyRotationThresholdInfo_v1, 0, sizeof(*confComputeSetKeyRotationThresholdInfo_v1));
+    memset(confComputeSetKeyRotationThresholdInfo_v1.get(), 0, sizeof(*confComputeSetKeyRotationThresholdInfo_v1));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4030,18 +4182,18 @@ nvmlConfComputeSetKeyRotationThresholdInfo_v1_t *nvmlConfComputeSetKeyRotationTh
     {
         NVML_LOG_ERR("missing maxAttackerAdvantage for struct nvmlConfComputeSetKeyRotationThresholdInfo_v1_t");
     }
-    return confComputeSetKeyRotationThresholdInfo_v1;
+    return confComputeSetKeyRotationThresholdInfo_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *nvmlConfComputeGetKeyRotationThresholdInfo_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *confComputeGetKeyRotationThresholdInfo_v1 = reinterpret_cast<nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *>(malloc(sizeof(nvmlConfComputeGetKeyRotationThresholdInfo_v1_t)));
+    std::unique_ptr<nvmlConfComputeGetKeyRotationThresholdInfo_v1_t, decltype(&free)> confComputeGetKeyRotationThresholdInfo_v1(reinterpret_cast<nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *>(malloc(sizeof(nvmlConfComputeGetKeyRotationThresholdInfo_v1_t))), free);
     if (confComputeGetKeyRotationThresholdInfo_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(confComputeGetKeyRotationThresholdInfo_v1, 0, sizeof(*confComputeGetKeyRotationThresholdInfo_v1));
+    memset(confComputeGetKeyRotationThresholdInfo_v1.get(), 0, sizeof(*confComputeGetKeyRotationThresholdInfo_v1));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4060,18 +4212,18 @@ nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *nvmlConfComputeGetKeyRotationTh
     {
         NVML_LOG_ERR("missing attackerAdvantage for struct nvmlConfComputeGetKeyRotationThresholdInfo_v1_t");
     }
-    return confComputeGetKeyRotationThresholdInfo_v1;
+    return confComputeGetKeyRotationThresholdInfo_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGpuFabricInfo_t *nvmlGpuFabricInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *gpuFabricInfo = reinterpret_cast<nvmlGpuFabricInfo_t *>(malloc(sizeof(nvmlGpuFabricInfo_t)));
+    std::unique_ptr<nvmlGpuFabricInfo_t, decltype(&free)> gpuFabricInfo(reinterpret_cast<nvmlGpuFabricInfo_t *>(malloc(sizeof(nvmlGpuFabricInfo_t))), free);
     if (gpuFabricInfo == nullptr)
     {
         return nullptr;
     }
-    memset(gpuFabricInfo, 0, sizeof(*gpuFabricInfo));
+    memset(gpuFabricInfo.get(), 0, sizeof(*gpuFabricInfo));
     if (node["clusterUuid"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4111,18 +4263,18 @@ nvmlGpuFabricInfo_t *nvmlGpuFabricInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing state for struct nvmlGpuFabricInfo_t");
     }
-    return gpuFabricInfo;
+    return gpuFabricInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGpuFabricInfo_v2_t *nvmlGpuFabricInfo_v2_tDeserializer(const YAML::Node &node)
 {
-    auto *gpuFabricInfo_v2 = reinterpret_cast<nvmlGpuFabricInfo_v2_t *>(malloc(sizeof(nvmlGpuFabricInfo_v2_t)));
+    std::unique_ptr<nvmlGpuFabricInfo_v2_t, decltype(&free)> gpuFabricInfo_v2(reinterpret_cast<nvmlGpuFabricInfo_v2_t *>(malloc(sizeof(nvmlGpuFabricInfo_v2_t))), free);
     if (gpuFabricInfo_v2 == nullptr)
     {
         return nullptr;
     }
-    memset(gpuFabricInfo_v2, 0, sizeof(*gpuFabricInfo_v2));
+    memset(gpuFabricInfo_v2.get(), 0, sizeof(*gpuFabricInfo_v2));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4178,18 +4330,18 @@ nvmlGpuFabricInfo_v2_t *nvmlGpuFabricInfo_v2_tDeserializer(const YAML::Node &nod
     {
         NVML_LOG_ERR("missing healthMask for struct nvmlGpuFabricInfo_v2_t");
     }
-    return gpuFabricInfo_v2;
+    return gpuFabricInfo_v2.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGpuFabricInfoV_t *nvmlGpuFabricInfoV_tDeserializer(const YAML::Node &node)
 {
-    auto *gpuFabricInfoV = reinterpret_cast<nvmlGpuFabricInfoV_t *>(malloc(sizeof(nvmlGpuFabricInfoV_t)));
+    std::unique_ptr<nvmlGpuFabricInfoV_t, decltype(&free)> gpuFabricInfoV(reinterpret_cast<nvmlGpuFabricInfoV_t *>(malloc(sizeof(nvmlGpuFabricInfoV_t))), free);
     if (gpuFabricInfoV == nullptr)
     {
         return nullptr;
     }
-    memset(gpuFabricInfoV, 0, sizeof(*gpuFabricInfoV));
+    memset(gpuFabricInfoV.get(), 0, sizeof(*gpuFabricInfoV));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4256,18 +4408,297 @@ nvmlGpuFabricInfoV_t *nvmlGpuFabricInfoV_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing healthSummary for struct nvmlGpuFabricInfoV_t");
     }
-    return gpuFabricInfoV;
+    return gpuFabricInfoV.release();
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlGpuOperationalEventConfig_v1_t *nvmlGpuOperationalEventConfig_v1_tDeserializer(const YAML::Node &node)
+{
+    std::unique_ptr<nvmlGpuOperationalEventConfig_v1_t, decltype(&free)> gpuOperationalEventConfig_v1(reinterpret_cast<nvmlGpuOperationalEventConfig_v1_t *>(malloc(sizeof(nvmlGpuOperationalEventConfig_v1_t))), free);
+    if (gpuOperationalEventConfig_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(gpuOperationalEventConfig_v1.get(), 0, sizeof(*gpuOperationalEventConfig_v1));
+    if (node["uuid"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        auto uuid = node["uuid"].as<std::string>();
+        std::memcpy(&gpuOperationalEventConfig_v1->uuid, uuid.data(), std::min(uuid.size(), sizeof(gpuOperationalEventConfig_v1->uuid)));
+    }
+    else
+    {
+        NVML_LOG_ERR("missing uuid for struct nvmlGpuOperationalEventConfig_v1_t");
+    }
+    if (node["minLogLevel"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        gpuOperationalEventConfig_v1->minLogLevel = node["minLogLevel"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing minLogLevel for struct nvmlGpuOperationalEventConfig_v1_t");
+    }
+    if (node["minSeverity"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        gpuOperationalEventConfig_v1->minSeverity = node["minSeverity"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing minSeverity for struct nvmlGpuOperationalEventConfig_v1_t");
+    }
+    return gpuOperationalEventConfig_v1.release();
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlEventSetWait_v3_t *nvmlEventSetWait_v3_tDeserializer(const YAML::Node &node)
+{
+    std::unique_ptr<nvmlEventSetWait_v3_t, decltype(&free)> eventSetWait_v3(reinterpret_cast<nvmlEventSetWait_v3_t *>(malloc(sizeof(nvmlEventSetWait_v3_t))), free);
+    if (eventSetWait_v3 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(eventSetWait_v3.get(), 0, sizeof(*eventSetWait_v3));
+    if (node["timeoutMs"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->timeoutMs = node["timeoutMs"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing timeoutMs for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["dataType"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->dataType = node["dataType"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing dataType for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["uuid"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        auto uuid = node["uuid"].as<std::string>();
+        std::memcpy(&eventSetWait_v3->uuid, uuid.data(), std::min(uuid.size(), sizeof(eventSetWait_v3->uuid)));
+    }
+    else
+    {
+        NVML_LOG_ERR("missing uuid for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["sourceModule"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        auto sourceModule = node["sourceModule"].as<std::string>();
+        std::memcpy(&eventSetWait_v3->sourceModule, sourceModule.data(), std::min(sourceModule.size(), sizeof(eventSetWait_v3->sourceModule)));
+    }
+    else
+    {
+        NVML_LOG_ERR("missing sourceModule for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["eventType"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->eventType = node["eventType"].as<unsigned long long>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing eventType for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["eventData"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->eventData = node["eventData"].as<unsigned long long>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing eventData for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["groupCursor"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->groupCursor = node["groupCursor"].as<unsigned long long>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing groupCursor for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["instanceId"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->instanceId = node["instanceId"].as<unsigned long long>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing instanceId for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["timestampUsec"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->timestampUsec = node["timestampUsec"].as<unsigned long long>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing timestampUsec for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["traceId"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->traceId = node["traceId"].as<unsigned long long>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing traceId for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["gpuInstanceId"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->gpuInstanceId = node["gpuInstanceId"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing gpuInstanceId for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["computeInstanceId"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->computeInstanceId = node["computeInstanceId"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing computeInstanceId for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["severity"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->severity = node["severity"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing severity for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["categoryId"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->categoryId = node["categoryId"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing categoryId for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["moduleEventCode"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->moduleEventCode = node["moduleEventCode"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing moduleEventCode for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["scope"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->scope = node["scope"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing scope for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["originator"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->originator = node["originator"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing originator for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["moduleInstance"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->moduleInstance = node["moduleInstance"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing moduleInstance for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["chipletId"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->chipletId = node["chipletId"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing chipletId for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["logLevel"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->logLevel = node["logLevel"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing logLevel for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["attributes"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->attributes = node["attributes"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing attributes for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["groupCperSize"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->groupCperSize = node["groupCperSize"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing groupCperSize for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["groupAttributes"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->groupAttributes = node["groupAttributes"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing groupAttributes for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["groupSize"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->groupSize = node["groupSize"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing groupSize for struct nvmlEventSetWait_v3_t");
+    }
+    if (node["groupIndex"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        eventSetWait_v3->groupIndex = node["groupIndex"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing groupIndex for struct nvmlEventSetWait_v3_t");
+    }
+    return eventSetWait_v3.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlSystemDriverBranchInfo_t *nvmlSystemDriverBranchInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *systemDriverBranchInfo = reinterpret_cast<nvmlSystemDriverBranchInfo_t *>(malloc(sizeof(nvmlSystemDriverBranchInfo_t)));
+    std::unique_ptr<nvmlSystemDriverBranchInfo_t, decltype(&free)> systemDriverBranchInfo(reinterpret_cast<nvmlSystemDriverBranchInfo_t *>(malloc(sizeof(nvmlSystemDriverBranchInfo_t))), free);
     if (systemDriverBranchInfo == nullptr)
     {
         return nullptr;
     }
-    memset(systemDriverBranchInfo, 0, sizeof(*systemDriverBranchInfo));
+    memset(systemDriverBranchInfo.get(), 0, sizeof(*systemDriverBranchInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4287,18 +4718,18 @@ nvmlSystemDriverBranchInfo_t *nvmlSystemDriverBranchInfo_tDeserializer(const YAM
     {
         NVML_LOG_ERR("missing branch for struct nvmlSystemDriverBranchInfo_t");
     }
-    return systemDriverBranchInfo;
+    return systemDriverBranchInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlTemperature_t *nvmlTemperature_tDeserializer(const YAML::Node &node)
 {
-    auto *temperature = reinterpret_cast<nvmlTemperature_t *>(malloc(sizeof(nvmlTemperature_t)));
+    std::unique_ptr<nvmlTemperature_t, decltype(&free)> temperature(reinterpret_cast<nvmlTemperature_t *>(malloc(sizeof(nvmlTemperature_t))), free);
     if (temperature == nullptr)
     {
         return nullptr;
     }
-    memset(temperature, 0, sizeof(*temperature));
+    memset(temperature.get(), 0, sizeof(*temperature));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4326,18 +4757,18 @@ nvmlTemperature_t *nvmlTemperature_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing temperature for struct nvmlTemperature_t");
     }
-    return temperature;
+    return temperature.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlNvlinkSupportedBwModes_t *nvmlNvlinkSupportedBwModes_tDeserializer(const YAML::Node &node)
 {
-    auto *nvlinkSupportedBwModes = reinterpret_cast<nvmlNvlinkSupportedBwModes_t *>(malloc(sizeof(nvmlNvlinkSupportedBwModes_t)));
+    std::unique_ptr<nvmlNvlinkSupportedBwModes_t, decltype(&free)> nvlinkSupportedBwModes(reinterpret_cast<nvmlNvlinkSupportedBwModes_t *>(malloc(sizeof(nvmlNvlinkSupportedBwModes_t))), free);
     if (nvlinkSupportedBwModes == nullptr)
     {
         return nullptr;
     }
-    memset(nvlinkSupportedBwModes, 0, sizeof(*nvlinkSupportedBwModes));
+    memset(nvlinkSupportedBwModes.get(), 0, sizeof(*nvlinkSupportedBwModes));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4366,18 +4797,18 @@ nvmlNvlinkSupportedBwModes_t *nvmlNvlinkSupportedBwModes_tDeserializer(const YAM
     {
         NVML_LOG_ERR("missing totalBwModes for struct nvmlNvlinkSupportedBwModes_t");
     }
-    return nvlinkSupportedBwModes;
+    return nvlinkSupportedBwModes.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlNvlinkGetBwMode_t *nvmlNvlinkGetBwMode_tDeserializer(const YAML::Node &node)
 {
-    auto *nvlinkGetBwMode = reinterpret_cast<nvmlNvlinkGetBwMode_t *>(malloc(sizeof(nvmlNvlinkGetBwMode_t)));
+    std::unique_ptr<nvmlNvlinkGetBwMode_t, decltype(&free)> nvlinkGetBwMode(reinterpret_cast<nvmlNvlinkGetBwMode_t *>(malloc(sizeof(nvmlNvlinkGetBwMode_t))), free);
     if (nvlinkGetBwMode == nullptr)
     {
         return nullptr;
     }
-    memset(nvlinkGetBwMode, 0, sizeof(*nvlinkGetBwMode));
+    memset(nvlinkGetBwMode.get(), 0, sizeof(*nvlinkGetBwMode));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4405,18 +4836,18 @@ nvmlNvlinkGetBwMode_t *nvmlNvlinkGetBwMode_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing bwMode for struct nvmlNvlinkGetBwMode_t");
     }
-    return nvlinkGetBwMode;
+    return nvlinkGetBwMode.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlNvlinkSetBwMode_t *nvmlNvlinkSetBwMode_tDeserializer(const YAML::Node &node)
 {
-    auto *nvlinkSetBwMode = reinterpret_cast<nvmlNvlinkSetBwMode_t *>(malloc(sizeof(nvmlNvlinkSetBwMode_t)));
+    std::unique_ptr<nvmlNvlinkSetBwMode_t, decltype(&free)> nvlinkSetBwMode(reinterpret_cast<nvmlNvlinkSetBwMode_t *>(malloc(sizeof(nvmlNvlinkSetBwMode_t))), free);
     if (nvlinkSetBwMode == nullptr)
     {
         return nullptr;
     }
-    memset(nvlinkSetBwMode, 0, sizeof(*nvlinkSetBwMode));
+    memset(nvlinkSetBwMode.get(), 0, sizeof(*nvlinkSetBwMode));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4444,18 +4875,18 @@ nvmlNvlinkSetBwMode_t *nvmlNvlinkSetBwMode_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing bwMode for struct nvmlNvlinkSetBwMode_t");
     }
-    return nvlinkSetBwMode;
+    return nvlinkSetBwMode.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuVersion_t *nvmlVgpuVersion_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuVersion = reinterpret_cast<nvmlVgpuVersion_t *>(malloc(sizeof(nvmlVgpuVersion_t)));
+    std::unique_ptr<nvmlVgpuVersion_t, decltype(&free)> vgpuVersion(reinterpret_cast<nvmlVgpuVersion_t *>(malloc(sizeof(nvmlVgpuVersion_t))), free);
     if (vgpuVersion == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuVersion, 0, sizeof(*vgpuVersion));
+    memset(vgpuVersion.get(), 0, sizeof(*vgpuVersion));
     if (node["minVersion"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4474,18 +4905,18 @@ nvmlVgpuVersion_t *nvmlVgpuVersion_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing maxVersion for struct nvmlVgpuVersion_t");
     }
-    return vgpuVersion;
+    return vgpuVersion.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuMetadata_t *nvmlVgpuMetadata_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuMetadata = reinterpret_cast<nvmlVgpuMetadata_t *>(malloc(sizeof(nvmlVgpuMetadata_t)));
+    std::unique_ptr<nvmlVgpuMetadata_t, decltype(&free)> vgpuMetadata(reinterpret_cast<nvmlVgpuMetadata_t *>(malloc(sizeof(nvmlVgpuMetadata_t))), free);
     if (vgpuMetadata == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuMetadata, 0, sizeof(*vgpuMetadata));
+    memset(vgpuMetadata.get(), 0, sizeof(*vgpuMetadata));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4560,18 +4991,18 @@ nvmlVgpuMetadata_t *nvmlVgpuMetadata_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing opaqueDataSize for struct nvmlVgpuMetadata_t");
     }
-    return vgpuMetadata;
+    return vgpuMetadata.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuPgpuMetadata_t *nvmlVgpuPgpuMetadata_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuPgpuMetadata = reinterpret_cast<nvmlVgpuPgpuMetadata_t *>(malloc(sizeof(nvmlVgpuPgpuMetadata_t)));
+    std::unique_ptr<nvmlVgpuPgpuMetadata_t, decltype(&free)> vgpuPgpuMetadata(reinterpret_cast<nvmlVgpuPgpuMetadata_t *>(malloc(sizeof(nvmlVgpuPgpuMetadata_t))), free);
     if (vgpuPgpuMetadata == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuPgpuMetadata, 0, sizeof(*vgpuPgpuMetadata));
+    memset(vgpuPgpuMetadata.get(), 0, sizeof(*vgpuPgpuMetadata));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4615,7 +5046,6 @@ nvmlVgpuPgpuMetadata_t *nvmlVgpuPgpuMetadata_tDeserializer(const YAML::Node &nod
         auto *tmp0 = nvmlVgpuVersion_tDeserializer(node["hostSupportedVgpuRange"]);
         if (!tmp0)
         {
-            free(vgpuPgpuMetadata);
             return nullptr;
         }
         std::memcpy(&vgpuPgpuMetadata->hostSupportedVgpuRange, tmp0, sizeof(nvmlVgpuVersion_t));
@@ -4634,18 +5064,18 @@ nvmlVgpuPgpuMetadata_t *nvmlVgpuPgpuMetadata_tDeserializer(const YAML::Node &nod
     {
         NVML_LOG_ERR("missing opaqueDataSize for struct nvmlVgpuPgpuMetadata_t");
     }
-    return vgpuPgpuMetadata;
+    return vgpuPgpuMetadata.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlVgpuPgpuCompatibility_t *nvmlVgpuPgpuCompatibility_tDeserializer(const YAML::Node &node)
 {
-    auto *vgpuPgpuCompatibility = reinterpret_cast<nvmlVgpuPgpuCompatibility_t *>(malloc(sizeof(nvmlVgpuPgpuCompatibility_t)));
+    std::unique_ptr<nvmlVgpuPgpuCompatibility_t, decltype(&free)> vgpuPgpuCompatibility(reinterpret_cast<nvmlVgpuPgpuCompatibility_t *>(malloc(sizeof(nvmlVgpuPgpuCompatibility_t))), free);
     if (vgpuPgpuCompatibility == nullptr)
     {
         return nullptr;
     }
-    memset(vgpuPgpuCompatibility, 0, sizeof(*vgpuPgpuCompatibility));
+    memset(vgpuPgpuCompatibility.get(), 0, sizeof(*vgpuPgpuCompatibility));
     if (node["vgpuVmCompatibility"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4664,25 +5094,24 @@ nvmlVgpuPgpuCompatibility_t *nvmlVgpuPgpuCompatibility_tDeserializer(const YAML:
     {
         NVML_LOG_ERR("missing compatibilityLimitCode for struct nvmlVgpuPgpuCompatibility_t");
     }
-    return vgpuPgpuCompatibility;
+    return vgpuPgpuCompatibility.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlExcludedDeviceInfo_t *nvmlExcludedDeviceInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *excludedDeviceInfo = reinterpret_cast<nvmlExcludedDeviceInfo_t *>(malloc(sizeof(nvmlExcludedDeviceInfo_t)));
+    std::unique_ptr<nvmlExcludedDeviceInfo_t, decltype(&free)> excludedDeviceInfo(reinterpret_cast<nvmlExcludedDeviceInfo_t *>(malloc(sizeof(nvmlExcludedDeviceInfo_t))), free);
     if (excludedDeviceInfo == nullptr)
     {
         return nullptr;
     }
-    memset(excludedDeviceInfo, 0, sizeof(*excludedDeviceInfo));
+    memset(excludedDeviceInfo.get(), 0, sizeof(*excludedDeviceInfo));
     if (node["pciInfo"])
     {
         // The following snippet is generated from write_deserializer_definition
         auto *tmp0 = nvmlPciInfo_tDeserializer(node["pciInfo"]);
         if (!tmp0)
         {
-            free(excludedDeviceInfo);
             return nullptr;
         }
         std::memcpy(&excludedDeviceInfo->pciInfo, tmp0, sizeof(nvmlPciInfo_t));
@@ -4702,18 +5131,18 @@ nvmlExcludedDeviceInfo_t *nvmlExcludedDeviceInfo_tDeserializer(const YAML::Node 
     {
         NVML_LOG_ERR("missing uuid for struct nvmlExcludedDeviceInfo_t");
     }
-    return excludedDeviceInfo;
+    return excludedDeviceInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlPRMCounterInput_v1_t *nvmlPRMCounterInput_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *pRMCounterInput_v1 = reinterpret_cast<nvmlPRMCounterInput_v1_t *>(malloc(sizeof(nvmlPRMCounterInput_v1_t)));
+    std::unique_ptr<nvmlPRMCounterInput_v1_t, decltype(&free)> pRMCounterInput_v1(reinterpret_cast<nvmlPRMCounterInput_v1_t *>(malloc(sizeof(nvmlPRMCounterInput_v1_t))), free);
     if (pRMCounterInput_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(pRMCounterInput_v1, 0, sizeof(*pRMCounterInput_v1));
+    memset(pRMCounterInput_v1.get(), 0, sizeof(*pRMCounterInput_v1));
     if (node["localPort"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4723,18 +5152,18 @@ nvmlPRMCounterInput_v1_t *nvmlPRMCounterInput_v1_tDeserializer(const YAML::Node 
     {
         NVML_LOG_ERR("missing localPort for struct nvmlPRMCounterInput_v1_t");
     }
-    return pRMCounterInput_v1;
+    return pRMCounterInput_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlPRMCounterList_v1_t *nvmlPRMCounterList_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *pRMCounterList_v1 = reinterpret_cast<nvmlPRMCounterList_v1_t *>(malloc(sizeof(nvmlPRMCounterList_v1_t)));
+    std::unique_ptr<nvmlPRMCounterList_v1_t, decltype(&free)> pRMCounterList_v1(reinterpret_cast<nvmlPRMCounterList_v1_t *>(malloc(sizeof(nvmlPRMCounterList_v1_t))), free);
     if (pRMCounterList_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(pRMCounterList_v1, 0, sizeof(*pRMCounterList_v1));
+    memset(pRMCounterList_v1.get(), 0, sizeof(*pRMCounterList_v1));
     if (node["numCounters"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4753,18 +5182,18 @@ nvmlPRMCounterList_v1_t *nvmlPRMCounterList_v1_tDeserializer(const YAML::Node &n
     {
         NVML_LOG_ERR("missing counters for struct nvmlPRMCounterList_v1_t");
     }
-    return pRMCounterList_v1;
+    return pRMCounterList_v1.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGpuInstancePlacement_t *nvmlGpuInstancePlacement_tDeserializer(const YAML::Node &node)
 {
-    auto *gpuInstancePlacement = reinterpret_cast<nvmlGpuInstancePlacement_t *>(malloc(sizeof(nvmlGpuInstancePlacement_t)));
+    std::unique_ptr<nvmlGpuInstancePlacement_t, decltype(&free)> gpuInstancePlacement(reinterpret_cast<nvmlGpuInstancePlacement_t *>(malloc(sizeof(nvmlGpuInstancePlacement_t))), free);
     if (gpuInstancePlacement == nullptr)
     {
         return nullptr;
     }
-    memset(gpuInstancePlacement, 0, sizeof(*gpuInstancePlacement));
+    memset(gpuInstancePlacement.get(), 0, sizeof(*gpuInstancePlacement));
     if (node["start"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4783,18 +5212,18 @@ nvmlGpuInstancePlacement_t *nvmlGpuInstancePlacement_tDeserializer(const YAML::N
     {
         NVML_LOG_ERR("missing size for struct nvmlGpuInstancePlacement_t");
     }
-    return gpuInstancePlacement;
+    return gpuInstancePlacement.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGpuInstanceProfileInfo_t *nvmlGpuInstanceProfileInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *gpuInstanceProfileInfo = reinterpret_cast<nvmlGpuInstanceProfileInfo_t *>(malloc(sizeof(nvmlGpuInstanceProfileInfo_t)));
+    std::unique_ptr<nvmlGpuInstanceProfileInfo_t, decltype(&free)> gpuInstanceProfileInfo(reinterpret_cast<nvmlGpuInstanceProfileInfo_t *>(malloc(sizeof(nvmlGpuInstanceProfileInfo_t))), free);
     if (gpuInstanceProfileInfo == nullptr)
     {
         return nullptr;
     }
-    memset(gpuInstanceProfileInfo, 0, sizeof(*gpuInstanceProfileInfo));
+    memset(gpuInstanceProfileInfo.get(), 0, sizeof(*gpuInstanceProfileInfo));
     if (node["id"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -4894,18 +5323,18 @@ nvmlGpuInstanceProfileInfo_t *nvmlGpuInstanceProfileInfo_tDeserializer(const YAM
     {
         NVML_LOG_ERR("missing memorySizeMB for struct nvmlGpuInstanceProfileInfo_t");
     }
-    return gpuInstanceProfileInfo;
+    return gpuInstanceProfileInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGpuInstanceProfileInfo_v2_t *nvmlGpuInstanceProfileInfo_v2_tDeserializer(const YAML::Node &node)
 {
-    auto *gpuInstanceProfileInfo_v2 = reinterpret_cast<nvmlGpuInstanceProfileInfo_v2_t *>(malloc(sizeof(nvmlGpuInstanceProfileInfo_v2_t)));
+    std::unique_ptr<nvmlGpuInstanceProfileInfo_v2_t, decltype(&free)> gpuInstanceProfileInfo_v2(reinterpret_cast<nvmlGpuInstanceProfileInfo_v2_t *>(malloc(sizeof(nvmlGpuInstanceProfileInfo_v2_t))), free);
     if (gpuInstanceProfileInfo_v2 == nullptr)
     {
         return nullptr;
     }
-    memset(gpuInstanceProfileInfo_v2, 0, sizeof(*gpuInstanceProfileInfo_v2));
+    memset(gpuInstanceProfileInfo_v2.get(), 0, sizeof(*gpuInstanceProfileInfo_v2));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5024,18 +5453,18 @@ nvmlGpuInstanceProfileInfo_v2_t *nvmlGpuInstanceProfileInfo_v2_tDeserializer(con
     {
         NVML_LOG_ERR("missing name for struct nvmlGpuInstanceProfileInfo_v2_t");
     }
-    return gpuInstanceProfileInfo_v2;
+    return gpuInstanceProfileInfo_v2.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGpuInstanceProfileInfo_v3_t *nvmlGpuInstanceProfileInfo_v3_tDeserializer(const YAML::Node &node)
 {
-    auto *gpuInstanceProfileInfo_v3 = reinterpret_cast<nvmlGpuInstanceProfileInfo_v3_t *>(malloc(sizeof(nvmlGpuInstanceProfileInfo_v3_t)));
+    std::unique_ptr<nvmlGpuInstanceProfileInfo_v3_t, decltype(&free)> gpuInstanceProfileInfo_v3(reinterpret_cast<nvmlGpuInstanceProfileInfo_v3_t *>(malloc(sizeof(nvmlGpuInstanceProfileInfo_v3_t))), free);
     if (gpuInstanceProfileInfo_v3 == nullptr)
     {
         return nullptr;
     }
-    memset(gpuInstanceProfileInfo_v3, 0, sizeof(*gpuInstanceProfileInfo_v3));
+    memset(gpuInstanceProfileInfo_v3.get(), 0, sizeof(*gpuInstanceProfileInfo_v3));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5154,18 +5583,18 @@ nvmlGpuInstanceProfileInfo_v3_t *nvmlGpuInstanceProfileInfo_v3_tDeserializer(con
     {
         NVML_LOG_ERR("missing capabilities for struct nvmlGpuInstanceProfileInfo_v3_t");
     }
-    return gpuInstanceProfileInfo_v3;
+    return gpuInstanceProfileInfo_v3.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlComputeInstancePlacement_t *nvmlComputeInstancePlacement_tDeserializer(const YAML::Node &node)
 {
-    auto *computeInstancePlacement = reinterpret_cast<nvmlComputeInstancePlacement_t *>(malloc(sizeof(nvmlComputeInstancePlacement_t)));
+    std::unique_ptr<nvmlComputeInstancePlacement_t, decltype(&free)> computeInstancePlacement(reinterpret_cast<nvmlComputeInstancePlacement_t *>(malloc(sizeof(nvmlComputeInstancePlacement_t))), free);
     if (computeInstancePlacement == nullptr)
     {
         return nullptr;
     }
-    memset(computeInstancePlacement, 0, sizeof(*computeInstancePlacement));
+    memset(computeInstancePlacement.get(), 0, sizeof(*computeInstancePlacement));
     if (node["start"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5184,18 +5613,18 @@ nvmlComputeInstancePlacement_t *nvmlComputeInstancePlacement_tDeserializer(const
     {
         NVML_LOG_ERR("missing size for struct nvmlComputeInstancePlacement_t");
     }
-    return computeInstancePlacement;
+    return computeInstancePlacement.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlComputeInstanceProfileInfo_t *nvmlComputeInstanceProfileInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *computeInstanceProfileInfo = reinterpret_cast<nvmlComputeInstanceProfileInfo_t *>(malloc(sizeof(nvmlComputeInstanceProfileInfo_t)));
+    std::unique_ptr<nvmlComputeInstanceProfileInfo_t, decltype(&free)> computeInstanceProfileInfo(reinterpret_cast<nvmlComputeInstanceProfileInfo_t *>(malloc(sizeof(nvmlComputeInstanceProfileInfo_t))), free);
     if (computeInstanceProfileInfo == nullptr)
     {
         return nullptr;
     }
-    memset(computeInstanceProfileInfo, 0, sizeof(*computeInstanceProfileInfo));
+    memset(computeInstanceProfileInfo.get(), 0, sizeof(*computeInstanceProfileInfo));
     if (node["id"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5277,18 +5706,18 @@ nvmlComputeInstanceProfileInfo_t *nvmlComputeInstanceProfileInfo_tDeserializer(c
     {
         NVML_LOG_ERR("missing sharedOfaCount for struct nvmlComputeInstanceProfileInfo_t");
     }
-    return computeInstanceProfileInfo;
+    return computeInstanceProfileInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlComputeInstanceProfileInfo_v2_t *nvmlComputeInstanceProfileInfo_v2_tDeserializer(const YAML::Node &node)
 {
-    auto *computeInstanceProfileInfo_v2 = reinterpret_cast<nvmlComputeInstanceProfileInfo_v2_t *>(malloc(sizeof(nvmlComputeInstanceProfileInfo_v2_t)));
+    std::unique_ptr<nvmlComputeInstanceProfileInfo_v2_t, decltype(&free)> computeInstanceProfileInfo_v2(reinterpret_cast<nvmlComputeInstanceProfileInfo_v2_t *>(malloc(sizeof(nvmlComputeInstanceProfileInfo_v2_t))), free);
     if (computeInstanceProfileInfo_v2 == nullptr)
     {
         return nullptr;
     }
-    memset(computeInstanceProfileInfo_v2, 0, sizeof(*computeInstanceProfileInfo_v2));
+    memset(computeInstanceProfileInfo_v2.get(), 0, sizeof(*computeInstanceProfileInfo_v2));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5389,18 +5818,18 @@ nvmlComputeInstanceProfileInfo_v2_t *nvmlComputeInstanceProfileInfo_v2_tDeserial
     {
         NVML_LOG_ERR("missing name for struct nvmlComputeInstanceProfileInfo_v2_t");
     }
-    return computeInstanceProfileInfo_v2;
+    return computeInstanceProfileInfo_v2.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlComputeInstanceProfileInfo_v3_t *nvmlComputeInstanceProfileInfo_v3_tDeserializer(const YAML::Node &node)
 {
-    auto *computeInstanceProfileInfo_v3 = reinterpret_cast<nvmlComputeInstanceProfileInfo_v3_t *>(malloc(sizeof(nvmlComputeInstanceProfileInfo_v3_t)));
+    std::unique_ptr<nvmlComputeInstanceProfileInfo_v3_t, decltype(&free)> computeInstanceProfileInfo_v3(reinterpret_cast<nvmlComputeInstanceProfileInfo_v3_t *>(malloc(sizeof(nvmlComputeInstanceProfileInfo_v3_t))), free);
     if (computeInstanceProfileInfo_v3 == nullptr)
     {
         return nullptr;
     }
-    memset(computeInstanceProfileInfo_v3, 0, sizeof(*computeInstanceProfileInfo_v3));
+    memset(computeInstanceProfileInfo_v3.get(), 0, sizeof(*computeInstanceProfileInfo_v3));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5510,18 +5939,18 @@ nvmlComputeInstanceProfileInfo_v3_t *nvmlComputeInstanceProfileInfo_v3_tDeserial
     {
         NVML_LOG_ERR("missing capabilities for struct nvmlComputeInstanceProfileInfo_v3_t");
     }
-    return computeInstanceProfileInfo_v3;
+    return computeInstanceProfileInfo_v3.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlGpmSupport_t *nvmlGpmSupport_tDeserializer(const YAML::Node &node)
 {
-    auto *gpmSupport = reinterpret_cast<nvmlGpmSupport_t *>(malloc(sizeof(nvmlGpmSupport_t)));
+    std::unique_ptr<nvmlGpmSupport_t, decltype(&free)> gpmSupport(reinterpret_cast<nvmlGpmSupport_t *>(malloc(sizeof(nvmlGpmSupport_t))), free);
     if (gpmSupport == nullptr)
     {
         return nullptr;
     }
-    memset(gpmSupport, 0, sizeof(*gpmSupport));
+    memset(gpmSupport.get(), 0, sizeof(*gpmSupport));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5540,18 +5969,18 @@ nvmlGpmSupport_t *nvmlGpmSupport_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing isSupportedDevice for struct nvmlGpmSupport_t");
     }
-    return gpmSupport;
+    return gpmSupport.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlDeviceCapabilities_t *nvmlDeviceCapabilities_tDeserializer(const YAML::Node &node)
 {
-    auto *deviceCapabilities = reinterpret_cast<nvmlDeviceCapabilities_t *>(malloc(sizeof(nvmlDeviceCapabilities_t)));
+    std::unique_ptr<nvmlDeviceCapabilities_t, decltype(&free)> deviceCapabilities(reinterpret_cast<nvmlDeviceCapabilities_t *>(malloc(sizeof(nvmlDeviceCapabilities_t))), free);
     if (deviceCapabilities == nullptr)
     {
         return nullptr;
     }
-    memset(deviceCapabilities, 0, sizeof(*deviceCapabilities));
+    memset(deviceCapabilities.get(), 0, sizeof(*deviceCapabilities));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5570,43 +5999,44 @@ nvmlDeviceCapabilities_t *nvmlDeviceCapabilities_tDeserializer(const YAML::Node 
     {
         NVML_LOG_ERR("missing capMask for struct nvmlDeviceCapabilities_t");
     }
-    return deviceCapabilities;
+    return deviceCapabilities.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlMask255_t *nvmlMask255_tDeserializer(const YAML::Node &node)
 {
-    auto *mask255 = reinterpret_cast<nvmlMask255_t *>(malloc(sizeof(nvmlMask255_t)));
+    std::unique_ptr<nvmlMask255_t, decltype(&free)> mask255(reinterpret_cast<nvmlMask255_t *>(malloc(sizeof(nvmlMask255_t))), free);
     if (mask255 == nullptr)
     {
         return nullptr;
     }
-    memset(mask255, 0, sizeof(*mask255));
+    memset(mask255.get(), 0, sizeof(*mask255));
     if (node["mask"])
     {
         // The following snippet is generated from write_deserializer_definition
-        auto const tmp0 = node["mask"].as<std::vector<unsigned int>>();
-        for (unsigned int ii = 0; ii < tmp0.size(); ++ii)
+        auto const size = sizeof(mask255->mask) / sizeof(mask255->mask[0]);
+        unsigned int ii = 0;
+        for (YAML::const_iterator it = node["mask"].begin(); it != node["mask"].end() && ii < size; ++it)
         {
-            mask255->mask[ii] = tmp0[ii];
+            mask255->mask[ii++] = it->as<unsigned int>();
         }
     }
     else
     {
         NVML_LOG_ERR("missing mask for struct nvmlMask255_t");
     }
-    return mask255;
+    return mask255.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlWorkloadPowerProfileInfo_t *nvmlWorkloadPowerProfileInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *workloadPowerProfileInfo = reinterpret_cast<nvmlWorkloadPowerProfileInfo_t *>(malloc(sizeof(nvmlWorkloadPowerProfileInfo_t)));
+    std::unique_ptr<nvmlWorkloadPowerProfileInfo_t, decltype(&free)> workloadPowerProfileInfo(reinterpret_cast<nvmlWorkloadPowerProfileInfo_t *>(malloc(sizeof(nvmlWorkloadPowerProfileInfo_t))), free);
     if (workloadPowerProfileInfo == nullptr)
     {
         return nullptr;
     }
-    memset(workloadPowerProfileInfo, 0, sizeof(*workloadPowerProfileInfo));
+    memset(workloadPowerProfileInfo.get(), 0, sizeof(*workloadPowerProfileInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5640,7 +6070,6 @@ nvmlWorkloadPowerProfileInfo_t *nvmlWorkloadPowerProfileInfo_tDeserializer(const
         auto *tmp0 = nvmlMask255_tDeserializer(node["conflictingMask"]);
         if (!tmp0)
         {
-            free(workloadPowerProfileInfo);
             return nullptr;
         }
         std::memcpy(&workloadPowerProfileInfo->conflictingMask, tmp0, sizeof(nvmlMask255_t));
@@ -5650,18 +6079,18 @@ nvmlWorkloadPowerProfileInfo_t *nvmlWorkloadPowerProfileInfo_tDeserializer(const
     {
         NVML_LOG_ERR("missing conflictingMask for struct nvmlWorkloadPowerProfileInfo_t");
     }
-    return workloadPowerProfileInfo;
+    return workloadPowerProfileInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlWorkloadPowerProfileProfilesInfo_t *nvmlWorkloadPowerProfileProfilesInfo_tDeserializer(const YAML::Node &node)
 {
-    auto *workloadPowerProfileProfilesInfo = reinterpret_cast<nvmlWorkloadPowerProfileProfilesInfo_t *>(malloc(sizeof(nvmlWorkloadPowerProfileProfilesInfo_t)));
+    std::unique_ptr<nvmlWorkloadPowerProfileProfilesInfo_t, decltype(&free)> workloadPowerProfileProfilesInfo(reinterpret_cast<nvmlWorkloadPowerProfileProfilesInfo_t *>(malloc(sizeof(nvmlWorkloadPowerProfileProfilesInfo_t))), free);
     if (workloadPowerProfileProfilesInfo == nullptr)
     {
         return nullptr;
     }
-    memset(workloadPowerProfileProfilesInfo, 0, sizeof(*workloadPowerProfileProfilesInfo));
+    memset(workloadPowerProfileProfilesInfo.get(), 0, sizeof(*workloadPowerProfileProfilesInfo));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5677,7 +6106,6 @@ nvmlWorkloadPowerProfileProfilesInfo_t *nvmlWorkloadPowerProfileProfilesInfo_tDe
         auto *tmp0 = nvmlMask255_tDeserializer(node["perfProfilesMask"]);
         if (!tmp0)
         {
-            free(workloadPowerProfileProfilesInfo);
             return nullptr;
         }
         std::memcpy(&workloadPowerProfileProfilesInfo->perfProfilesMask, tmp0, sizeof(nvmlMask255_t));
@@ -5694,15 +6122,14 @@ nvmlWorkloadPowerProfileProfilesInfo_t *nvmlWorkloadPowerProfileProfilesInfo_tDe
         int size = std::min(node["perfProfile"].size(), sizeof(workloadPowerProfileProfilesInfo->perfProfile) / sizeof(nvmlWorkloadPowerProfileInfo_t));
         for (YAML::const_iterator it = node["perfProfile"].begin(); it != node["perfProfile"].end(); ++it)
         {
-            auto *tmp = nvmlWorkloadPowerProfileInfo_tDeserializer(*it);
-            if (!tmp)
-            {
-                free(workloadPowerProfileProfilesInfo);
-                return nullptr;
-            }
             if (idx >= size)
             {
                 break;
+            }
+            auto *tmp = nvmlWorkloadPowerProfileInfo_tDeserializer(*it);
+            if (!tmp)
+            {
+                return nullptr;
             }
             std::memcpy(&workloadPowerProfileProfilesInfo->perfProfile[idx++], tmp, sizeof(nvmlWorkloadPowerProfileInfo_t));
             free(tmp);
@@ -5712,18 +6139,18 @@ nvmlWorkloadPowerProfileProfilesInfo_t *nvmlWorkloadPowerProfileProfilesInfo_tDe
     {
         NVML_LOG_ERR("missing perfProfile for struct nvmlWorkloadPowerProfileProfilesInfo_t");
     }
-    return workloadPowerProfileProfilesInfo;
+    return workloadPowerProfileProfilesInfo.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlWorkloadPowerProfileCurrentProfiles_t *nvmlWorkloadPowerProfileCurrentProfiles_tDeserializer(const YAML::Node &node)
 {
-    auto *workloadPowerProfileCurrentProfiles = reinterpret_cast<nvmlWorkloadPowerProfileCurrentProfiles_t *>(malloc(sizeof(nvmlWorkloadPowerProfileCurrentProfiles_t)));
+    std::unique_ptr<nvmlWorkloadPowerProfileCurrentProfiles_t, decltype(&free)> workloadPowerProfileCurrentProfiles(reinterpret_cast<nvmlWorkloadPowerProfileCurrentProfiles_t *>(malloc(sizeof(nvmlWorkloadPowerProfileCurrentProfiles_t))), free);
     if (workloadPowerProfileCurrentProfiles == nullptr)
     {
         return nullptr;
     }
-    memset(workloadPowerProfileCurrentProfiles, 0, sizeof(*workloadPowerProfileCurrentProfiles));
+    memset(workloadPowerProfileCurrentProfiles.get(), 0, sizeof(*workloadPowerProfileCurrentProfiles));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5739,7 +6166,6 @@ nvmlWorkloadPowerProfileCurrentProfiles_t *nvmlWorkloadPowerProfileCurrentProfil
         auto *tmp0 = nvmlMask255_tDeserializer(node["perfProfilesMask"]);
         if (!tmp0)
         {
-            free(workloadPowerProfileCurrentProfiles);
             return nullptr;
         }
         std::memcpy(&workloadPowerProfileCurrentProfiles->perfProfilesMask, tmp0, sizeof(nvmlMask255_t));
@@ -5755,7 +6181,6 @@ nvmlWorkloadPowerProfileCurrentProfiles_t *nvmlWorkloadPowerProfileCurrentProfil
         auto *tmp1 = nvmlMask255_tDeserializer(node["requestedProfilesMask"]);
         if (!tmp1)
         {
-            free(workloadPowerProfileCurrentProfiles);
             return nullptr;
         }
         std::memcpy(&workloadPowerProfileCurrentProfiles->requestedProfilesMask, tmp1, sizeof(nvmlMask255_t));
@@ -5771,7 +6196,6 @@ nvmlWorkloadPowerProfileCurrentProfiles_t *nvmlWorkloadPowerProfileCurrentProfil
         auto *tmp2 = nvmlMask255_tDeserializer(node["enforcedProfilesMask"]);
         if (!tmp2)
         {
-            free(workloadPowerProfileCurrentProfiles);
             return nullptr;
         }
         std::memcpy(&workloadPowerProfileCurrentProfiles->enforcedProfilesMask, tmp2, sizeof(nvmlMask255_t));
@@ -5781,18 +6205,18 @@ nvmlWorkloadPowerProfileCurrentProfiles_t *nvmlWorkloadPowerProfileCurrentProfil
     {
         NVML_LOG_ERR("missing enforcedProfilesMask for struct nvmlWorkloadPowerProfileCurrentProfiles_t");
     }
-    return workloadPowerProfileCurrentProfiles;
+    return workloadPowerProfileCurrentProfiles.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlWorkloadPowerProfileRequestedProfiles_t *nvmlWorkloadPowerProfileRequestedProfiles_tDeserializer(const YAML::Node &node)
 {
-    auto *workloadPowerProfileRequestedProfiles = reinterpret_cast<nvmlWorkloadPowerProfileRequestedProfiles_t *>(malloc(sizeof(nvmlWorkloadPowerProfileRequestedProfiles_t)));
+    std::unique_ptr<nvmlWorkloadPowerProfileRequestedProfiles_t, decltype(&free)> workloadPowerProfileRequestedProfiles(reinterpret_cast<nvmlWorkloadPowerProfileRequestedProfiles_t *>(malloc(sizeof(nvmlWorkloadPowerProfileRequestedProfiles_t))), free);
     if (workloadPowerProfileRequestedProfiles == nullptr)
     {
         return nullptr;
     }
-    memset(workloadPowerProfileRequestedProfiles, 0, sizeof(*workloadPowerProfileRequestedProfiles));
+    memset(workloadPowerProfileRequestedProfiles.get(), 0, sizeof(*workloadPowerProfileRequestedProfiles));
     if (node["version"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5808,7 +6232,6 @@ nvmlWorkloadPowerProfileRequestedProfiles_t *nvmlWorkloadPowerProfileRequestedPr
         auto *tmp0 = nvmlMask255_tDeserializer(node["requestedProfilesMask"]);
         if (!tmp0)
         {
-            free(workloadPowerProfileRequestedProfiles);
             return nullptr;
         }
         std::memcpy(&workloadPowerProfileRequestedProfiles->requestedProfilesMask, tmp0, sizeof(nvmlMask255_t));
@@ -5818,18 +6241,18 @@ nvmlWorkloadPowerProfileRequestedProfiles_t *nvmlWorkloadPowerProfileRequestedPr
     {
         NVML_LOG_ERR("missing requestedProfilesMask for struct nvmlWorkloadPowerProfileRequestedProfiles_t");
     }
-    return workloadPowerProfileRequestedProfiles;
+    return workloadPowerProfileRequestedProfiles.release();
 }
 
 // The following snippet is generated from write_deserializer_definition
 nvmlWorkloadPowerProfileUpdateProfiles_v1_t *nvmlWorkloadPowerProfileUpdateProfiles_v1_tDeserializer(const YAML::Node &node)
 {
-    auto *workloadPowerProfileUpdateProfiles_v1 = reinterpret_cast<nvmlWorkloadPowerProfileUpdateProfiles_v1_t *>(malloc(sizeof(nvmlWorkloadPowerProfileUpdateProfiles_v1_t)));
+    std::unique_ptr<nvmlWorkloadPowerProfileUpdateProfiles_v1_t, decltype(&free)> workloadPowerProfileUpdateProfiles_v1(reinterpret_cast<nvmlWorkloadPowerProfileUpdateProfiles_v1_t *>(malloc(sizeof(nvmlWorkloadPowerProfileUpdateProfiles_v1_t))), free);
     if (workloadPowerProfileUpdateProfiles_v1 == nullptr)
     {
         return nullptr;
     }
-    memset(workloadPowerProfileUpdateProfiles_v1, 0, sizeof(*workloadPowerProfileUpdateProfiles_v1));
+    memset(workloadPowerProfileUpdateProfiles_v1.get(), 0, sizeof(*workloadPowerProfileUpdateProfiles_v1));
     if (node["operation"])
     {
         // The following snippet is generated from write_deserializer_definition
@@ -5845,7 +6268,6 @@ nvmlWorkloadPowerProfileUpdateProfiles_v1_t *nvmlWorkloadPowerProfileUpdateProfi
         auto *tmp0 = nvmlMask255_tDeserializer(node["updateProfilesMask"]);
         if (!tmp0)
         {
-            free(workloadPowerProfileUpdateProfiles_v1);
             return nullptr;
         }
         std::memcpy(&workloadPowerProfileUpdateProfiles_v1->updateProfilesMask, tmp0, sizeof(nvmlMask255_t));
@@ -5855,11 +6277,11 @@ nvmlWorkloadPowerProfileUpdateProfiles_v1_t *nvmlWorkloadPowerProfileUpdateProfi
     {
         NVML_LOG_ERR("missing updateProfilesMask for struct nvmlWorkloadPowerProfileUpdateProfiles_v1_t");
     }
-    return workloadPowerProfileUpdateProfiles_v1;
+    return workloadPowerProfileUpdateProfiles_v1.release();
 }
 
 // The following snippet is generated from write_basic_type_parser
-template <typename underlyType, typename resultType>
+template <typename underlyingType, typename resultType>
 std::optional<NvmlFuncReturn> BasicTypeParser(const YAML::Node &node)
 {
     if (!node || !node["FunctionReturn"])
@@ -5871,19 +6293,19 @@ std::optional<NvmlFuncReturn> BasicTypeParser(const YAML::Node &node)
     {
         return NvmlFuncReturn(ret);
     }
-    auto value = static_cast<resultType>(node["ReturnValue"].as<underlyType>());
+    auto value = static_cast<resultType>(node["ReturnValue"].as<underlyingType>());
     return NvmlFuncReturn(ret, std::move(value));
 }
 
 // The following snippet is generated from write_basic_key_type_parser
-template <typename underlyType, typename resultType>
+template <typename underlyingType, typename resultType>
 std::optional<InjectionArgument> BasicKeyTypeParser(const YAML::Node &node)
 {
     if (!node)
     {
         return std::nullopt;
     }
-    return static_cast<resultType>(node.as<underlyType>());
+    return static_cast<resultType>(node.as<underlyingType>());
 }
 
 // The following snippet is generated from write_nvml_return_parser
@@ -6998,6 +7420,86 @@ std::optional<NvmlFuncReturn> UnitFanSpeedsParser(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> EventSetGetContextCount_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *eventSetGetContextCount_v1 = nvmlEventSetGetContextCount_v1_tDeserializer(node["ReturnValue"]);
+    if (eventSetGetContextCount_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {eventSetGetContextCount_v1, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> EventSetGetContextInfo_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *eventSetGetContextInfo_v1 = nvmlEventSetGetContextInfo_v1_tDeserializer(node["ReturnValue"]);
+    if (eventSetGetContextInfo_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {eventSetGetContextInfo_v1, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> EventSetGetContextData_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *eventSetGetContextData_v1 = nvmlEventSetGetContextData_v1_tDeserializer(node["ReturnValue"]);
+    if (eventSetGetContextData_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {eventSetGetContextData_v1, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> EventSetGetGpuOperationalEventContextLegacyXid_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *eventSetGetGpuOperationalEventContextLegacyXid_v1 = nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_tDeserializer(node["ReturnValue"]);
+    if (eventSetGetGpuOperationalEventContextLegacyXid_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {eventSetGetGpuOperationalEventContextLegacyXid_v1, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
 std::optional<NvmlFuncReturn> SystemEventData_v1Parser(const YAML::Node &node)
 {
     if (!node || !node["FunctionReturn"])
@@ -7235,6 +7737,46 @@ std::optional<NvmlFuncReturn> GpuFabricInfoVParser(const YAML::Node &node)
         return std::nullopt;
     }
     return NvmlFuncReturn(ret, {gpuFabricInfoV, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> GpuOperationalEventConfig_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *gpuOperationalEventConfig_v1 = nvmlGpuOperationalEventConfig_v1_tDeserializer(node["ReturnValue"]);
+    if (gpuOperationalEventConfig_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {gpuOperationalEventConfig_v1, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> EventSetWait_v3Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *eventSetWait_v3 = nvmlEventSetWait_v3_tDeserializer(node["ReturnValue"]);
+    if (eventSetWait_v3 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {eventSetWait_v3, true});
 }
 
 // The following snippet is generated from write_known_struct_parser
@@ -7791,14 +8333,16 @@ std::optional<NvmlFuncReturn> MemoryAffinityParser(const YAML::Node &node)
     }
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     unsigned int idx = 0;
-    auto *valPtr = reinterpret_cast<unsigned long *>(malloc(sizeof(unsigned long) * size));
+    std::unique_ptr<unsigned long, decltype(&free)> valPtr(reinterpret_cast<unsigned long *>(malloc(sizeof(unsigned long) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
         // The following snippet is generated from write_array_funcs_parser
-        valPtr[idx++] = it->as<unsigned long>();
+        valPtr.get()[idx++] = it->as<unsigned long>();
     }
         // The following snippet is generated from write_array_funcs_parser
-    return NvmlFuncReturn(ret, {valPtr, size, true});
+    InjectionArgument returnValue(valPtr.get(), size, true);
+    (void)valPtr.release();
+    return NvmlFuncReturn(ret, returnValue);
 }
 
 // The following snippet is generated from write_array_funcs_parser
@@ -7815,14 +8359,16 @@ std::optional<NvmlFuncReturn> CpuAffinityWithinScopeParser(const YAML::Node &nod
     }
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     unsigned int idx = 0;
-    auto *valPtr = reinterpret_cast<unsigned long *>(malloc(sizeof(unsigned long) * size));
+    std::unique_ptr<unsigned long, decltype(&free)> valPtr(reinterpret_cast<unsigned long *>(malloc(sizeof(unsigned long) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
         // The following snippet is generated from write_array_funcs_parser
-        valPtr[idx++] = it->as<unsigned long>();
+        valPtr.get()[idx++] = it->as<unsigned long>();
     }
         // The following snippet is generated from write_array_funcs_parser
-    return NvmlFuncReturn(ret, {valPtr, size, true});
+    InjectionArgument returnValue(valPtr.get(), size, true);
+    (void)valPtr.release();
+    return NvmlFuncReturn(ret, returnValue);
 }
 
 // The following snippet is generated from write_array_funcs_parser
@@ -7839,14 +8385,16 @@ std::optional<NvmlFuncReturn> CpuAffinityParser(const YAML::Node &node)
     }
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     unsigned int idx = 0;
-    auto *valPtr = reinterpret_cast<unsigned long *>(malloc(sizeof(unsigned long) * size));
+    std::unique_ptr<unsigned long, decltype(&free)> valPtr(reinterpret_cast<unsigned long *>(malloc(sizeof(unsigned long) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
         // The following snippet is generated from write_array_funcs_parser
-        valPtr[idx++] = it->as<unsigned long>();
+        valPtr.get()[idx++] = it->as<unsigned long>();
     }
         // The following snippet is generated from write_array_funcs_parser
-    return NvmlFuncReturn(ret, {valPtr, size, true});
+    InjectionArgument returnValue(valPtr.get(), size, true);
+    (void)valPtr.release();
+    return NvmlFuncReturn(ret, returnValue);
 }
 
 // The following snippet is generated from write_array_funcs_parser
@@ -7863,16 +8411,17 @@ std::optional<NvmlFuncReturn> SupportedGraphicsClocksParser(const YAML::Node &no
     }
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     unsigned int idx = 0;
-    auto *valPtr = reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * size));
+    std::unique_ptr<unsigned int, decltype(&free)> valPtr(reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
         // The following snippet is generated from write_array_funcs_parser
-        valPtr[idx++] = it->as<unsigned int>();
+        valPtr.get()[idx++] = it->as<unsigned int>();
     }
         // The following snippet is generated from write_array_funcs_parser
     std::vector<InjectionArgument> args;
     args.emplace_back(idx);
-    args.emplace_back(valPtr, idx, true);
+    args.emplace_back(valPtr.get(), idx, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, args);
 }
 
@@ -7890,16 +8439,17 @@ std::optional<NvmlFuncReturn> RetiredPagesParser(const YAML::Node &node)
     }
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     unsigned int idx = 0;
-    auto *valPtr = reinterpret_cast<unsigned long long *>(malloc(sizeof(unsigned long long) * size));
+    std::unique_ptr<unsigned long long, decltype(&free)> valPtr(reinterpret_cast<unsigned long long *>(malloc(sizeof(unsigned long long) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
         // The following snippet is generated from write_array_funcs_parser
-        valPtr[idx++] = it->as<unsigned long long>();
+        valPtr.get()[idx++] = it->as<unsigned long long>();
     }
         // The following snippet is generated from write_array_funcs_parser
     std::vector<InjectionArgument> args;
     args.emplace_back(idx);
-    args.emplace_back(valPtr, idx, true);
+    args.emplace_back(valPtr.get(), idx, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, args);
 }
 
@@ -7919,14 +8469,15 @@ std::optional<NvmlFuncReturn> SupportedMemoryClocksParser(const YAML::Node &node
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * size));
+    std::unique_ptr<unsigned int, decltype(&free)> valPtr(reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
-        valPtr[idx++] = it->as<unsigned int>();
+        valPtr.get()[idx++] = it->as<unsigned int>();
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8060,21 +8611,21 @@ std::optional<NvmlFuncReturn> EncoderSessionsParser(const YAML::Node &node)
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlEncoderSessionInfo_t *>(malloc(sizeof(nvmlEncoderSessionInfo_t) * size));
+    std::unique_ptr<nvmlEncoderSessionInfo_t, decltype(&free)> valPtr(reinterpret_cast<nvmlEncoderSessionInfo_t *>(malloc(sizeof(nvmlEncoderSessionInfo_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlEncoderSessionInfo_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlEncoderSessionInfo_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlEncoderSessionInfo_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8113,21 +8664,21 @@ std::optional<NvmlFuncReturn> FBCSessionsParser(const YAML::Node &node)
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlFBCSessionInfo_t *>(malloc(sizeof(nvmlFBCSessionInfo_t) * size));
+    std::unique_ptr<nvmlFBCSessionInfo_t, decltype(&free)> valPtr(reinterpret_cast<nvmlFBCSessionInfo_t *>(malloc(sizeof(nvmlFBCSessionInfo_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlFBCSessionInfo_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlFBCSessionInfo_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlFBCSessionInfo_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8147,21 +8698,21 @@ std::optional<NvmlFuncReturn> ComputeRunningProcesses_v3Parser(const YAML::Node 
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size));
+    std::unique_ptr<nvmlProcessInfo_t, decltype(&free)> valPtr(reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlProcessInfo_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlProcessInfo_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8181,21 +8732,21 @@ std::optional<NvmlFuncReturn> GraphicsRunningProcesses_v3Parser(const YAML::Node
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size));
+    std::unique_ptr<nvmlProcessInfo_t, decltype(&free)> valPtr(reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlProcessInfo_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlProcessInfo_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8215,21 +8766,21 @@ std::optional<NvmlFuncReturn> MPSComputeRunningProcesses_v3Parser(const YAML::No
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size));
+    std::unique_ptr<nvmlProcessInfo_t, decltype(&free)> valPtr(reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlProcessInfo_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlProcessInfo_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8249,14 +8800,15 @@ std::optional<NvmlFuncReturn> AccountingPidsParser(const YAML::Node &node)
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * size));
+    std::unique_ptr<unsigned int, decltype(&free)> valPtr(reinterpret_cast<unsigned int *>(malloc(sizeof(unsigned int) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
-        valPtr[idx++] = it->as<unsigned int>();
+        valPtr.get()[idx++] = it->as<unsigned int>();
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8295,14 +8847,15 @@ std::optional<NvmlFuncReturn> SupportedVgpusParser(const YAML::Node &node)
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlVgpuTypeId_t *>(malloc(sizeof(nvmlVgpuTypeId_t) * size));
+    std::unique_ptr<nvmlVgpuTypeId_t, decltype(&free)> valPtr(reinterpret_cast<nvmlVgpuTypeId_t *>(malloc(sizeof(nvmlVgpuTypeId_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
-        valPtr[idx++] = static_cast<nvmlVgpuTypeId_t>(it->as<int>());
+        valPtr.get()[idx++] = static_cast<nvmlVgpuTypeId_t>(it->as<int>());
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8322,14 +8875,15 @@ std::optional<NvmlFuncReturn> CreatableVgpusParser(const YAML::Node &node)
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlVgpuTypeId_t *>(malloc(sizeof(nvmlVgpuTypeId_t) * size));
+    std::unique_ptr<nvmlVgpuTypeId_t, decltype(&free)> valPtr(reinterpret_cast<nvmlVgpuTypeId_t *>(malloc(sizeof(nvmlVgpuTypeId_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
-        valPtr[idx++] = static_cast<nvmlVgpuTypeId_t>(it->as<int>());
+        valPtr.get()[idx++] = static_cast<nvmlVgpuTypeId_t>(it->as<int>());
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8463,21 +9017,21 @@ std::optional<NvmlFuncReturn> ComputeRunningProcessesParser(const YAML::Node &no
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t) * size));
+    std::unique_ptr<nvmlProcessInfo_v1_t, decltype(&free)> valPtr(reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlProcessInfo_v1_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_v1_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlProcessInfo_v1_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8497,21 +9051,21 @@ std::optional<NvmlFuncReturn> ComputeRunningProcesses_v2Parser(const YAML::Node 
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size));
+    std::unique_ptr<nvmlProcessInfo_t, decltype(&free)> valPtr(reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlProcessInfo_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlProcessInfo_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8531,21 +9085,21 @@ std::optional<NvmlFuncReturn> GraphicsRunningProcessesParser(const YAML::Node &n
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t) * size));
+    std::unique_ptr<nvmlProcessInfo_v1_t, decltype(&free)> valPtr(reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlProcessInfo_v1_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_v1_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlProcessInfo_v1_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8565,21 +9119,21 @@ std::optional<NvmlFuncReturn> GraphicsRunningProcesses_v2Parser(const YAML::Node
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size));
+    std::unique_ptr<nvmlProcessInfo_t, decltype(&free)> valPtr(reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlProcessInfo_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlProcessInfo_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8599,21 +9153,21 @@ std::optional<NvmlFuncReturn> MPSComputeRunningProcessesParser(const YAML::Node 
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t) * size));
+    std::unique_ptr<nvmlProcessInfo_v1_t, decltype(&free)> valPtr(reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlProcessInfo_v1_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_v1_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlProcessInfo_v1_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 
@@ -8633,21 +9187,21 @@ std::optional<NvmlFuncReturn> MPSComputeRunningProcesses_v2Parser(const YAML::No
     // The following snippet is generated from write_two_attrs_funcs_parser
     auto size = static_cast<unsigned int>(node["ReturnValue"].size());
     int idx = 0;
-    auto *valPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size));
+    std::unique_ptr<nvmlProcessInfo_t, decltype(&free)> valPtr(reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size)), free);
     for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
     {
     // The following snippet is generated from write_two_attrs_funcs_parser
         auto *tmp = nvmlProcessInfo_tDeserializer(*it);
         if (!tmp)
         {
-            free(valPtr);
             return std::nullopt;
         }
-        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_t));
+        std::memcpy(&valPtr.get()[idx++], tmp, sizeof(nvmlProcessInfo_t));
         free(tmp);
     }
     args.emplace_back(size);
-    args.emplace_back(valPtr, size, true);
+    args.emplace_back(valPtr.get(), size, true);
+    (void)valPtr.release();
     return NvmlFuncReturn(ret, std::move(args));
 }
 

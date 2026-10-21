@@ -461,9 +461,9 @@ int TestGroupManager::TestDefaultGpusAreDynamic()
 
     /* We need to use the host engine handler directly or we'll be injecting
        entities into the wrong cache manager */
-    DcgmHostEngineHandler *heHandler = DcgmHostEngineHandler::Instance();
-    DcgmCacheManager *cacheManager   = heHandler->GetCacheManager();
-    DcgmGroupManager *groupManager   = heHandler->GetGroupManager();
+    DcgmHostEngineHandler *heHandler           = DcgmHostEngineHandler::Instance();
+    DcgmCacheManagerAnyUniquePtr *cacheManager = heHandler->GetCacheManager();
+    DcgmGroupManager *groupManager             = heHandler->GetGroupManager();
 
     groupId    = groupManager->GetAllGpusGroup();
     dcgmReturn = groupManager->GetGroupEntities(groupId, DcgmGroupOption::ActiveOnly, entities);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,11 @@
  */
 #pragma once
 
+#include "DistributedCudaContextRuntimeAnyPtr.hpp"
+#include "PhysicalGpuAnyPtr.hpp"
+#include <CudaOpsAnyPtr.hpp>
+#include <CudaWorkerThreadAnyUniquePtr.hpp>
+#include <DcgmOpsAnyPtr.hpp>
 #include <dcgm_structs.h>
 
 #include <cstdarg>
@@ -25,8 +30,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-#include "CudaWorker/CudaWorkerThread.hpp"
 
 /* DCGM Distributed Cuda Context
  *
@@ -114,9 +117,8 @@
 
 namespace DcgmNs::ProfTester
 {
-class PhysicalGpu;
 struct Entity;
-class DistributedCudaContextTests; // Forward declaration for friend class
+struct DistributedCudaContextTestFixture; // Forward declaration for friend test fixture
 
 class DistributedCudaContext
 {
@@ -128,26 +130,34 @@ public:
     /**
      * \brief Establish CUDA connection to indicated device (or MIG).
      *
-     * @param cudaVisibleDevices string to set CUDA_VISIBLE_DEVICES to.
-     *
-     * @return None.
+     * @param[in] physicalGpu Borrowed physical GPU that owns this context.
+     * @param[in] entities Field entities watched by this context.
+     * @param[in] entity GPU or MIG entity represented by this context.
+     * @param[in] cudaVisibleDevices Value assigned to CUDA_VISIBLE_DEVICES in the worker.
+     * @param[in] dcgmOps Borrowed DCGM API interface.
+     * @param[in] cudaOps Borrowed CUDA API interface.
+     * @param[in] runtime Borrowed runtime used for process and pipe operations.
+     * @param[in] cudaWorker CUDA worker owned by this context.
      */
-    DistributedCudaContext(std::shared_ptr<DcgmNs::ProfTester::PhysicalGpu>,
+    DistributedCudaContext(PhysicalGpuAnyPtr physicalGpu,
+                           std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> entities,
+                           const dcgmGroupEntityPair_t &entity,
+                           const std::string &cudaVisibleDevices,
+                           DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                           CudaOpsAnyPtr cudaOps,
+                           DistributedCudaContextRuntimeAnyPtr runtime,
+                           CudaWorkerThreadAnyUniquePtr cudaWorker);
 
-                           std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>>,
-                           const dcgmGroupEntityPair_t &,
-                           const std::string &);
-
-    // Move constructors.
-    DistributedCudaContext(DistributedCudaContext &) = delete; //!< no copy
-    DistributedCudaContext(DistributedCudaContext &&);         //!< but move
+    // A context has a stable address and sole ownership of its child process and pipe descriptors.
+    DistributedCudaContext(DistributedCudaContext const &) = delete;
+    DistributedCudaContext(DistributedCudaContext &&)      = delete;
 
     // Destructor.
     ~DistributedCudaContext();
 
     // Assignments operators.
-    DistributedCudaContext &operator=(DistributedCudaContext &) = delete;
-    DistributedCudaContext &operator=(DistributedCudaContext &&) noexcept;
+    DistributedCudaContext &operator=(DistributedCudaContext const &) = delete;
+    DistributedCudaContext &operator=(DistributedCudaContext &&)      = delete;
 
     /** @name DeviceID
      * Device moniker and physical GPU relationships.
@@ -157,9 +167,9 @@ public:
     /**
      * \brief Return Physical GPU.
      *
-     * @return a PhysicalGpu shared pointer is returned.
+     * @return the borrowed PhysicalGpu wrapper.
      */
-    std::shared_ptr<PhysicalGpu> GetPhysicalGpu(void);
+    PhysicalGpuAnyPtr const &GetPhysicalGpu(void) const;
 
     /**
      * \brief Return Device name.
@@ -181,11 +191,9 @@ public:
     /**
      * \brief Return Entity information.
      *
-     * @return a
-     * share_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> map of
-     * field entities to watch and retrieve.
+     * @return Mutable map of field entities to watch and retrieve.
      */
-    std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> &Entities(void) const;
+    std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> &Entities(void);
 
     /**@}*/
 
@@ -205,7 +213,7 @@ public:
      *
      * @param entities Entities specifying target.
      */
-    void ReInitialize(std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> entities);
+    void ReInitialize(std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> entities);
 
     /**
      * \brief Initialize worker side.
@@ -542,8 +550,8 @@ public:
     /**@}**/
 
 private:
-    // Friend class for unit testing
-    friend class DistributedCudaContextTests;
+    // Friend fixture for unit testing
+    friend struct DistributedCudaContextTestFixture;
 
     /**
      * Handle CUDA_VISIBLE_DEVICES environment variable logic
@@ -647,18 +655,6 @@ private:
     int ReadLnCheck(unsigned int &activity, bool &quitEarly);
 
     /**
-     * \brief Move DistributedCudaContext rvalue into another.
-     *
-     * This exists for the benefit of move constructors and assignment
-     * operators.
-     *
-     * @param other An rvalue reference to a DistributedCudaContext.
-     *
-     * @return None.
-     */
-    void MoveFrom(DistributedCudaContext &&other);
-
-    /**
      *
      * \brief Respond from the worker to the parent process.
      *
@@ -731,7 +727,10 @@ private:
      */
 
     // Physical GPU.
-    std::shared_ptr<PhysicalGpu> m_physicalGpu;
+    PhysicalGpuAnyPtr m_physicalGpu;               //!< Borrowed physical GPU that owns this context.
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;               // DCGM API interface.
+    CudaOpsAnyPtr m_cudaOps;                       //!< Borrowed CUDA API interface.
+    DistributedCudaContextRuntimeAnyPtr m_runtime; //!< Borrowed runtime used for process and pipe operations.
 
     // Group of GPUs we are watching.
     dcgmGpuGrp_t m_groupId { 0 };
@@ -765,8 +764,7 @@ private:
     //<! Entity that describes GPU (non-MIG) or GI (MIG)
     dcgmGroupEntityPair_t m_entity;
 
-    //<! field entities to watch and check.
-    std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> m_entities;
+    std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> m_entities; //!< Field entities watched by this context.
 
     bool m_isInitialized { false }; //<! whether initialized
     bool m_failed { false };        //<! whether passed startup
@@ -807,8 +805,7 @@ private:
      */
     bool m_targetMaxValue { false };
 
-    CudaWorkerThread m_cudaWorker; /* Worker thread for launching cuda workloads against
-                                      our GPU */
+    CudaWorkerThreadAnyUniquePtr m_cudaWorker; //!< CUDA worker owned by this context.
 
     /**@}*/
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,18 @@
 #include "TargetedPower_wrapper.h"
 #include "dcgm_fields.h"
 
+#include <DcgmOps.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <PluginLib.h>
 #include <PluginStrings.h>
+
+#include <CublasOps.hpp>
+#include <CublasOpsAnyUniquePtr.hpp>
+#include <CudaCommon.h>
+#include <CudaCommonAnyUniquePtr.hpp>
+#include <CudaOps.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <memory>
 
 extern "C" {
 
@@ -96,14 +106,22 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
                               dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              NvvsCommonPtr nvvsCommon,
                               HangDetectMonitor *monitor)
 {
-    ConstantPower *cp = new ConstantPower(handle);
-    *userData         = cp;
+    CudaOpsAnyUniquePtr cudaOps       = std::make_unique<CudaOps>();
+    CudaCommonAnyUniquePtr cudaCommon = std::make_unique<CudaCommon>(cudaOps.AsAnyPtr());
+    auto cp                           = std::make_unique<ConstantPower>(handle,
+                                                                        std::make_unique<DcgmNs::DcgmOps>(),
+                                                                        std::move(cudaOps),
+                                                                        std::make_unique<CublasOps>(),
+                                                                        std::move(cudaCommon),
+                                                                        nvvsCommon);
 
     cp->SetPluginAttr(pluginAttr);
     cp->SetHangDetectMonitor(monitor);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, cp->GetDisplayName());
+    *userData = cp.release();
     return DCGM_ST_OK;
 }
 

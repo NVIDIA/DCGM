@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch_all.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <DcgmError.h>
 #include <array>
@@ -52,6 +52,37 @@ TEST_CASE("dcgm_errors: metadata helpers handle valid and invalid codes")
         CHECK(dcgmErrorGetFormatMsgByCode(DCGM_FR_ERROR_SENTINEL) == nullptr);
         CHECK(dcgmGetErrorMeta(DCGM_FR_ERROR_SENTINEL) == nullptr);
         CHECK(dcgmGetErrorMeta(static_cast<dcgmError_t>(-1)) == nullptr);
+    }
+}
+
+TEST_CASE("dcgm_errors: RIST error metadata follows the failure-reporting contract")
+{
+    struct ExpectedRistError
+    {
+        dcgmError_t code;
+        dcgmErrorSeverity_t severity;
+        dcgmErrorCategory_t category;
+    };
+
+    constexpr auto expectedErrors = std::to_array<ExpectedRistError>({
+        { DCGM_FR_RIST_TEST_FAILED, DCGM_ERROR_ISOLATE, DCGM_FR_EC_SOFTWARE_OTHER },
+        { DCGM_FR_RIST_NO_RESULTS, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER },
+        { DCGM_FR_RIST_PROTOCOL, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER },
+        { DCGM_FR_RIST_NONZERO_EXIT, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER },
+        { DCGM_FR_CHILD_TERMINATED, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER },
+        { DCGM_FR_RIST_TIMEOUT, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER },
+        { DCGM_FR_RIST_HEARTBEAT_STALLED, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER },
+        { DCGM_FR_CHILD_SPAWN_FAILED, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER },
+    });
+
+    for (auto const &expected : expectedErrors)
+    {
+        CAPTURE(expected.code);
+        CHECK(dcgmErrorGetPriorityByCode(expected.code) == expected.severity);
+        CHECK(dcgmErrorGetCategoryByCode(expected.code) == expected.category);
+        REQUIRE(dcgmGetErrorMeta(expected.code) != nullptr);
+        CHECK(dcgmGetErrorMeta(expected.code)->msgFormat != nullptr);
+        CHECK(dcgmGetErrorMeta(expected.code)->suggestion != nullptr);
     }
 }
 

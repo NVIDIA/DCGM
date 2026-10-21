@@ -19,10 +19,12 @@ add_executable(dcgmlibtests)
 target_sources(dcgmlibtests
     PRIVATE
         CacheTests.cpp
+        DcgmAccountingManagerTests.cpp
         MigManagerTests.cpp
         ApiTests.cpp
         DcgmGroupManagerTests.cpp
         GpuInstanceTests.cpp
+        KeyedVectorTests.cpp
         dcgm_error_tests.cpp
         GpmTests.cpp
         DcgmKmsgReaderTests.cpp
@@ -30,11 +32,17 @@ target_sources(dcgmlibtests
         DcgmResourceManagerTests.cpp
         DcgmTopologyTests.cpp
         DcgmImexManagerTests.cpp
+        DcgmCMUtilsTests.cpp
+        DcgmNvLinkCachedWatchTests.cpp
         NvmlTaskRunnerTests.cpp
         DcgmModuleCoreTests.cpp
         DcgmModuleCommandValidationTests.cpp
         DcgmCoreCommunicationTests.cpp
         DcgmFieldGroupTests.cpp
+        DcgmEntityTypesTests.cpp
+        DcgmClientHandlerTests.cpp
+        DcgmGpmManagerTests.cpp
+        DcgmProfilesTests.cpp
         DcgmHostEngineHandlerTests.cpp
         dcgm_fields_tests.cpp
         DcgmVersionTests.cpp
@@ -45,6 +53,8 @@ target_link_libraries(dcgmlibtests PRIVATE
         dcgmtest_interface
         common_interface
         dcgm_interface
+        policy_interface
+        test-utils
 )
 
 target_link_libraries(dcgmlibtests
@@ -61,7 +71,7 @@ target_link_libraries(dcgmlibtests
         -Wl,--no-whole-archive
         dcgm
         Catch2::Catch2WithMain
-        ${CMAKE_THREAD_LIBS_INIT}
+        Threads::Threads
         fmt::fmt
         rt
         dl

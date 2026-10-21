@@ -18,7 +18,6 @@
 #include "DcgmHandle.h"
 #include "DcgmSystem.h"
 #include "EntitySet.h"
-#include "EnvConfig.h"
 #include "IgnoreErrorCodesHelper.h"
 #include "NvvsException.hpp"
 #include "NvvsJsonStrings.h"
@@ -29,36 +28,36 @@
 
 #include <DcgmBuildInfo.hpp>
 #include <DcgmLogging.h>
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
 #include <HangDetectHandler.h>
 #include <HangDetectMonitor.h>
+#include <boost/process.hpp>
 #include <cstdlib>
 #include <dcgm_fields.h>
 #include <dcgm_structs_internal.h>
 #include <fmt/ranges.h>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <ranges>
-#include <setjmp.h>
-#include <signal.h>
 #include <sstream>
 #include <stdexcept>
 #include <tclap/CmdLine.h>
-#include <time.h>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 using namespace DcgmNs::Nvvs;
-DcgmHandle dcgmHandle;
-DcgmSystem dcgmSystem;
-NvvsCommon nvvsCommon __attribute__((visibility("default")));
-bool initTimedOut = false;
-jmp_buf exitInitialization;
 
 /*****************************************************************************/
-NvidiaValidationSuite::NvidiaValidationSuite()
+NvidiaValidationSuite::NvidiaValidationSuite(NvvsCommon *nvvsCommon, DcgmHandle dcgmHandle, DcgmSystem dcgmSystem)
     : logInit(false)
+    , m_nvvsCommon(nvvsCommon)
+    , m_dcgmOps()
+    , m_dcgmHandle(std::move(dcgmHandle))
+    , m_dcgmSystem(std::move(dcgmSystem))
     , m_gpuVect()
     , testVect()
     , tpVect()
@@ -72,14 +71,8 @@ NvidiaValidationSuite::NvidiaValidationSuite()
     , hwDiagLogFile()
     , listTests(false)
     , listGpus(false)
-    , initTimer(0)
-    , restoreSigAction {}
-    , initWaitTime(120)
     , m_pv()
-{
-    // init globals
-    nvvsCommon.Init();
-}
+{}
 
 /*****************************************************************************/
 NvidiaValidationSuite::~NvidiaValidationSuite()
@@ -96,13 +89,14 @@ NvidiaValidationSuite::~NvidiaValidationSuite()
     delete m_tf;
     delete parser;
 
-    dcgmShutdown();
+    m_dcgmHandle.Cleanup();
+    m_dcgmOps.dcgmShutdown();
 }
 
 /*****************************************************************************/
 void NvidiaValidationSuite::CheckDriverVersion()
 {
-    if (!dcgmSystem.IsInitialized())
+    if (!m_dcgmSystem.IsInitialized())
     {
         log_error("DCGM is not initialized");
         throw std::runtime_error("DCGM is not initialized");
@@ -112,23 +106,23 @@ void NvidiaValidationSuite::CheckDriverVersion()
 
     memset(&deviceAttr, 0, sizeof(deviceAttr));
     deviceAttr.version = dcgmDeviceAttributes_version3;
-    dcgmReturn_t ret   = dcgmSystem.GetDeviceAttributes(0, deviceAttr);
+    dcgmReturn_t ret   = m_dcgmSystem.GetDeviceAttributes(0, deviceAttr);
     unsigned int count = 0;
     std::stringstream additionalMsg;
 
     // Attempt re-connecting if we have trouble with our initial interaction with the hostengine.
     for (count = 0; count < 3 && ret == DCGM_ST_CONNECTION_NOT_VALID; ++count)
     {
-        dcgmReturn_t connectionRet = dcgmHandle.ConnectToDcgm(nvvsCommon.dcgmHostname);
+        dcgmReturn_t connectionRet = m_dcgmHandle.ConnectToDcgm(m_nvvsCommon->dcgmHostname);
         if (connectionRet == DCGM_ST_OK)
         {
-            ret = dcgmSystem.GetDeviceAttributes(0, deviceAttr);
+            ret = m_dcgmSystem.GetDeviceAttributes(0, deviceAttr);
         }
         else
         {
             additionalMsg.str("");
             additionalMsg << "Couldn't re-connect to hostengine after establishing an invalid connection: "
-                          << dcgmHandle.RetToString(connectionRet);
+                          << m_dcgmHandle.RetToString(connectionRet);
         }
     }
 
@@ -139,7 +133,7 @@ void NvidiaValidationSuite::CheckDriverVersion()
 
     if (ret != DCGM_ST_OK)
     {
-        buf << "Unable to get the driver version: " << dcgmHandle.RetToString(ret);
+        buf << "Unable to get the driver version: " << m_dcgmHandle.RetToString(ret);
         if (additionalMsg.rdbuf()->in_avail() == 0)
         {
             buf << ". Couldn't succeed despite " << count << " retries.";
@@ -167,50 +161,6 @@ void NvidiaValidationSuite::CheckDriverVersion()
     }
 }
 
-// Handler for SIGALRM as part of ensuring we can't stall indefinitely on DCGM init
-void alarm_handler(int /* sig */)
-{
-    initTimedOut = true;
-    longjmp(exitInitialization, 1);
-}
-
-/*
- * startTimer - Starts a timer to make sure we don't get stuck in the DCGM initialization and or loading
- * the CUDA library
- */
-void NvidiaValidationSuite::startTimer()
-{
-    struct itimerspec value;
-    struct sigaction act;
-
-    memset(&value, 0, sizeof(value));
-    memset(&act, 0, sizeof(act));
-
-    // Set SIGALRM to use alarm_handler
-    act.sa_handler = alarm_handler;
-    sigemptyset(&act.sa_mask);
-    sigaction(SIGALRM, &act, &this->restoreSigAction);
-
-    // Set the timer for 20 seconds
-    value.it_value.tv_sec = this->initWaitTime;
-    timer_create(CLOCK_REALTIME, NULL, &this->initTimer);
-    timer_settime(this->initTimer, 0, &value, NULL);
-}
-
-/*
- * stopTimer - disables the timer previously set to make sure we don't get stuck in the DCGM initialization
- * and or loading the CUDA library
- */
-void NvidiaValidationSuite::stopTimer()
-{
-    struct itimerspec value;
-    memset(&value, 0, sizeof(value));
-    timer_settime(this->initTimer, 0, &value, NULL);
-
-    // Restore any previous signal handler
-    sigaction(SIGALRM, &this->restoreSigAction, NULL);
-}
-
 bool NvidiaValidationSuite::IsGpuIncluded(unsigned int gpuIndex, std::vector<unsigned int> &gpuIndices) const
 {
     if (gpuIndices.size() == 0)
@@ -228,6 +178,25 @@ bool NvidiaValidationSuite::IsGpuIncluded(unsigned int gpuIndex, std::vector<uns
 
     return false;
 }
+
+namespace
+{
+/**
+ * CUDA 12.8 and later support enumerating multiple GPUs while MIG mode is enabled on a GPU.
+ * Uses the CUDA driver version reported by DCGM (same encoding as @ref DcgmSystem::GetCudaMajorVersion).
+ */
+bool CudaDriverSupportsMigMultiGpuEnumeration(DcgmSystemBase *dcgmSystem)
+{
+    unsigned int const major = dcgmSystem->GetCudaMajorVersion();
+    unsigned int const minor = dcgmSystem->GetCudaMinorVersion();
+    if (major == 0)
+    {
+        /* Version unavailable; retain the pre-12.8 restriction. */
+        return false;
+    }
+    return (major > 12) || (major == 12 && minor >= 8);
+}
+} // namespace
 
 std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int> &gpuIndices,
                                                        const std::vector<Gpu *> &visibleGpus)
@@ -257,12 +226,20 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
 
         anyMigModeDisabled = !mv.migEnabled || anyMigModeDisabled;
 
-        isMigModeEnabled = isMigModeEnabled || mv.migEnabled;
-        if (isMigModeEnabled && numGpus > 1)
+        isMigModeEnabled       = isMigModeEnabled || mv.migEnabled;
+        bool const gpuIncluded = IsGpuIncluded(visibleGpus[i]->GetGpuId(), originalList);
+        if (gpuIncluded == true && mv.migEnabled && mv.computeInstanceCount == 0)
         {
-            // CUDA does not support enumerating GPUs with MIG mode enabled
+            return "Cannot run diagnostic: MIG is enabled, but no compute instances are configured."
+                   " CUDA needs to execute on a compute instance if MIG is enabled.";
+        }
+
+        if (isMigModeEnabled && numGpus > 1 && !CudaDriverSupportsMigMultiGpuEnumeration(&m_dcgmSystem))
+        {
+            // CUDA before 12.8 does not support enumerating GPUs with MIG mode enabled
             std::stringstream buf;
-            buf << "Cannot run diagnostic: CUDA does not support enumerating GPUs with MIG mode enabled, yet GPU "
+            buf << "Cannot run diagnostic: CUDA before 12.8 does not support enumerating GPUs with MIG mode enabled, "
+                   "yet GPU "
                 << visibleGpus[i]->GetGpuId() << " is MIG enabled and the diagnostic is attempting to run on "
                 << numGpus << " GPUs.";
             DCGM_LOG_ERROR << buf.str();
@@ -270,15 +247,9 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
             return errorStr;
         }
 
-        if (IsGpuIncluded(visibleGpus[i]->GetGpuId(), originalList) == false)
+        if (gpuIncluded == false)
         {
             continue;
-        }
-
-        if (mv.migEnabled && mv.computeInstanceCount == 0)
-        {
-            return "Cannot run diagnostic: MIG is enabled, but no compute instances are configured."
-                   " CUDA needs to execute on a compute instance if MIG is enabled.";
         }
 
         if (originalList.empty())
@@ -298,9 +269,9 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
         return errorStr;
     }
 
-    if (isMigModeEnabled && !gpuIndices.empty())
+    if (isMigModeEnabled && !gpuIndices.empty() && !CudaDriverSupportsMigMultiGpuEnumeration(&m_dcgmSystem))
     {
-        // We know there's at most 1 GPU because we fail above if there's more than one
+        // We know there's at most 1 GPU because we fail above if there's more than one (CUDA < 12.8)
         std::stringstream val;
         val << *gpuIndices.begin();
         errno = 0;
@@ -361,6 +332,11 @@ std::string NvidiaValidationSuite::BuildCudaVisibleDevicesString(std::vector<uns
 
     // Join UUIDs with commas - no leading or trailing commas
     return fmt::format("{}", fmt::join(uuids, ","));
+}
+
+bool NvidiaValidationSuite::ShouldIncludeRistInLevelRun(std::optional<std::string> const &configuredPath)
+{
+    return configuredPath.has_value() && !configuredPath->empty();
 }
 
 /*****************************************************************************/
@@ -446,7 +422,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     auto const beginInit = std::chrono::steady_clock::now();
 
     processCommandLine(argc, argv);
-    if (nvvsCommon.quietMode)
+    if (m_nvvsCommon->quietMode)
     {
         std::cout.setstate(std::ios::failbit);
     }
@@ -469,20 +445,20 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         DCGM_LOG_DEBUG << "argc: " << argc << ". argv: " << out.str();
     }
 
-    parser = new ConfigFileParser_v2("", fwcfg);
+    parser = new ConfigFileParser_v2(m_nvvsCommon, "", fwcfg);
 
-    dcgmReturn_t ret = dcgmHandle.ConnectToDcgm(nvvsCommon.dcgmHostname);
+    dcgmReturn_t ret = m_dcgmHandle.ConnectToDcgm(m_nvvsCommon->dcgmHostname);
     if (ret != DCGM_ST_OK)
     {
         std::stringstream buf;
-        buf << "Unable to connect to DCGM: " << dcgmHandle.GetLastError();
+        buf << "Unable to connect to DCGM: " << m_dcgmHandle.GetLastError();
         return buf.str();
     }
-    dcgmSystem.Init(dcgmHandle.GetHandle());
+    m_dcgmSystem = DcgmSystem(&m_dcgmOps, m_dcgmHandle.GetHandle());
 
     if (configFile.size() > 0)
         parser->setConfigFile(configFile);
-    if (!parser->Init() && !nvvsCommon.configless)
+    if (!parser->Init() && !m_nvvsCommon->configless)
     {
         std::ostringstream out;
         out << std::endl << "Unable to open config file ";
@@ -500,14 +476,14 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
             log_warning(out.str());
 
             // Force to true if we couldn't open a config file
-            nvvsCommon.configless = true;
+            m_nvvsCommon->configless = true;
         }
     }
 
-    parser->PrepareEntitySets(dcgmHandle.GetHandle());
+    parser->PrepareEntitySets(m_dcgmHandle.GetHandle());
     parser->legacyGlobalStructHelper();
 
-    m_allowlist                                         = std::make_unique<Allowlist>(*parser);
+    m_allowlist                                         = std::make_unique<Allowlist>(m_nvvsCommon, *parser);
     std::vector<std::unique_ptr<EntitySet>> &entitySets = parser->GetEntitySets();
     bool hasGpuEntity                                   = false;
 
@@ -581,21 +557,21 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     // Thread safety: This is called before any plugin threads are started, so no synchronization needed
     SetCudaVisibleDevicesForTesting(gpuIndices);
 
-    errorString
-        = ParseIgnoreErrorCodesString(nvvsCommon.ignoreErrorCodesString, nvvsCommon.parsedIgnoreErrorCodes, gpuIndices);
+    errorString = ParseIgnoreErrorCodesString(
+        m_nvvsCommon->ignoreErrorCodesString, m_nvvsCommon->parsedIgnoreErrorCodes, gpuIndices);
     if (!errorString.empty())
     {
         return errorString;
     }
 
     std::optional<NvvsHangDetectHandler> handler;
-    if (!nvvsCommon.hangDetectDisable)
+    if (!m_nvvsCommon->hangDetectDisable)
     {
         handler.emplace();
-        m_detector = std::make_unique<HangDetect>();
-        auto const expirySec
-            = (nvvsCommon.hangDetectExpirySec == 0) ? DEFAULT_HANG_DETECT_EXPIRY_SEC : nvvsCommon.hangDetectExpirySec;
-        m_monitor = std::make_unique<HangDetectMonitor>(
+        m_detector           = std::make_unique<HangDetect>();
+        auto const expirySec = (m_nvvsCommon->hangDetectExpirySec == 0) ? DEFAULT_HANG_DETECT_EXPIRY_SEC
+                                                                        : m_nvvsCommon->hangDetectExpirySec;
+        m_monitor            = std::make_unique<HangDetectMonitor>(
             *m_detector, std::chrono::seconds(DEFAULT_HANG_DETECT_CHECK_INTERVAL), std::chrono::seconds(expirySec));
         m_monitor->SetHangDetectedHandler(&(handler.value()));
     }
@@ -604,12 +580,12 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         log_debug("HangDetectMonitor: Disabled");
     }
 
-    m_tf = new TestFramework(entitySets);
+    m_tf = new TestFramework(entitySets, &m_dcgmOps, m_nvvsCommon, &m_dcgmHandle, &m_dcgmSystem);
     m_tf->loadPlugins(m_monitor.get());
-    if (auto ret = m_tf->SetDiagResponseVersion(nvvsCommon.diagResponseVersion); ret != DCGM_ST_OK)
+    if (auto ret = m_tf->SetDiagResponseVersion(m_nvvsCommon->diagResponseVersion); ret != DCGM_ST_OK)
     {
         std::string const errMsg
-            = fmt::format("failed to set version [{}], err: [{}].", nvvsCommon.diagResponseVersion, ret);
+            = fmt::format("failed to set version [{}], err: [{}].", m_nvvsCommon->diagResponseVersion, ret);
         log_error(errMsg);
         std::cerr << errMsg << std::endl;
         return errMsg;
@@ -632,7 +608,8 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     }
 
     // Capture whether explicit EUD-only was requested before DistributeTests erases desiredTest
-    nvvsCommon.isEudOnly = (nvvsCommon.desiredTest.size() == 1) && nvvsCommon.desiredTest.contains(EUD_PLUGIN_NAME);
+    m_nvvsCommon->isEudOnly
+        = (m_nvvsCommon->desiredTest.size() == 1) && m_nvvsCommon->desiredTest.contains(EUD_PLUGIN_NAME);
 
     DistributeTests(entitySets);
 
@@ -681,7 +658,7 @@ void NvidiaValidationSuite::ValidateSubtestParameters()
 
     m_pv.Initialize(parms);
 
-    InitializeParameters(nvvsCommon.parmsString, m_pv);
+    InitializeParameters(m_nvvsCommon->parmsString, m_pv);
 }
 
 /*****************************************************************************/
@@ -708,7 +685,7 @@ bool NvidiaValidationSuite::HasGenericSupport(const std::string &gpuBrand, uint6
 /*****************************************************************************/
 void NvidiaValidationSuite::EnumerateAllVisibleGpus()
 {
-    if (!dcgmSystem.IsInitialized())
+    if (!m_dcgmSystem.IsInitialized())
     {
         log_error("DCGM is not initialized");
         throw std::runtime_error("DCGM is not initialized");
@@ -716,21 +693,21 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
 
     bool isAllowlisted;
     std::vector<unsigned int> gpuIds;
-    dcgmReturn_t ret = dcgmSystem.GetAllSupportedDevices(gpuIds);
+    dcgmReturn_t ret = m_dcgmSystem.GetAllSupportedDevices(gpuIds);
     std::stringstream buf;
 
     if (ret != DCGM_ST_OK)
     {
-        buf << "Unable to retrieve device count: " << dcgmHandle.RetToString(ret);
+        buf << "Unable to retrieve device count: " << m_dcgmHandle.RetToString(ret);
         throw std::runtime_error(buf.str());
     }
 
     for (size_t i = 0; i < gpuIds.size(); i++)
     {
-        std::unique_ptr<Gpu> gpu { new Gpu(gpuIds[i]) };
+        std::unique_ptr<Gpu> gpu { new Gpu(gpuIds[i], &m_dcgmOps, &m_dcgmHandle, &m_dcgmSystem) };
         if ((ret = gpu->Init()) != DCGM_ST_OK)
         {
-            buf << "Unable to initialize GPU " << gpuIds[i] << ": " << dcgmHandle.RetToString(ret);
+            buf << "Unable to initialize GPU " << gpuIds[i] << ": " << m_dcgmHandle.RetToString(ret);
             throw std::runtime_error(buf.str());
         }
 
@@ -758,11 +735,11 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
         std::string gpuBrand = gpu->getDeviceBrandAsString();
         uint64_t gpuArch     = gpu->getDeviceArchitecture();
 
-        if (!nvvsCommon.fakegpusString.empty())
+        if (!m_nvvsCommon->fakegpusString.empty())
         {
-            log_debug("attempting to use fake gpus: {}", nvvsCommon.fakegpusString.c_str());
+            log_debug("attempting to use fake gpus: {}", m_nvvsCommon->fakegpusString.c_str());
             DcgmEntityStatus_t status;
-            dcgmSystem.GetGpuStatus(gpuIds[i], &status);
+            m_dcgmSystem.GetGpuStatus(gpuIds[i], &status);
             gpu->setDeviceEntityStatus(status);
 
             log_debug("status of gpu {} is {}", gpuIds[i], status);
@@ -834,7 +811,7 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
 /*****************************************************************************/
 void NvidiaValidationSuite::overrideParameters(TestParameters *tp, const std::string &lowerCaseTestName)
 {
-    OverwriteTestParamtersIfAny(tp, lowerCaseTestName, nvvsCommon.parms);
+    OverwriteTestParamtersIfAny(tp, lowerCaseTestName, m_nvvsCommon->parms);
 }
 
 void NvidiaValidationSuite::InitializeAndCheckGpuObjs(GpuSet *gpuSet)
@@ -874,13 +851,54 @@ void NvidiaValidationSuite::InitializeAndCheckGpuObjs(GpuSet *gpuSet)
     }
 }
 
+namespace
+{
+bool IsEudDependentPackageTest(std::string const &testName)
+{
+    auto const transformedTestName = ParameterValidator::TransformTestName(testName);
+    return transformedTestName == EUD_PLUGIN_NAME || transformedTestName == CPU_EUD_TEST_NAME;
+}
+
+bool IsCpuSdcDependentPackageTest(std::string const &testName)
+{
+    return ParameterValidator::TransformTestName(testName) == CPU_SDC_PLUGIN_NAME;
+}
+
+enum class DependentPackageInstallTarget
+{
+    DependentPackageOnly,
+    DependentPackageAndDcgmProprietaryPackage,
+};
+
+std::string BuildMissingDependentPackageMessage(std::vector<std::string> const &dependentPackageTests,
+                                                DependentPackageInstallTarget installTarget)
+{
+    if (dependentPackageTests.empty())
+    {
+        return {};
+    }
+
+    std::string const flatDependentPackageTests = fmt::to_string(fmt::join(dependentPackageTests, ", "));
+    std::string const installTargetMessage
+        = installTarget == DependentPackageInstallTarget::DependentPackageAndDcgmProprietaryPackage
+              ? fmt::format("both the [{}] dependent package and the DCGM proprietary package are installed",
+                            flatDependentPackageTests)
+              : fmt::format("the [{}] dependent package is installed", flatDependentPackageTests);
+
+    return fmt::format("[{}] cannot find dependent package(s). Please ensure that {}.",
+                       flatDependentPackageTests,
+                       installTargetMessage);
+}
+} // namespace
+
 void NvidiaValidationSuite::ThrowTestNotFoundExecption() const
 {
     std::vector<std::string> notFoundTests;
     std::vector<std::string> noSupportedEntityTests;
-    std::vector<std::string> eudTests;
+    std::vector<std::string> eudDependentPackageTests;
+    std::vector<std::string> cpuSdcDependentPackageTests;
 
-    for (auto const &requestedTestName : nvvsCommon.desiredTest)
+    for (auto const &requestedTestName : m_nvvsCommon->desiredTest)
     {
         bool foundInTestVect = false;
 
@@ -903,11 +921,15 @@ void NvidiaValidationSuite::ThrowTestNotFoundExecption() const
         }
         else
         {
-            // If the required packages are not available, EUD-related tests will not be exported.
+            // If the required packages are not available, these tests will not be exported.
             // To inform users about installing packages, we'd like to display a distinct notification.
-            if (requestedTestName == EUD_PLUGIN_NAME || requestedTestName == CPU_EUD_TEST_NAME)
+            if (IsEudDependentPackageTest(requestedTestName))
             {
-                eudTests.push_back(requestedTestName);
+                eudDependentPackageTests.push_back(requestedTestName);
+            }
+            else if (IsCpuSdcDependentPackageTest(requestedTestName))
+            {
+                cpuSdcDependentPackageTests.push_back(requestedTestName);
             }
             else
             {
@@ -927,17 +949,15 @@ void NvidiaValidationSuite::ThrowTestNotFoundExecption() const
         notFoundTestsMsg
             = fmt::format("[{}] were not found among possible test choices. ", fmt::join(notFoundTests, ", "));
     }
-    std::string eudTestsMsg;
-    if (!eudTests.empty())
-    {
-        std::string flatEudTests = fmt::to_string(fmt::join(eudTests, ", "));
-        eudTestsMsg              = fmt::format(
-            "[{}] cannot find dependent package(s). Please ensure that both the [{}] dependent package and the DCGM proprietary package are installed.",
-            flatEudTests,
-            flatEudTests);
-    }
-    std::string errMsg
-        = fmt::format("Error: requested test(s): {}{}{}", noSupportedEntityTestsMsg, notFoundTestsMsg, eudTestsMsg);
+    std::string const eudDependentPackageTestsMsg = BuildMissingDependentPackageMessage(
+        eudDependentPackageTests, DependentPackageInstallTarget::DependentPackageAndDcgmProprietaryPackage);
+    std::string const cpuSdcDependentPackageTestsMsg = BuildMissingDependentPackageMessage(
+        cpuSdcDependentPackageTests, DependentPackageInstallTarget::DependentPackageOnly);
+    std::string errMsg = fmt::format("Error: requested test(s): {}{}{}{}",
+                                     noSupportedEntityTestsMsg,
+                                     notFoundTestsMsg,
+                                     eudDependentPackageTestsMsg,
+                                     cpuSdcDependentPackageTestsMsg);
     log_error(errMsg);
     throw NvvsException(errMsg, NVVS_ST_TEST_NOT_FOUND);
 }
@@ -960,8 +980,8 @@ void NvidiaValidationSuite::DistributeTests(std::vector<std::unique_ptr<EntitySe
 
         // go through the vector of tests requested and try to match them with an actual test.
         // push a warning if no match found
-        for (auto requestedTestNameIt = nvvsCommon.desiredTest.begin();
-             requestedTestNameIt != nvvsCommon.desiredTest.end();)
+        for (auto requestedTestNameIt = m_nvvsCommon->desiredTest.begin();
+             requestedTestNameIt != m_nvvsCommon->desiredTest.end();)
         {
             bool found                           = false;
             bool foundSuite                      = false;
@@ -1066,15 +1086,15 @@ void NvidiaValidationSuite::DistributeTests(std::vector<std::unique_ptr<EntitySe
                                     compareRequestedName, gpuSet->GetGpuObjs()[0]->getDeviceId(), tp);
                             }
 
-                            if (nvvsCommon.parms.size() > 0)
+                            if (m_nvvsCommon->parms.size() > 0)
                             {
                                 overrideParameters(tp, compareRequestedName);
                             }
 
                             tp->AddString(PS_PLUGIN_NAME, (*testIt)->GetPluginName());
                             tp->AddString(PS_TEST_NAME, (*testIt)->GetTestName());
-                            tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
-                            if (nvvsCommon.genericMode)
+                            tp->AddDouble(PS_LOGFILE_TYPE, (double)m_nvvsCommon->logFileType);
+                            if (m_nvvsCommon->genericMode)
                             {
                                 tp->AddString(PS_USE_GENERIC_MODE, "True");
                             }
@@ -1100,7 +1120,7 @@ void NvidiaValidationSuite::DistributeTests(std::vector<std::unique_ptr<EntitySe
                 }
                 else
                 {
-                    requestedTestNameIt = nvvsCommon.desiredTest.erase(requestedTestNameIt);
+                    requestedTestNameIt = m_nvvsCommon->desiredTest.erase(requestedTestNameIt);
                 }
             }
             else
@@ -1112,12 +1132,12 @@ void NvidiaValidationSuite::DistributeTests(std::vector<std::unique_ptr<EntitySe
 
     for (auto const &suite : foundSuites)
     {
-        nvvsCommon.desiredTest.erase(suite);
+        m_nvvsCommon->desiredTest.erase(suite);
     }
 
-    if (!nvvsCommon.desiredTest.empty())
+    if (!m_nvvsCommon->desiredTest.empty())
     {
-        if (!anyTestAssigned || !nvvsCommon.rerunAsRoot)
+        if (!anyTestAssigned || !m_nvvsCommon->rerunAsRoot)
         {
             ThrowTestNotFoundExecption();
         }
@@ -1159,10 +1179,14 @@ bool NvidiaValidationSuite::FillTestVectors(suiteNames_enum suite, Test::testCla
                     testNames.push_back(EUD_PLUGIN_NAME);
                     testNames.push_back(CPU_EUD_TEST_NAME);
                 }
+                testNames.push_back(CPU_SDC_PLUGIN_NAME);
                 testNames.push_back(NVBANDWIDTH_PLUGIN_NAME);
                 testNames.push_back(NCCL_TESTS_PLUGIN_NAME);
-                EnvConfig envConfig;
-                if (envConfig.IsEnvVarPathToRegularFile(DCGM_RIST_BIN_PATH_ENV))
+                namespace tp = boost::this_process;
+                auto env     = tp::environment();
+                auto envPath = env.find(DCGM_RIST_BIN_PATH_ENV);
+                if (ShouldIncludeRistInLevelRun(envPath == env.end() ? std::nullopt
+                                                                     : std::make_optional(envPath->to_string())))
                 {
                     testNames.push_back(RIST_PLUGIN_NAME);
                 }
@@ -1226,15 +1250,15 @@ bool NvidiaValidationSuite::FillTestVectors(suiteNames_enum suite, Test::testCla
                     m_allowlist->GetDefaultsByDeviceId(*it, gpuSet->GetGpuObjs()[0]->getDeviceId(), tp);
                 }
 
-                if (nvvsCommon.parms.size() > 0)
+                if (m_nvvsCommon->parms.size() > 0)
                     overrideParameters(tp, *it);
             }
 
             tp->AddString(PS_PLUGIN_NAME, (*testIt)->GetPluginName());
             tp->AddString(PS_TEST_NAME, (*it));
-            tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
+            tp->AddDouble(PS_LOGFILE_TYPE, (double)m_nvvsCommon->logFileType);
             tp->AddDouble(PS_SUITE_LEVEL, (double)suite);
-            if (nvvsCommon.genericMode)
+            if (m_nvvsCommon->genericMode)
             {
                 tp->AddString(PS_USE_GENERIC_MODE, "True");
             }
@@ -1335,7 +1359,7 @@ std::vector<Gpu *> NvidiaValidationSuite::decipherProperties(GpuSet *set)
 }
 
 /*****************************************************************************/
-void initializeDesiredTests(const std::string &specifiedTests)
+void initializeDesiredTests(const std::string &specifiedTests, NvvsCommon &nvvsCommon)
 {
     if (specifiedTests.size() > 0)
     {
@@ -1378,10 +1402,14 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
                 {
                     buf << "test '" << testName << "' does not match any loaded tests. ";
                     auto transformedTestName = ParameterValidator::TransformTestName(testName);
-                    if (transformedTestName == EUD_PLUGIN_NAME || transformedTestName == CPU_EUD_TEST_NAME)
+                    if (IsEudDependentPackageTest(transformedTestName))
                     {
                         buf << "Please ensure that both the [" << transformedTestName
                             << "] dependent package and the DCGM proprietary package are installed.";
+                    }
+                    else if (IsCpuSdcDependentPackageTest(transformedTestName))
+                    {
+                        buf << "Please ensure that the [" << transformedTestName << "] dependent package is installed.";
                     }
                     else
                     {
@@ -1416,8 +1444,8 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
                     throw std::runtime_error(buf.str());
                 }
 
-                std::string requestedName                 = m_tf->GetCompareName(testName);
-                nvvsCommon.parms[requestedName][parmName] = std::move(parmValue);
+                std::string requestedName                    = m_tf->GetCompareName(testName);
+                m_nvvsCommon->parms[requestedName][parmName] = std::move(parmValue);
             }
             else
             {
@@ -1437,7 +1465,7 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
                     if (parmValue.empty() || TestParameters::bool_string_to_bool(parmValue))
                     {
                         log_debug("User requested that supporting plugins use generic mode.");
-                        nvvsCommon.genericMode = true;
+                        m_nvvsCommon->genericMode = true;
                     }
                 }
                 else
@@ -1558,14 +1586,6 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
                                            "",
                                            "parameters to set for tests",
                                            cmd);
-        TCLAP::ValueArg<unsigned int> initializationWaitTime(
-            "w",
-            "initwaittime",
-            "Number of seconds to wait before aborting DCGM initialization",
-            false,
-            120,
-            "initialization wait time",
-            cmd);
         TCLAP::ValueArg<std::string> dcgmHost(
             "", "dcgmHostname", "Specify the hostname where DCGM is running.", false, "", "DCGM hostname", cmd);
         TCLAP::ValueArg<std::string> throttleMask("",
@@ -1689,38 +1709,36 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             configFile = std::move(configFileArg);
         }
 
-        listGpus                          = listGpusArg.getValue();
-        listTests                         = listTestsArg.getValue();
-        nvvsCommon.verbose                = verboseArg.getValue();
-        nvvsCommon.pluginPath             = pluginPathArg.getValue();
-        nvvsCommon.parse                  = parseArg.getValue();
-        nvvsCommon.quietMode              = quietModeArg.getValue();
-        nvvsCommon.configless             = configLessArg.getValue();
-        nvvsCommon.fakegpusString         = fakeGpusArg.getValue();
-        nvvsCommon.statsOnlyOnFail        = statsOnFailArg.getValue();
-        nvvsCommon.indexString            = indexArg.getValue();
-        nvvsCommon.parmsString            = parms.getValue();
-        nvvsCommon.dcgmHostname           = dcgmHost.getValue();
-        nvvsCommon.currentIteration       = currentIteration.getValue();
-        nvvsCommon.totalIterations        = totalIterations.getValue();
-        nvvsCommon.entityIds              = entityIds.getValue();
-        nvvsCommon.channelFd              = channelFd.getValue();
-        nvvsCommon.diagResponseVersion    = responseVersion.getValue();
-        nvvsCommon.rerunAsRoot            = rerunAsRoot.isSet();
-        nvvsCommon.ignoreErrorCodesString = ignoreErrorCodes.getValue();
-        nvvsCommon.SetStatsPath(statsPathArg.getValue());
-        nvvsCommon.hangDetectDisable   = hangDetectDisable.isSet();
-        nvvsCommon.hangDetectExpirySec = hangDetectExpirySec.getValue();
-
-        this->initWaitTime = initializationWaitTime.getValue();
+        listGpus                             = listGpusArg.getValue();
+        listTests                            = listTestsArg.getValue();
+        m_nvvsCommon->verbose                = verboseArg.getValue();
+        m_nvvsCommon->pluginPath             = pluginPathArg.getValue();
+        m_nvvsCommon->parse                  = parseArg.getValue();
+        m_nvvsCommon->quietMode              = quietModeArg.getValue();
+        m_nvvsCommon->configless             = configLessArg.getValue();
+        m_nvvsCommon->fakegpusString         = fakeGpusArg.getValue();
+        m_nvvsCommon->statsOnlyOnFail        = statsOnFailArg.getValue();
+        m_nvvsCommon->indexString            = indexArg.getValue();
+        m_nvvsCommon->parmsString            = parms.getValue();
+        m_nvvsCommon->dcgmHostname           = dcgmHost.getValue();
+        m_nvvsCommon->currentIteration       = currentIteration.getValue();
+        m_nvvsCommon->totalIterations        = totalIterations.getValue();
+        m_nvvsCommon->entityIds              = entityIds.getValue();
+        m_nvvsCommon->channelFd              = channelFd.getValue();
+        m_nvvsCommon->diagResponseVersion    = responseVersion.getValue();
+        m_nvvsCommon->rerunAsRoot            = rerunAsRoot.isSet();
+        m_nvvsCommon->ignoreErrorCodesString = ignoreErrorCodes.getValue();
+        m_nvvsCommon->SetStatsPath(statsPathArg.getValue());
+        m_nvvsCommon->hangDetectDisable   = hangDetectDisable.isSet();
+        m_nvvsCommon->hangDetectExpirySec = hangDetectExpirySec.getValue();
 
         if (listGpus || listTests)
-            nvvsCommon.configless = true;
+            m_nvvsCommon->configless = true;
 
-        if (nvvsCommon.desiredTest.size() > 0)
-            nvvsCommon.configless = true;
+        if (m_nvvsCommon->desiredTest.size() > 0)
+            m_nvvsCommon->configless = true;
 
-        initializeDesiredTests(specificTestArg.getValue());
+        initializeDesiredTests(specificTestArg.getValue(), *m_nvvsCommon);
 
         debugFile = GetLogFilenameFromArgAndEnv(
             debugFileArg.getValue(), NVVS_LOGGING_DEFAULT_NVVS_LOGFILE, NVVS_ENV_LOG_PREFIX);
@@ -1743,7 +1761,7 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             std::string reasonStr = clocksEventMask.getValue();
             // Make reasonStr lower case for parsing
             std::transform(reasonStr.begin(), reasonStr.end(), reasonStr.begin(), ::tolower);
-            nvvsCommon.clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(std::move(reasonStr));
+            m_nvvsCommon->clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(std::move(reasonStr));
         }
         // Set bitmask for ignoring user specified clocks reasons (deprecated)
         else if (throttleMask.isSet())
@@ -1751,16 +1769,16 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             std::string reasonStr = throttleMask.getValue();
             // Make reasonStr lower case for parsing
             std::transform(reasonStr.begin(), reasonStr.end(), reasonStr.begin(), ::tolower);
-            nvvsCommon.clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(std::move(reasonStr));
+            m_nvvsCommon->clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(std::move(reasonStr));
         }
 
         // Enable early failure checks if requested
         if (failEarly.isSet())
         {
-            nvvsCommon.failEarly = true;
+            m_nvvsCommon->failEarly = true;
             if (failCheckInterval.isSet())
             {
-                nvvsCommon.failCheckInterval = failCheckInterval.getValue();
+                m_nvvsCommon->failCheckInterval = failCheckInterval.getValue();
             }
         }
 
@@ -1771,11 +1789,11 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             // Revert to default values when users input too fast (100 ms) /slow (60 s) watch frequency
             if (watchFrequencyVal < 100000 || watchFrequencyVal > 60000000)
             {
-                nvvsCommon.watchFrequency = DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS;
+                m_nvvsCommon->watchFrequency = DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS;
             }
             else
             {
-                nvvsCommon.watchFrequency = watchFrequencyVal;
+                m_nvvsCommon->watchFrequency = watchFrequencyVal;
             }
         }
     }

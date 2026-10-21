@@ -1,0 +1,11 @@
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda11
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda11/lib
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda11/lib/libcublas.so
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda11/lib/libcublas.so.11
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda11/lib/libcublas.so.11.11.3.6
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda11/lib/libcublasLt.so
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda11/lib/libcublasLt.so.11
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda11/lib/libcublasLt.so.11.11.3.6
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda11-cublas-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda11-cublas-<BASEPACKAGEVERSION>/LICENSE

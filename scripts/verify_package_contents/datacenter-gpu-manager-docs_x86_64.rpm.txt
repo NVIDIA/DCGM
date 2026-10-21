@@ -1,0 +1,2 @@
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-docs-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-docs-<BASEPACKAGEVERSION>/LICENSE

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ target_link_libraries(configManagerTests
         fmt::fmt
         modules_objects
         Catch2::Catch2WithMain
-        ${CMAKE_THREAD_LIBS_INIT}
+        Threads::Threads
         fmt::fmt
         rt
         dl

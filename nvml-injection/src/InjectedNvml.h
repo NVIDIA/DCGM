@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <deque>
 #include <list>
 #include <map>
 #include <mutex>
@@ -25,6 +26,7 @@
 #include <vector>
 
 #include <dcgm_nvml.h>
+#include <nvml_injection.h>
 #include <yaml-cpp/yaml.h>
 
 #include "AttributeHolder.h"
@@ -50,15 +52,15 @@ struct StringHash : std::hash<std::string_view>
 
 using funcCallMap_t = std::unordered_map<std::string, uint32_t, StringHash, std::equal_to<>>;
 
-#define GLOBAL            "Global"
-#define DEVICE            "Device"
-#define GPU_INASTANCE     "GpuInstance"
-#define COMPUTE_INASTANCE "ComputeInstance"
-#define VGPU_TYPE         "vGPUType"
-#define VGPU_INSTANCE     "vGPUInstance"
-#define MIG_DEVICE        "MigDevice"
-#define FunctionReturn    "FunctionReturn"
-#define ReturnValue       "ReturnValue"
+inline constexpr std::string GLOBAL           = "Global";
+inline constexpr std::string DEVICE           = "Device";
+inline constexpr std::string GPU_INSTANCE     = "GpuInstance";
+inline constexpr std::string COMPUTE_INSTANCE = "ComputeInstance";
+inline constexpr std::string VGPU_TYPE        = "vGPUType";
+inline constexpr std::string VGPU_INSTANCE    = "vGPUInstance";
+inline constexpr std::string MIG_DEVICE       = "MigDevice";
+inline constexpr std::string FUNCTION_RETURN  = "FunctionReturn";
+inline constexpr std::string RETURN_VALUE     = "ReturnValue";
 
 class InjectedNvml
 {
@@ -221,12 +223,25 @@ public:
                                std::vector<InjectionArgument> &preparedValues);
 
 private:
+    struct EventContext
+    {
+        nvmlEventSetGetContextInfo_v1_t info {};
+        std::vector<unsigned char> data;
+    };
+
+    struct EventDataV3
+    {
+        nvmlEventSetWait_v3_t data {};
+        std::vector<EventContext> contexts;
+    };
+
     static InjectedNvml *m_injectedNvmlInstance;
 
     /*****************************************************************************/
     InjectedNvml();
 
     std::mutex m_mutex;
+    std::mutex m_eventMutex;
     static const unsigned int m_nvmlDeviceStart = 0xA0A0;
 
     std::map<nvmlVgpuInstance_t, AttributeHolder<nvmlVgpuInstance_t>> m_vgpuInstances;
@@ -270,6 +285,8 @@ private:
     unsigned long long m_registeredEventTypes = 0;
 
     std::unique_ptr<FileSystemOperator> m_fileSystemOp;
+    std::deque<EventDataV3> m_pendingV3Events;
+    std::unordered_map<nvmlEventSet_t, std::vector<EventContext>> m_eventContexts;
 
     nvmlDevice_t GenNextNvmlDevice() const;
 
@@ -332,6 +349,15 @@ private:
     void ObjectlessSetNoLock(const std::string &key, const InjectionArgument &value);
 
     nvmlReturn_t nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequest_t *request);
+    std::optional<YAML::Node> ReadEventFile(unsigned int timeoutms);
+    nvmlReturn_t nvmlEventSetWaitImpl(nvmlEventData_t *data, unsigned int timeoutms);
+    nvmlReturn_t nvmlEventSetWaitImpl(nvmlEventSet_t set, nvmlEventSetWait_v3_t *params);
+    nvmlReturn_t nvmlEventSetGetContextCountImpl(nvmlEventSet_t set, nvmlEventSetGetContextCount_v1_t *params);
+    nvmlReturn_t nvmlEventSetGetContextInfoImpl(nvmlEventSet_t set, nvmlEventSetGetContextInfo_v1_t *params);
+    nvmlReturn_t nvmlEventSetGetContextDataImpl(nvmlEventSet_t set, nvmlEventSetGetContextData_v1_t *params);
+    nvmlReturn_t nvmlEventSetGetGpuOperationalEventContextLegacyXidImpl(
+        nvmlEventSet_t set,
+        nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *params);
 
     // This is used for emulating GPU detachment before host engine initialization.
     // We will detach the GPUs before the host engine is initialized.

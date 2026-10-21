@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,11 @@ std::string_view CpuHelpers::GetGraceModelName()
     return "Grace";
 }
 
+std::string_view CpuHelpers::GetVeraModelName()
+{
+    return "Vera";
+}
+
 bool CpuHelpers::SupportNonNvidiaCpu()
 {
     EnvConfig envConfig;
@@ -64,8 +69,10 @@ void CpuHelpers::FillVendorAndModelIfNvidiaCpuPresent()
          * jep106 specifies the standard
          * 036b is the manufacturer's identification code for Nvidia
          * 0241 signifies the chip that has Grace CPUs on it.
+         * 0410 signifies the chip that has Vera CPUs on it.
          */
         static std::string_view const sGraceChipId           = "0241";
+        static std::string_view const sVeraChipId            = "0410";
         static std::string_view const sNvidiaManufacturersId = "036b";
 
         m_cpuVendor = "Unknown";
@@ -83,14 +90,19 @@ void CpuHelpers::FillVendorAndModelIfNvidiaCpuPresent()
         {
             if (tokens[1] == sNvidiaManufacturersId)
             {
-                m_cpuVendor = GetNvidiaVendorName();
-                if (DcgmNs::Trim(std::string(tokens[2])) == sGraceChipId)
+                m_cpuVendor       = GetNvidiaVendorName();
+                auto const chipId = DcgmNs::Trim(std::string(tokens[2]));
+                if (chipId == sGraceChipId)
                 {
                     m_cpuModel = GetGraceModelName();
                 }
+                else if (chipId == sVeraChipId)
+                {
+                    m_cpuModel = GetVeraModelName();
+                }
                 else
                 {
-                    log_debug("Non-Grace chip ID '{}' found", tokens[2]);
+                    log_debug("Unrecognized Nvidia chip ID '{}' found", tokens[2]);
                 }
                 break;
             }

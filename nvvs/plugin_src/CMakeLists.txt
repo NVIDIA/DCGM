@@ -46,33 +46,63 @@ macro(define_plugin PLUGIN_NAME CUDA_VER)
 
     nvvs_plugin_srcs(${PLUGIN_NAME}_${CUDA_VER})
 
-    target_include_directories(${PLUGIN_NAME}_${CUDA_VER} PRIVATE
-        "${CUDA${CUDA_VER}_INCLUDE_DIR}"
-        "${JSON_CPP_INCLUDE_PATH}")
-
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER}
         PRIVATE
-            ${CUDA${CUDA_VER}_STATIC_LIBS}
-            ${JSONCPP_STATIC_LIBS}
+            jsoncpp_static
             dcgm_common
-            dcgm_cublas_proxy${CUDA_VER}
+            cuda_ops${CUDA_VER}
             dcgm_logging
             pluginCudaCommon_${CUDA_VER}
             sdk_nvml_essentials_objects
             sdk_nvml_loader
         PUBLIC
-            ${CUDA${CUDA_VER}_LIBS}
             pluginCommon)
 
     set_target_properties(${PLUGIN_NAME}_${CUDA_VER} PROPERTIES
         LIBRARY_OUTPUT_NAME "${PLUGIN_NAME}"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
-    target_link_options(${PLUGIN_NAME}_${CUDA_VER} PRIVATE 
-        -Wl,--version-script,${PROJECT_SOURCE_DIR}/nvvs/plugin_src/nvvs_plugin.linux_def)
+    nvvs_configure_plugin_version_script(${PLUGIN_NAME}_${CUDA_VER} ${ARGN})
 
     target_link_libraries(nvvs_plugins INTERFACE "${PLUGIN_NAME}_${CUDA_VER}")
 endmacro()
+
+# Creates the linker script for the plugin. ARGN consists of
+# - (optional) DO_NOT_EXPORT <unexported symbol> ...: List of symbols to remove from the full list of exported symbols
+function(nvvs_configure_plugin_version_script PLUGIN_NAME #[[ARGN]])
+    cmake_parse_arguments(ARG "" "" "DO_NOT_EXPORT" ${ARGN})
+
+    # Handle optionality
+    if (NOT ARG_DO_NOT_EXPORT)
+        set(ARG_DO_NOT_EXPORT "")
+    endif()
+
+    # Remove unexported functions
+    set(EXPORTED_FUNCTIONS
+        GetPluginInterfaceVersion
+        GetPluginInfo
+        InitializePlugin
+        RunTest
+        RetrieveCustomStats
+        RetrieveResults
+        ShutdownPlugin)
+    foreach(UNEXPORTED_FUNCTION IN LISTS ARG_DO_NOT_EXPORT)
+        list(REMOVE_ITEM EXPORTED_FUNCTIONS "${UNEXPORTED_FUNCTION}")
+    endforeach()
+
+    # Configure linker script and target
+    set(EXPORTED_FUNCTIONS_FOR_LINKER_SCRIPT "")
+    foreach(EXPORTED_FUNCTION IN LISTS EXPORTED_FUNCTIONS)
+        string(APPEND EXPORTED_FUNCTIONS_FOR_LINKER_SCRIPT "        ${EXPORTED_FUNCTION};\n")
+    endforeach()
+    set(CONFIGURED_LINKER_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_NAME}.linux_def")
+    configure_file(
+        "${PROJECT_SOURCE_DIR}/nvvs/plugin_src/nvvs_plugin.linux_def.in"
+        "${CONFIGURED_LINKER_SCRIPT}"
+        @ONLY)
+    target_link_options(${PLUGIN_NAME} PRIVATE
+        "-Wl,--version-script,${CONFIGURED_LINKER_SCRIPT}")
+endfunction()
 
 set(SUPPORTED_CUDA_VERSIONS 11 12 13)
 
@@ -85,8 +115,8 @@ add_subdirectory(memtest)
 add_subdirectory(nccl_tests)
 add_subdirectory(nvbandwidth)
 add_subdirectory(pcie)
+add_subdirectory(cpu_sdc)
 add_subdirectory(targetedpower)
 add_subdirectory(targetedstress)
-add_subdirectory(test_common)
 
 set(NVVS_PLUGINS_BASE_DIR ${NVVS_PLUGINS_BASE_DIR} PARENT_SCOPE)

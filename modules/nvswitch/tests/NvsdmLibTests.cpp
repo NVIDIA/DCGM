@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@
  */
 
 #include <NvsdmLib.h>
+#include <TempFile.hpp>
 #include <catch2/catch_all.hpp>
 #include <cstring>
-#include <fstream>
 #include <nvsdm.h>
 
 using namespace DcgmNs;
@@ -1148,14 +1148,10 @@ devices:
           port_idx: 0
 )yaml";
 
-    std::string tmpPath = "/tmp/nvsdm_test_load.yaml";
-    {
-        std::ofstream ofs(tmpPath);
-        ofs << yamlContent;
-    }
+    auto yamlFile = TempFile::Random(yamlContent, "nvsdm-test-load-");
 
     NvsdmMock mock;
-    CHECK(mock.LoadYaml(tmpPath) == true);
+    CHECK(mock.LoadYaml(yamlFile.Path().string()) == true);
     mock.nvsdmInitialize();
 
     unsigned int count = 0;
@@ -1169,8 +1165,6 @@ devices:
         },
         &count);
     CHECK(count == 1);
-
-    std::remove(tmpPath.c_str());
 }
 
 TEST_CASE("NvsdmMock: LoadYaml with invalid path returns false", "[NvsdmMock]")
@@ -1181,14 +1175,8 @@ TEST_CASE("NvsdmMock: LoadYaml with invalid path returns false", "[NvsdmMock]")
 
 TEST_CASE("NvsdmMock: LoadYaml with missing devices key returns false", "[NvsdmMock]")
 {
-    std::string tmpPath = "/tmp/nvsdm_test_bad.yaml";
-    {
-        std::ofstream ofs(tmpPath);
-        ofs << "not_devices: []" << std::endl;
-    }
+    auto yamlFile = TempFile::Random("not_devices: []\n", "nvsdm-test-bad-");
 
     NvsdmMock mock;
-    CHECK(mock.LoadYaml(tmpPath) == false);
-
-    std::remove(tmpPath.c_str());
+    CHECK(mock.LoadYaml(yamlFile.Path().string()) == false);
 }

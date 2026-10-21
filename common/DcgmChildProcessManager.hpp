@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <ChildProcess/ChildProcess.hpp>
 #include <ChildProcess/IoContext.hpp>
 #include <DcgmUtilities.h>
+#include <FileHandle/FileHandle.hpp>
 
 #include <memory>
 #include <thread>
@@ -97,7 +98,8 @@ public:
      * Get the standard error handle of the child process.
      *
      * @param[in] handle      Handle to the ChildProcess instance
-     * @param[out] fd         File descriptor of the standard error
+     * @param[out] fd         Duplicated file descriptor of the standard error. Caller owns the descriptor and must
+     *                        close it.
      *
      * @returns DCGM_ST_OK if successful, error code otherwise
      */
@@ -106,7 +108,8 @@ public:
      * Get the standard output handle of the child process.
      *
      * @param[in] handle      Handle to the ChildProcess instance
-     * @param[out] fd         File descriptor of the standard output
+     * @param[out] fd         Duplicated file descriptor of the standard output. Caller owns the descriptor and must
+     *                        close it.
      *
      * @returns DCGM_ST_OK if successful, error code otherwise
      */
@@ -115,7 +118,8 @@ public:
      * Get the data channel handle of the child process.
      *
      * @param[in] handle      Handle to the ChildProcess instance
-     * @param[out] fd         File descriptor of the data channel
+     * @param[out] fd         Duplicated file descriptor of the data channel. Caller owns the descriptor and must
+     *                        close it.
      *
      * @returns DCGM_ST_OK if successful, error code otherwise
      */
@@ -158,9 +162,8 @@ public:
 private:
     struct PipeInfo
     {
-        int readFd;          //!< Read end of the pipe
-        int writeFd;         //!< Write end of the pipe
-        std::jthread thread; //!< Thread to read from stdout/stderr/data channel and write to writeFd
+        DcgmNs::Utils::FileHandle readFd; //!< Manager-owned read end of the pipe
+        std::jthread thread;              //!< Thread to write stdout/stderr/data-channel data to the pipe.
     };
     ChildProcessFactory m_processFactory;
 

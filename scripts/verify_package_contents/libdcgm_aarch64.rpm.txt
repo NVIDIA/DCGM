@@ -1,0 +1,7 @@
+/usr/lib64/libdcgm.so.<MAJORVERSION>
+/usr/lib64/libdcgm.so.<SOFTWAREVERSION>
+/usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>
+/usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>/LICENSE
+/usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>/third-party-notices.txt
+/usr/share/licenses/libdcgm-<BASEPACKAGEVERSION>
+/usr/share/licenses/libdcgm-<BASEPACKAGEVERSION>/LICENSE

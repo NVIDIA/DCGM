@@ -1,8 +1,22 @@
+/*
+ * Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <catch2/catch_all.hpp>
 
-#define TEST_DCGMCACHEMANAGER
 #include <DcgmCacheManager.h>
-#undef TEST_DCGMCACHEMANAGER
 
 #include <DcgmGroupManager.h>
 #include <DcgmUtilities.h>
@@ -16,18 +30,25 @@
 #include <string>
 #include <vector>
 
-bool operator==(dcgmGroupEntityPair_t const &lhs, dcgmGroupEntityPair_t const &rhs)
-{
-    return lhs.entityGroupId == rhs.entityGroupId && lhs.entityId == rhs.entityId;
-}
-
 namespace
 {
 using TestGroupManager = impl::DcgmGroupManager<MockHostEngineHandler>;
 
+/**
+ * Test adapter that exposes fake GPU setup state used by group-manager tests.
+ */
+class GroupManagerTestDcgmCacheManager : public DcgmCacheManager
+{
+public:
+    using DcgmCacheManager::AddFakeComputeInstance;
+    using DcgmCacheManager::AddFakeGpu;
+    using DcgmCacheManager::AddFakeInstance;
+    using DcgmCacheManager::m_gpus;
+};
+
 struct GroupManagerTestBase
 {
-    DcgmCacheManager cacheManager;
+    GroupManagerTestDcgmCacheManager cacheManager;
     MockHostEngineHandler hostEngine;
 };
 
@@ -84,6 +105,7 @@ void RecordRemovedGroup(unsigned int groupId, void *userData)
 
 TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager lifecycle and identifiers", "[GroupManager]")
 {
+    DcgmCacheManagerAnyPtr cmPtr(&cacheManager);
     SECTION("default groups")
     {
         hostEngine.entityLists[{ 1, DCGM_FE_GPU }]    = {};
@@ -92,12 +114,12 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager lifecycle and identifie
         SECTION("default group creation failures propagate from the constructor")
         {
             hostEngine.entityListReturns[{ 1, DCGM_FE_SWITCH }] = DCGM_ST_GENERIC_ERROR;
-            REQUIRE_THROWS_AS(TestGroupManager(&cacheManager, hostEngine, true), std::runtime_error);
+            REQUIRE_THROWS_AS(TestGroupManager(cmPtr, hostEngine, true), std::runtime_error);
         }
 
         SECTION("default groups are created eagerly when requested")
         {
-            TestGroupManager groupManager(&cacheManager, hostEngine, true);
+            TestGroupManager groupManager(cmPtr, hostEngine, true);
             auto groupIdsResult = GetAllGroupIds(groupManager);
             REQUIRE(groupIdsResult.is_ok());
             auto const &groupIds = *groupIdsResult;
@@ -109,7 +131,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager lifecycle and identifie
 
         SECTION("default groups can be skipped and later created")
         {
-            TestGroupManager groupManager(&cacheManager, hostEngine, false);
+            TestGroupManager groupManager(cmPtr, hostEngine, false);
             auto groupIdsBefore = GetAllGroupIds(groupManager);
             REQUIRE(groupIdsBefore.is_ok());
             REQUIRE(groupIdsBefore->empty());
@@ -122,7 +144,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager lifecycle and identifie
 
         SECTION("group ids can be enumerated and normalized")
         {
-            TestGroupManager groupManager(&cacheManager, hostEngine, false);
+            TestGroupManager groupManager(cmPtr, hostEngine, false);
             REQUIRE(groupManager.CreateDefaultGroups() == DCGM_ST_OK);
             auto customGroupResult = CreateGroup(groupManager, 7, "custom", DCGM_GROUP_EMPTY);
             REQUIRE(customGroupResult.is_ok());
@@ -157,7 +179,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager lifecycle and identifie
     {
         hostEngine.entityLists[{ 1, DCGM_FE_GPU }]    = { MakeEntity(DCGM_FE_GPU, 0) };
         hostEngine.entityLists[{ 1, DCGM_FE_SWITCH }] = {};
-        TestGroupManager groupManager(&cacheManager, hostEngine, false);
+        TestGroupManager groupManager(cmPtr, hostEngine, false);
 
         auto emptyGroupResult   = CreateGroup(groupManager, 11, "custom", DCGM_GROUP_EMPTY);
         auto defaultGroupResult = CreateGroup(groupManager, 11, "default", DCGM_GROUP_DEFAULT);
@@ -183,7 +205,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager lifecycle and identifie
         REQUIRE(instance0 != DCGM_ENTITY_ID_BAD);
         auto const computeInstance0 = cacheManager.AddFakeComputeInstance(instance0);
         REQUIRE(computeInstance0 != DCGM_ENTITY_ID_BAD);
-        TestGroupManager groupManager(&cacheManager, hostEngine, false);
+        TestGroupManager groupManager(cmPtr, hostEngine, false);
 
         hostEngine.entityLists[{ 1, DCGM_FE_GPU_I }]  = { MakeEntity(DCGM_FE_GPU_I, instance0) };
         hostEngine.entityLists[{ 1, DCGM_FE_GPU_CI }] = { MakeEntity(DCGM_FE_GPU_CI, computeInstance0) };
@@ -217,7 +239,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager lifecycle and identifie
 
     SECTION("AddNewGroup propagates exceptions thrown by collaborators")
     {
-        TestGroupManager groupManager(&cacheManager, hostEngine, false);
+        TestGroupManager groupManager(cmPtr, hostEngine, false);
         hostEngine.strictEntityLists = true;
 
         unsigned int groupId = 0;
@@ -227,7 +249,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager lifecycle and identifie
 
     SECTION("invalid create arguments and limits are enforced")
     {
-        TestGroupManager groupManager(&cacheManager, hostEngine, false);
+        TestGroupManager groupManager(cmPtr, hostEngine, false);
 
         REQUIRE(groupManager.AddNewGroup(0, "bad", DCGM_GROUP_EMPTY, nullptr) == DCGM_ST_BADPARAM);
 
@@ -243,11 +265,12 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager lifecycle and identifie
 
 TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager contents and failure behavior", "[GroupManager]")
 {
+    DcgmCacheManagerAnyPtr cmPtr(&cacheManager);
     auto const gpu0 = cacheManager.AddFakeGpu(0x1000, 0x2000);
     REQUIRE(gpu0 != DCGM_GPU_ID_BAD);
     auto const gpu1 = cacheManager.AddFakeGpu(0x1000, 0x2000);
     REQUIRE(gpu1 != DCGM_GPU_ID_BAD);
-    TestGroupManager groupManager(&cacheManager, hostEngine, false);
+    TestGroupManager groupManager(cmPtr, hostEngine, false);
     auto pad0Result    = CreateGroup(groupManager, 22, "pad0", DCGM_GROUP_EMPTY);
     auto groupIdResult = CreateGroup(groupManager, 22, "pad1", DCGM_GROUP_EMPTY);
     REQUIRE(pad0Result.is_ok());
@@ -342,7 +365,8 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager contents and failure be
 
 TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager connection cleanup and callbacks", "[GroupManager]")
 {
-    TestGroupManager groupManager(&cacheManager, hostEngine, false);
+    DcgmCacheManagerAnyPtr cmPtr(&cacheManager);
+    TestGroupManager groupManager(cmPtr, hostEngine, false);
     auto connection1GroupAResult = CreateGroup(groupManager, 41, "c1a", DCGM_GROUP_EMPTY);
     auto connection1GroupBResult = CreateGroup(groupManager, 41, "c1b", DCGM_GROUP_EMPTY);
     auto connection2GroupResult  = CreateGroup(groupManager, 42, "c2", DCGM_GROUP_EMPTY);
@@ -395,6 +419,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager dynamic groups and atta
     REQUIRE(instance0 != DCGM_ENTITY_ID_BAD);
     auto const computeInstance0 = cacheManager.AddFakeComputeInstance(instance0);
     REQUIRE(computeInstance0 != DCGM_ENTITY_ID_BAD);
+    DcgmCacheManagerAnyPtr cmPtr(&cacheManager);
 
     SECTION("default groups are resolved dynamically through the hostengine adapter")
     {
@@ -403,7 +428,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager dynamic groups and atta
         hostEngine.entityLists[{ 1, DCGM_FE_SWITCH }] = { MakeEntity(DCGM_FE_SWITCH, 3) };
         hostEngine.entityLists[{ 0, DCGM_FE_SWITCH }]
             = { MakeEntity(DCGM_FE_SWITCH, 3), MakeEntity(DCGM_FE_SWITCH, 4) };
-        TestGroupManager groupManager(&cacheManager, hostEngine, false);
+        TestGroupManager groupManager(cmPtr, hostEngine, false);
         REQUIRE(groupManager.CreateDefaultGroups() == DCGM_ST_OK);
         auto groupId = groupManager.GetAllGpusGroup();
         auto option  = DcgmGroupOption::ActiveOnly;
@@ -435,7 +460,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager dynamic groups and atta
         hostEngine.entityLists[{ 1, DCGM_FE_SWITCH }] = { MakeEntity(DCGM_FE_SWITCH, 9) };
         hostEngine.entityLists[{ 1, DCGM_FE_GPU_I }]  = { MakeEntity(DCGM_FE_GPU_I, instance0) };
         hostEngine.entityLists[{ 1, DCGM_FE_GPU_CI }] = { MakeEntity(DCGM_FE_GPU_CI, computeInstance0) };
-        TestGroupManager groupManager(&cacheManager, hostEngine, false);
+        TestGroupManager groupManager(cmPtr, hostEngine, false);
         REQUIRE(groupManager.CreateDefaultGroups() == DCGM_ST_OK);
 
         hostEngine.entityListReturns[{ 1, DCGM_FE_SWITCH }] = DCGM_ST_MODULE_NOT_LOADED;
@@ -461,7 +486,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager dynamic groups and atta
     {
         hostEngine.entityLists[{ 1, DCGM_FE_GPU }]    = { MakeEntity(DCGM_FE_GPU, gpu0) };
         hostEngine.entityLists[{ 1, DCGM_FE_SWITCH }] = {};
-        TestGroupManager groupManager(&cacheManager, hostEngine, false);
+        TestGroupManager groupManager(cmPtr, hostEngine, false);
         REQUIRE(groupManager.CreateDefaultGroups() == DCGM_ST_OK);
         auto initialGroupIdsResult = GetAllGroupIds(groupManager);
         REQUIRE(initialGroupIdsResult.is_ok());
@@ -491,7 +516,7 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager dynamic groups and atta
         hostEngine.entityLists[{ 0, DCGM_FE_GPU }]    = {};
         hostEngine.entityLists[{ 1, DCGM_FE_SWITCH }] = {};
         hostEngine.entityLists[{ 0, DCGM_FE_SWITCH }] = {};
-        TestGroupManager groupManager(&cacheManager, hostEngine, false);
+        TestGroupManager groupManager(cmPtr, hostEngine, false);
         REQUIRE(groupManager.CreateDefaultGroups() == DCGM_ST_OK);
         auto regularGroupIdResult = CreateGroup(groupManager, 0, "regular", DCGM_GROUP_EMPTY);
         REQUIRE(regularGroupIdResult.is_ok());
@@ -528,7 +553,8 @@ TEST_CASE_METHOD(GroupManagerTestBase, "DcgmGroupManager SKU behavior", "[GroupM
     REQUIRE(instance0 != DCGM_ENTITY_ID_BAD);
     auto const computeInstance0 = cacheManager.AddFakeComputeInstance(instance0);
     REQUIRE(computeInstance0 != DCGM_ENTITY_ID_BAD);
-    TestGroupManager groupManager(&cacheManager, hostEngine, false);
+    DcgmCacheManagerAnyPtr cmPtr(&cacheManager);
+    TestGroupManager groupManager(cmPtr, hostEngine, false);
 
     SECTION("empty and singleton groups are treated as same-SKU")
     {

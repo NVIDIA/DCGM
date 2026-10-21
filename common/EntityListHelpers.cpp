@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,23 @@
  */
 
 #include "EntityListHelpers.h"
+
 #include "CpuHelpers.h"
 #include "DcgmGroupEntityPairHelpers.h"
 #include "DcgmLogging.h"
 #include "DcgmStringHelpers.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
+
+#include <DcgmOpsAnyPtr.hpp>
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
+
+#include <fmt/core.h>
+#include <fmt/format.h>
+#include <fmt/ostream.h>
+
 #include <algorithm>
 #include <charconv>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <sstream>
@@ -30,14 +39,11 @@
 #include <tuple>
 #include <unordered_set>
 
-#include <fmt/core.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
-
 using namespace DcgmNs;
 
 namespace
 {
+constexpr char const *kTooManyEntitiesInContextFmt = "Error: {} in {}";
 
 bool AllDigits(std::string const &str)
 {
@@ -69,7 +75,8 @@ bool AllDigits(std::string const &str)
 std::string ParseLinkComponent(std::string const &part,
                                std::string const &componentName,
                                std::string const &fullSpec,
-                               std::vector<unsigned int> &out)
+                               std::vector<unsigned int> &out,
+                               std::size_t maxCount)
 {
     if (!part.empty() && part.front() == '{')
     {
@@ -82,8 +89,13 @@ std::string ParseLinkComponent(std::string const &part,
         {
             return fmt::format("Error: unexpected characters after '}}' in {} {}: {}", fullSpec, componentName, part);
         }
-        if (ParseRangeString(part.substr(1, close - 1), out) != DCGM_ST_OK)
+        if (auto const ret = ParseRangeString(part.substr(1, close - 1), out, maxCount); ret != DCGM_ST_OK)
         {
+            if (ret == DCGM_ST_MAX_LIMIT)
+            {
+                return fmt::format(
+                    "Error: {} in {} {}: {}", TooManyEntitiesMessageFragment, fullSpec, componentName, part);
+            }
             return fmt::format("Error: invalid range in {} {}: {}", fullSpec, componentName, part);
         }
     }
@@ -94,6 +106,10 @@ std::string ParseLinkComponent(std::string const &part,
         if (ec != std::errc {})
         {
             return fmt::format("Error: value out of range in {} {}: {}", fullSpec, componentName, part);
+        }
+        if (out.size() >= maxCount)
+        {
+            return fmt::format("Error: {} in {} {}: {}", TooManyEntitiesMessageFragment, fullSpec, componentName, part);
         }
         out.push_back(val);
     }
@@ -124,7 +140,8 @@ std::string ParseDeviceLink(std::string const &remainder,
                             std::string const &keyword,
                             std::string const &deviceIdName,
                             dcgm_field_entity_group_t linkType,
-                            std::vector<dcgmGroupEntityPair_t> &entityGroups)
+                            std::vector<dcgmGroupEntityPair_t> &entityGroups,
+                            EntityListParseLimits const &limits)
 {
     size_t sep = remainder.find(':');
     if (sep == std::string::npos)
@@ -141,13 +158,17 @@ std::string ParseDeviceLink(std::string const &remainder,
     std::string devPart = remainder.substr(0, sep);
     std::string lnkPart = remainder.substr(sep + 1);
 
+    std::size_t const remaining
+        = (entityGroups.size() >= limits.maxTotalEntities) ? 0 : (limits.maxTotalEntities - entityGroups.size());
+    std::size_t const componentBudget = std::min(limits.maxRangeExpansion, remaining);
+
     std::vector<unsigned int> deviceIds, linkIndices;
-    if (auto err = ParseLinkComponent(devPart, deviceIdName, fullSpec, deviceIds); !err.empty())
+    if (auto err = ParseLinkComponent(devPart, deviceIdName, fullSpec, deviceIds, componentBudget); !err.empty())
     {
         log_error(err);
         return err;
     }
-    if (auto err = ParseLinkComponent(lnkPart, "linkIndex", fullSpec, linkIndices); !err.empty())
+    if (auto err = ParseLinkComponent(lnkPart, "linkIndex", fullSpec, linkIndices, componentBudget); !err.empty())
     {
         log_error(err);
         return err;
@@ -170,6 +191,16 @@ std::string ParseDeviceLink(std::string const &remainder,
             log_error("Error: linkIndex out of range in: {}", fullSpec);
             return fmt::format("Error: values out of range in: {}", fullSpec);
         }
+    }
+
+    std::uint64_t const product
+        = static_cast<std::uint64_t>(deviceIds.size()) * static_cast<std::uint64_t>(linkIndices.size());
+    std::size_t const productLimit = std::min(limits.maxLinkProduct, remaining);
+    if (product > productLimit)
+    {
+        std::string err = fmt::format("Error: {} from {} in: {}", TooManyEntitiesMessageFragment, keyword, fullSpec);
+        log_error(err);
+        return err;
     }
 
     for (auto const devIdVal : deviceIds)
@@ -340,12 +371,13 @@ EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info)
 }
 
 /**
- * Fills in a lookup table for entity ids for GPUs and MIG devices known to the hostengine
+ * Fills in a lookup table for entity ids for GPUs and MIG devices known to the hostengine.
  * @param dcgmHandle A handle associated with a live connection to the hostengine.
+ * @param dcgmOps DCGM API adapter to use for all hostengine queries.
  * @return A map from ParseResult to entity pairs.
- * @note This function writes to stdout in case of errors
+ * @note This function writes to stdout in case of errors.
  */
-[[nodiscard]] static EntityMap PopulateEntitiesMap(dcgmHandle_t dcgmHandle)
+[[nodiscard]] static EntityMap PopulateEntitiesMap(dcgmHandle_t dcgmHandle, DcgmOpsAnyPtr dcgmOps)
 {
     using namespace DcgmNs;
 
@@ -356,7 +388,7 @@ EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info)
     dcgmMigHierarchy_v2 migHierarchy {};
     migHierarchy.version = dcgmMigHierarchy_version2;
 
-    auto ret = dcgmGetGpuInstanceHierarchy(dcgmHandle, &migHierarchy);
+    auto ret = dcgmOps->dcgmGetGpuInstanceHierarchy(dcgmHandle, &migHierarchy);
     if (ret != DCGM_ST_OK)
     {
         DCGM_LOG_DEBUG << "Failed to collect MIG hierarchy information. "
@@ -379,7 +411,7 @@ EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info)
     // Get only supported (active) devices from the CM
     constexpr unsigned int flags = DCGM_GEGE_FLAG_ONLY_SUPPORTED;
 
-    ret = dcgmGetEntityGroupEntities(dcgmHandle, DCGM_FE_GPU, entities.data(), &numItems, flags);
+    ret = dcgmOps->dcgmGetEntityGroupEntities(dcgmHandle, DCGM_FE_GPU, entities.data(), &numItems, flags);
     if (ret != DCGM_ST_OK)
     {
         log_error("Unable to collect GPU entities. "
@@ -398,7 +430,7 @@ EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info)
             dcgmDeviceAttributes_t deviceAttributes {};
             deviceAttributes.version = dcgmDeviceAttributes_version3;
 
-            ret = dcgmGetDeviceAttributes(dcgmHandle, entities[idx], &deviceAttributes);
+            ret = dcgmOps->dcgmGetDeviceAttributes(dcgmHandle, entities[idx], &deviceAttributes);
             if (ret != DCGM_ST_OK)
             {
                 log_error("Unable to collect GPU attributes for GpuId {}"
@@ -515,9 +547,10 @@ namespace detail
 
 
 [[nodiscard]] std::tuple<std::vector<dcgmGroupEntityPair_t>, std::string> TryParseEntityList(dcgmHandle_t dcgmHandle,
-                                                                                             std::string const &ids)
+                                                                                             std::string const &ids,
+                                                                                             DcgmOpsAnyPtr dcgmOps)
 {
-    auto entities = DcgmNs::PopulateEntitiesMap(dcgmHandle);
+    auto entities = DcgmNs::PopulateEntitiesMap(dcgmHandle, dcgmOps);
     return TryParseEntityList(std::move(entities), ids);
 }
 
@@ -608,13 +641,27 @@ namespace detail
     return std::make_tuple(std::move(result), std::move(rejectedIds));
 }
 
-std::string EntityListParser(std::string const &entityList, std::vector<dcgmGroupEntityPair_t> &entityGroups)
+std::string EntityListParser(std::string const &entityList,
+                             std::vector<dcgmGroupEntityPair_t> &entityGroups,
+                             EntityListParseLimits const &limits)
 {
     std::stringstream ss(entityList);
     dcgmGroupEntityPair_t insertElem;
     std::string entityIdStr;
     std::vector<std::string> tokens;
     std::string const delimStr = ",";
+
+    auto remainingCapacity = [&]() -> std::size_t {
+        if (entityGroups.size() >= limits.maxTotalEntities)
+        {
+            return 0;
+        }
+        return limits.maxTotalEntities - entityGroups.size();
+    };
+
+    auto rejectTooMany = [&](std::string const &context) -> std::string {
+        return fmt::format(kTooManyEntitiesInContextFmt, TooManyEntitiesMessageFragment, context);
+    };
 
     /* This is expecting input to be strings like:
        "0,1,2" or
@@ -651,7 +698,8 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
                                                    "gpu_link",
                                                    "gpuId",
                                                    DCGM_FE_GPU,
-                                                   entityGroups);
+                                                   entityGroups,
+                                                   limits);
                         if (!err.empty())
                         {
                             return err;
@@ -673,7 +721,8 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
                                                    "switch_link",
                                                    "switchId",
                                                    DCGM_FE_SWITCH,
-                                                   entityGroups);
+                                                   entityGroups,
+                                                   limits);
                         if (!err.empty())
                         {
                             return err;
@@ -754,8 +803,16 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
                 return err;
             }
 
+            std::size_t const rangeBudget = std::min(limits.maxRangeExpansion, remainingCapacity());
             std::vector<unsigned int> entityIds;
-            dcgmReturn_t ret = DcgmNs::ParseRangeString(entityIdStr.substr(1, closeBracket - 1), entityIds);
+            dcgmReturn_t ret
+                = DcgmNs::ParseRangeString(entityIdStr.substr(1, closeBracket - 1), entityIds, rangeBudget);
+            if (ret == DCGM_ST_MAX_LIMIT)
+            {
+                std::string err = rejectTooMany(entityIdStr);
+                log_error(err);
+                return err;
+            }
             if (ret != DCGM_ST_OK)
             {
                 std::string err = fmt::format("A malformed range was specified: {}", entityIdStr);
@@ -785,7 +842,15 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
                 continue;
             }
 
-            for (unsigned int cpuId : cpuHelpers.GetCpuIds())
+            auto const &cpuIds = cpuHelpers.GetCpuIds();
+            if (cpuIds.size() > remainingCapacity())
+            {
+                std::string err = rejectTooMany(entityIdStr);
+                log_error(err);
+                return err;
+            }
+
+            for (unsigned int cpuId : cpuIds)
             {
                 insertElem.entityId = cpuId;
                 entityGroups.push_back(insertElem);
@@ -798,6 +863,12 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
             // enforces dcgm_field_eid_t (uint32_t) range, which matters for packed DCGM_FE_LINK ids.
             if (auto const eid = ParseIntegerEntityId(entityIdStr); eid.has_value())
             {
+                if (remainingCapacity() == 0)
+                {
+                    std::string err = rejectTooMany(entityIdStr);
+                    log_error(err);
+                    return err;
+                }
                 insertElem.entityId = *eid;
                 entityGroups.push_back(insertElem);
             }
@@ -856,9 +927,51 @@ std::string ParseExpectedNumEntitiesForGpus(std::string const &expectedNumEntiti
     return "";
 }
 
+namespace
+{
+    std::string ParseEntityListWithEntities(std::string const &entityList,
+                                            std::vector<dcgmGroupEntityPair_t> &entityGroups,
+                                            EntityMap entities,
+                                            EntityListParseLimits const &limits = {})
+    {
+        if (entityList.empty())
+        {
+            entityGroups.clear();
+            return "";
+        }
+
+        auto [gpuEntities, rejectedIds] = DcgmNs::TryParseEntityList(std::move(entities), entityList);
+
+        if (gpuEntities.size() > limits.maxTotalEntities)
+        {
+            std::string err = fmt::format(kTooManyEntitiesInContextFmt, TooManyEntitiesMessageFragment, entityList);
+            log_error(err);
+            return err;
+        }
+
+        EntityListParseLimits remainingLimits = limits;
+        remainingLimits.maxTotalEntities      = limits.maxTotalEntities - gpuEntities.size();
+
+        // Fallback to old method
+        std::vector<dcgmGroupEntityPair_t> oldEntityList;
+
+        /* Convert the string to a list of entities */
+        auto err = DcgmNs::EntityListParser(rejectedIds, oldEntityList, remainingLimits);
+        if (!err.empty())
+        {
+            return err;
+        }
+
+        std::move(begin(gpuEntities), end(gpuEntities), std::back_inserter(entityGroups));
+        std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityGroups));
+        return "";
+    }
+} // namespace
+
 std::string EntityListWithMigAndUuidParser(dcgmHandle_t dcgmHandle,
                                            std::string const &entityList,
-                                           std::vector<dcgmGroupEntityPair_t> &entityGroups)
+                                           std::vector<dcgmGroupEntityPair_t> &entityGroups,
+                                           DcgmOpsAnyPtr dcgmOps)
 {
     if (entityList.empty())
     {
@@ -866,66 +979,38 @@ std::string EntityListWithMigAndUuidParser(dcgmHandle_t dcgmHandle,
         return "";
     }
 
-    auto [gpuEntities, rejectedIds] = DcgmNs::TryParseEntityList(dcgmHandle, entityList);
-
-    // Fallback to old method
-    std::vector<dcgmGroupEntityPair_t> oldEntityList;
-
-    /* Convert the string to a list of entities */
-    auto err = DcgmNs::EntityListParser(rejectedIds, oldEntityList);
-    if (!err.empty())
-    {
-        return err;
-    }
-
-    std::move(begin(gpuEntities), end(gpuEntities), std::back_inserter(entityGroups));
-    std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityGroups));
-    return "";
+    return ParseEntityListWithEntities(entityList, entityGroups, PopulateEntitiesMap(dcgmHandle, dcgmOps));
 }
 
-std::vector<dcgmGroupEntityPair_t> EntityListWithMigAndUuidParser(
+DcgmResult<std::vector<std::uint32_t>> ParseEntityIdsAndFilterGpu(
     dcgmMigHierarchy_v2 const &migHierarchy,
     std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids,
     std::string_view entityIds)
 {
-    if (entityIds.empty())
-    {
-        return {};
-    }
-
-    DcgmNs::EntityMap entities = DcgmNs::PopulateEntitiesMap(migHierarchy, gpuIdUuids);
-
     std::vector<dcgmGroupEntityPair_t> entityGroups;
-    auto [gpuEntities, rejectedIds] = DcgmNs::TryParseEntityList(std::move(entities), std::string(entityIds));
-
-    // Fallback to old method
-    std::vector<dcgmGroupEntityPair_t> oldEntityList;
-
-    /* Convert the string to a list of entities */
-    auto err = DcgmNs::EntityListParser(rejectedIds, oldEntityList);
+    std::string entityIdsString(entityIds);
+    auto err
+        = ParseEntityListWithEntities(entityIdsString, entityGroups, PopulateEntitiesMap(migHierarchy, gpuIdUuids));
     if (!err.empty())
     {
         log_error("failed to parse entity ids: {}", entityIds);
-        return {};
+        if (err.find(TooManyEntitiesMessageFragment) != std::string::npos)
+        {
+            return std::unexpected(DCGM_ST_MAX_LIMIT);
+        }
+        return std::unexpected(DCGM_ST_BADPARAM);
     }
 
-    std::move(begin(gpuEntities), end(gpuEntities), std::back_inserter(entityGroups));
-    std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityGroups));
-    return entityGroups;
-}
-
-std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(dcgmMigHierarchy_v2 const &migHierarchy,
-                                                      std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids,
-                                                      std::string_view entityIds)
-{
-    std::vector<dcgmGroupEntityPair_t> entityGroups
-        = EntityListWithMigAndUuidParser(migHierarchy, gpuIdUuids, entityIds);
-
     std::vector<std::uint32_t> gpuList;
+    std::unordered_set<std::uint32_t> seen;
     gpuList.reserve(DCGM_MAX_NUM_DEVICES);
     for (auto const &entity : entityGroups)
     {
         if (entity.entityGroupId != DCGM_FE_GPU)
+        {
+            continue;
+        }
+        if (!seen.insert(entity.entityId).second)
         {
             continue;
         }

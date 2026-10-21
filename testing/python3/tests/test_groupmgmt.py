@@ -136,8 +136,7 @@ def test_dcgm_group_get_grp_info_standalone(handle, gpuIds):
     helper_dcgm_group_get_grp_info(handle, gpuIds)
 
 
-@test_utils.run_with_standalone_host_engine(20)
-def test_dcgm_group_get_all_ids_standalone(handle):
+def helper_dcgm_group_get_all_ids_standalone(handle):
     """
     Get all the group IDS configured on the host engine
     """
@@ -162,6 +161,11 @@ def test_dcgm_group_get_all_ids_standalone(handle):
     groupIdListAfter = dcgm_agent.dcgmGroupGetAllIds(handle)
     assert len(groupIdListAfter) == expectedCount, "Num of groups less than expected. Expected: %d Returned %d" % (
         expectedCount, len(groupIdListAfter))
+
+
+@test_utils.run_with_standalone_host_engine(20)
+def test_dcgm_group_get_all_ids_standalone(handle):
+    helper_dcgm_group_get_all_ids_standalone(handle)
 
 
 def dcgm_group_test_default_group(handle, gpuIds):

@@ -565,6 +565,42 @@ NVML_ENTRY_POINT(nvmlEventSetWait_v2,
                  set,
                  data,
                  timeoutms)
+NVML_ENTRY_POINT(nvmlEventSetRegisterGpuOperationalEvents_v1,
+                 tsapiEventSetRegisterGpuOperationalEvents_v1,
+                 (nvmlEventSet_t eventSet, const nvmlGpuOperationalEventConfig_v1_t *config),
+                 "(%p, %p)",
+                 eventSet,
+                 config)
+NVML_ENTRY_POINT(nvmlEventSetWait_v3,
+                 tsapiEventSetWait_v3,
+                 (nvmlEventSet_t set, nvmlEventSetWait_v3_t *params),
+                 "(%p, %p)",
+                 set,
+                 params)
+NVML_ENTRY_POINT(nvmlEventSetGetContextCount_v1,
+                 tsapiEventSetGetContextCount_v1,
+                 (nvmlEventSet_t set, nvmlEventSetGetContextCount_v1_t *params),
+                 "(%p, %p)",
+                 set,
+                 params)
+NVML_ENTRY_POINT(nvmlEventSetGetContextInfo_v1,
+                 tsapiEventSetGetContextInfo_v1,
+                 (nvmlEventSet_t set, nvmlEventSetGetContextInfo_v1_t *params),
+                 "(%p, %p)",
+                 set,
+                 params)
+NVML_ENTRY_POINT(nvmlEventSetGetContextData_v1,
+                 tsapiEventSetGetContextData_v1,
+                 (nvmlEventSet_t set, nvmlEventSetGetContextData_v1_t *params),
+                 "(%p, %p)",
+                 set,
+                 params)
+NVML_ENTRY_POINT(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1,
+                 tsapiEventSetGetGpuOperationalEventContextLegacyXid_v1,
+                 (nvmlEventSet_t set, nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *params),
+                 "(%p, %p)",
+                 set,
+                 params)
 NVML_ENTRY_POINT(nvmlEventSetFree, tsapiEventSetFree, (nvmlEventSet_t set), "(%p)", set)
 NVML_ENTRY_POINT(nvmlDeviceGetComputeRunningProcesses,
                  tsapiDeviceGetComputeRunningProcesses,

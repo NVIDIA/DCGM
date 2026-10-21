@@ -62,6 +62,23 @@ protected:
         return "mnubergemm.";
     }
 
+    /** Inject NET_link_order=snake for odd process counts.
+     *
+     * Mnubergemm requires snake link ordering when the total MPI process count
+     * is odd to ensure correct NVLink traffic patterns.
+     *
+     * @param[in,out] paramsMap     The merged parameter map to modify in place.
+     * @param[in]     processCount  Total MPI process count for the run.
+     */
+    void AdjustParamsMap(std::unordered_map<std::string, std::string> &paramsMap,
+                         unsigned int processCount) const override
+    {
+        if (processCount % 2 != 0)
+        {
+            paramsMap["NET_link_order"] = "snake";
+        }
+    }
+
     /**
      * Get the default parameters map for mnubergemm
      *

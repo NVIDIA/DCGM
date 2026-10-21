@@ -18,6 +18,7 @@
 #define MPI_RUNNER_H
 
 #include <DcgmUtilities.h>
+#include <expected>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <functional>
@@ -65,9 +66,11 @@ public:
     /**
      * @brief Construct an MPI command from input parameters and store it internally
      *
-     * @param params Pointer to parameters, type depends on the derived class
+     * @param[in] params Pointer to parameters, type depends on the derived class.
+     * @return Empty on success.
+     * @return `DCGM_ST_BADPARAM` when the parameters cannot form a valid MPI command.
      */
-    virtual void ConstructMpiCommand(void const *params) = 0;
+    virtual std::expected<void, dcgmReturn_t> ConstructMpiCommand(void const *params) = 0;
 
     /**
      * @brief Launch the MPI process with the stored command
@@ -77,7 +80,7 @@ public:
      *
      * @return dcgmReturn_t DCGM_ST_OK on success, error code otherwise
      */
-    dcgmReturn_t LaunchMpiProcess();
+    virtual dcgmReturn_t LaunchMpiProcess();
 
     /**
      * @brief Default output callback handler
@@ -94,14 +97,17 @@ public:
      *
      * @return std::optional<int> The exit code if the process has exited, std::nullopt if still running or not started
      */
-    [[nodiscard]] std::optional<int> GetMpiProcessExitCode();
+    [[nodiscard]] virtual std::optional<int> GetMpiProcessExitCode();
 
     /**
-     * @brief Get the PID of the running MPI process
+     * Get the PID returned by the most recent successful MPI process launch.
      *
-     * @return pid_t The process ID, or std::nullopt if not running
+     * The PID remains available until the process is stopped and its runner state is cleared, even if the process exits
+     * before this method is called.
+     *
+     * @return The launched process ID, or `std::nullopt` when no process is owned by this runner.
      */
-    [[nodiscard]] std::optional<pid_t> GetMpiProcessPid() const;
+    [[nodiscard]] virtual std::optional<pid_t> GetMpiProcessPid() const;
 
     /**
      * @brief Stop the MPI process if it's running
@@ -111,7 +117,7 @@ public:
      *
      * @return dcgmReturn_t DCGM_ST_OK on success, error code otherwise
      */
-    dcgmReturn_t StopMpiProcess();
+    virtual dcgmReturn_t StopMpiProcess();
 
     /**
      * @brief Wait for the MPI process to complete
@@ -121,7 +127,7 @@ public:
      *
      * @return dcgmReturn_t DCGM_ST_OK on success, or error code otherwise
      */
-    dcgmReturn_t Wait(int timeoutSec = -1);
+    virtual dcgmReturn_t Wait(int timeoutSec = -1);
 
     /**
      * @brief Get the last command that was used to launch the MPI process
@@ -150,7 +156,7 @@ public:
      * @param nodeInfo The node info map used to populate the response structure
      * @return dcgmReturn_t DCGM_ST_OK on success, error code otherwise
      */
-    dcgmReturn_t PopulateResponse(void *responseStruct, nodeInfoMap_t const &nodeInfo);
+    virtual dcgmReturn_t PopulateResponse(void *responseStruct, nodeInfoMap_t const &nodeInfo);
 
 protected:
     /**

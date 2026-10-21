@@ -20,6 +20,7 @@
 
 #include <boost/asio/io_context.hpp>
 #include <boost/filesystem/path.hpp>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -36,15 +37,63 @@ public:
     ChildProcessBuilder &AddArg(std::string arg);
     ChildProcessBuilder &AddArgs(std::vector<std::string> args);
     ChildProcessBuilder &AddEnvironment(std::unordered_map<std::string, std::string> &&env);
+    ChildProcessBuilder &ReplaceEnvironment(ChildProcessEnvironment &&env);
+    [[nodiscard]] ChildProcessEnvironment BuildEnvironment(ChildProcessEnvironment baseEnvironment) const;
+    /**
+     * Register the legacy single framed data channel.
+     *
+     * This is a compatibility wrapper for existing callers. New multi-channel
+     * callers should prefer AddFramedChannel(fd) for each child FD they need.
+     *
+     * @param[in] fd  Child file descriptor to bind as the legacy framed channel.
+     */
     ChildProcessBuilder &SetChannelFd(int const fd);
-    ChildProcess Build(IoContext &ioContext);
+    /**
+     * Register one framed child output channel.
+     *
+     * The child's fd is bound during exec setup. The parent can read framed
+     * data through ChildProcess::GetFdChannel(fd). Register channels before
+     * Build(); duplicate registrations are ignored by ChildProcess.
+     *
+     * @param[in] fd  Child file descriptor to bind as a framed output channel.
+     */
+    ChildProcessBuilder &AddFramedChannel(int fd);
+    /**
+     * Configure child launch to close all file descriptors except those listed
+     * here and any framed channel descriptors registered on this builder.
+     *
+     * @param[in] allowedFds  Child file descriptors that may remain open across exec.
+     *
+     * @return This builder.
+     */
+    ChildProcessBuilder &CloseFdsExcept(std::set<int> allowedFds);
+    /**
+     * Create and start a child process using this builder configuration.
+     *
+     * @param[in] ioContext  I/O context used to manage the child process.
+     *
+     * @return The created child process.
+     */
+    ChildProcess Build(IoContext &ioContext) const;
+    /**
+     * Configure and start an existing child process instance.
+     *
+     * @param[in]     ioContext  I/O context used to manage the child process.
+     * @param[in,out] process    Child process instance to configure and start.
+     *
+     * @return The configured child process.
+     */
+    ChildProcessBase &Build(IoContext &ioContext, ChildProcessBase &process) const;
 
 private:
     boost::filesystem::path m_executable;
     std::vector<std::string> m_args;
-    std::unordered_map<std::string, std::string> m_environment;
+    ChildProcessEnvironment m_environment;
+    ChildProcessEnvironmentMode m_environmentMode = ChildProcessEnvironmentMode::Inherit;
     std::string m_user;
     std::optional<int> m_channelFd;
+    std::vector<int> m_framedChannelFds;
+    std::optional<std::set<int>> m_allowedFds;
 };
 
 } //namespace DcgmNs::Common::Subprocess

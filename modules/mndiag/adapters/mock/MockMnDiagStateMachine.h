@@ -51,6 +51,7 @@ public:
         bool notifyDiagnosticFinishedCalled       = false;
         bool setProcessExecutionTimeoutCalled     = false;
         std::chrono::seconds lastTimeoutInSeconds = std::chrono::seconds(0);
+        bool lastKeepReserved                     = false;
         bool setExpectedBinaryPathCalled          = false;
         std::string lastExpectedBinaryPath;
     };
@@ -125,16 +126,18 @@ public:
         return m_config.notifyDiagnosticFinishedReturn;
     }
 
-    void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds) override
+    void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds, bool keepReserved = false) override
     {
         m_stats.setProcessExecutionTimeoutCalled = true;
         m_stats.lastTimeoutInSeconds             = timeoutInSeconds;
+        m_stats.lastKeepReserved                 = keepReserved;
 
         if (m_processExecutionTimeoutCallback)
         {
             m_processExecutionTimeoutCallback(timeoutInSeconds);
         }
     }
+
     /**
      * Sets the expected binary path for the diagnostic process
      *

@@ -473,13 +473,102 @@ static dcgmReturn_t MockCoreCallbackGetSamples(dcgm_module_command_header_t *hea
     return DCGM_ST_OK;
 }
 
-struct DcgmHealthWatchBerCorePoster
+struct DcgmHealthWatchCorePoster
 {
     MockGetSamplesContext *mockGetSamples {};
     MockGetLatestSampleContext *mockLatestSample {};
     bool getAllGpuInfoEnabled = false;
     dcgmcm_gpu_info_cached_t singleGpuInfo {};
 };
+
+struct RecordedFieldWatch
+{
+    dcgm_field_entity_group_t entityGroupId {};
+    dcgm_field_eid_t entityId {};
+    unsigned short fieldId {};
+    timelib64_t monitorFreqUsec {};
+    double maxSampleAge {};
+    dcgm_connection_id_t connectionId {};
+};
+
+struct RecordingWatchContext
+{
+    std::vector<RecordedFieldWatch> fieldWatches;
+    std::vector<dcgmGroupEntityPair_t> groupEntities;
+    dcgmReturn_t addFieldWatchRet     = DCGM_ST_OK;
+    dcgmReturn_t getGroupEntitiesRet  = DCGM_ST_OK;
+    dcgmReturn_t updateAllFieldsRet   = DCGM_ST_OK;
+    unsigned int updateAllFieldsCalls = 0;
+};
+
+static bool ContainsRecordedWatch(RecordingWatchContext const &context,
+                                  dcgm_field_entity_group_t entityGroupId,
+                                  dcgm_field_eid_t entityId,
+                                  unsigned short fieldId)
+{
+    for (auto const &watch : context.fieldWatches)
+    {
+        if (watch.entityGroupId == entityGroupId && watch.entityId == entityId && watch.fieldId == fieldId)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static dcgmReturn_t RecordingWatchCoreCallback(dcgm_module_command_header_t *header, void *poster)
+{
+    if (!header || !poster)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    auto *context = static_cast<RecordingWatchContext *>(poster);
+
+    switch (header->subCommand)
+    {
+        case DcgmCoreReqIdCMAddFieldWatch:
+        {
+            auto *afw = reinterpret_cast<dcgmCoreAddFieldWatch_v2 *>(header);
+            context->fieldWatches.push_back(RecordedFieldWatch { afw->request.entityGroupId,
+                                                                 afw->request.entityId,
+                                                                 afw->request.fieldId,
+                                                                 afw->request.monitorFreqUsec,
+                                                                 afw->request.maxSampleAge,
+                                                                 afw->request.connectionId });
+            afw->ret = context->addFieldWatchRet;
+            return DCGM_ST_OK;
+        }
+        case DcgmCoreReqIdGMGetGroupEntities:
+        {
+            auto *gge                      = reinterpret_cast<dcgmCoreGetGroupEntities_t *>(header);
+            gge->response.ret              = context->getGroupEntitiesRet;
+            gge->response.entityPairsCount = 0;
+
+            for (auto const &entity : context->groupEntities)
+            {
+                if (gge->response.entityPairsCount >= DCGM_GROUP_MAX_ENTITIES_V2)
+                {
+                    break;
+                }
+
+                gge->response.entityPairs[gge->response.entityPairsCount] = entity;
+                gge->response.entityPairsCount++;
+            }
+            return DCGM_ST_OK;
+        }
+        case DcgmCoreReqIdCMUpdateAllFields:
+        {
+            auto *update = reinterpret_cast<dcgm_core_msg_update_all_fields_v1 *>(header);
+            context->updateAllFieldsCalls++;
+            update->uf.cmdRet = context->updateAllFieldsRet;
+            return DCGM_ST_OK;
+        }
+        default:
+            return DCGM_ST_OK;
+    }
+}
 
 static dcgmReturn_t MockCoreCallbackSamplesLatestGpuInfo(dcgm_module_command_header_t *header, void *poster)
 {
@@ -488,7 +577,7 @@ static dcgmReturn_t MockCoreCallbackSamplesLatestGpuInfo(dcgm_module_command_hea
         return DCGM_ST_BADPARAM;
     }
 
-    auto *ctx = static_cast<DcgmHealthWatchBerCorePoster *>(poster);
+    auto *ctx = static_cast<DcgmHealthWatchCorePoster *>(poster);
     if (!ctx)
     {
         return DCGM_ST_BADPARAM;
@@ -521,6 +610,17 @@ static dcgmReturn_t MockCoreCallbackSamplesLatestGpuInfo(dcgm_module_command_hea
             return DCGM_ST_OK;
     }
 }
+
+struct CcUnavailableTestCase
+{
+    std::string_view name;
+    dcgmReturn_t computeCapabilityRet;
+};
+
+static constexpr std::array ccUnavailableTestCases = {
+    CcUnavailableTestCase { .name = "compute capability NOT_WATCHED", .computeCapabilityRet = DCGM_ST_NOT_WATCHED },
+    CcUnavailableTestCase { .name = "compute capability NO_DATA", .computeCapabilityRet = DCGM_ST_NO_DATA },
+};
 
 // Test helper class that has friend access to DcgmHealthWatch
 class DcgmHealthWatchTestHelper
@@ -803,6 +903,54 @@ public:
     {
         return hw.MonitorNVLink(eg, eid, s, e, r);
     }
+
+    static dcgmReturn_t SetCpuThermal(DcgmHealthWatch &hw,
+                                      dcgm_field_entity_group_t eg,
+                                      dcgm_field_eid_t eid,
+                                      bool enable,
+                                      DcgmWatcher watcher,
+                                      long long updateInterval,
+                                      double maxKeepAge)
+    {
+        return hw.SetCpuThermal(eg, eid, enable, watcher, updateInterval, maxKeepAge);
+    }
+
+    static dcgmReturn_t SetCpuPower(DcgmHealthWatch &hw,
+                                    dcgm_field_entity_group_t eg,
+                                    dcgm_field_eid_t eid,
+                                    bool enable,
+                                    DcgmWatcher watcher,
+                                    long long updateInterval,
+                                    double maxKeepAge)
+    {
+        return hw.SetCpuPower(eg, eid, enable, watcher, updateInterval, maxKeepAge);
+    }
+
+    static dcgmReturn_t SetConnectX(DcgmHealthWatch &hw,
+                                    dcgm_field_entity_group_t eg,
+                                    dcgm_field_eid_t eid,
+                                    bool enable,
+                                    DcgmWatcher watcher,
+                                    long long updateInterval,
+                                    double maxKeepAge)
+    {
+        return hw.SetConnectX(eg, eid, enable, watcher, updateInterval, maxKeepAge);
+    }
+
+    static dcgmReturn_t SetNvSwitchWatches(DcgmHealthWatch &hw,
+                                           std::vector<unsigned int> &groupSwitchIds,
+                                           dcgmHealthSystems_t systems,
+                                           DcgmWatcher watcher,
+                                           long long updateInterval,
+                                           double maxKeepAge)
+    {
+        return hw.SetNvSwitchWatches(groupSwitchIds, systems, watcher, updateInterval, maxKeepAge);
+    }
+
+    static std::string MemFieldToString(DcgmHealthWatch &hw, unsigned short fieldId)
+    {
+        return hw.MemFieldToString(fieldId);
+    }
 };
 
 // Test fixture class for common setup
@@ -838,12 +986,36 @@ private:
     }
 };
 
+class DcgmHealthWatchRecordingFixture
+{
+public:
+    RecordingWatchContext recordingContext;
+    dcgmCoreCallbacks_t callbacks;
+    DcgmHealthWatch healthWatch;
+
+    DcgmHealthWatchRecordingFixture()
+        : callbacks(createCallbacks())
+        , healthWatch(callbacks)
+    {}
+
+private:
+    dcgmCoreCallbacks_t createCallbacks()
+    {
+        dcgmCoreCallbacks_t cb = {};
+        cb.version             = dcgmCoreCallbacks_version;
+        cb.postfunc            = RecordingWatchCoreCallback;
+        cb.poster              = &recordingContext;
+        cb.loggerfunc          = [](void const *) { /* do nothing */ };
+        return cb;
+    }
+};
+
 class DcgmHealthWatchGetSamplesFixture
 {
 public:
     MockGetSamplesContext mockGetSamples;
     MockGetLatestSampleContext mockLatestSample;
-    DcgmHealthWatchBerCorePoster corePoster;
+    DcgmHealthWatchCorePoster corePoster;
     dcgmCoreCallbacks_t callbacks;
     DcgmHealthWatch healthWatch;
     DcgmHealthResponse response;
@@ -1062,6 +1234,33 @@ private:
 
 TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorDevastatingXids")
 {
+    SECTION("Incidents use the mapped health system")
+    {
+        struct Row
+        {
+            uint64_t xid;
+            dcgmHealthSystems_t system;
+        };
+
+        auto const row = GENERATE(Row { 48, DCGM_HEALTH_WATCH_MEM },
+                                  Row { 74, DCGM_HEALTH_WATCH_NVLINK },
+                                  Row { 79, DCGM_HEALTH_WATCH_ALL },
+                                  Row { 94, DCGM_HEALTH_WATCH_MEM },
+                                  Row { 95, DCGM_HEALTH_WATCH_MEM },
+                                  Row { 119, DCGM_HEALTH_WATCH_ALL },
+                                  Row { 120, DCGM_HEALTH_WATCH_ALL },
+                                  Row { 140, DCGM_HEALTH_WATCH_MEM });
+        CAPTURE(row.xid);
+
+        DcgmHealthWatchTestHelper::InjectXidForTesting(healthWatch, row.xid, testGpuId);
+        DcgmHealthWatchTestHelper::MonitorDevastatingXids(healthWatch, testEntityGroupId, testGpuId, response);
+
+        response.PopulateHealthResponse(healthResponse);
+
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].system == row.system);
+    }
+
     SECTION("No devastating XIDs detected")
     {
         // Don't inject any XIDs
@@ -1089,10 +1288,9 @@ TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorDevastatingXid
         REQUIRE(healthResponse.incidentCount == 3);
         REQUIRE(healthResponse.overallHealth == DCGM_HEALTH_RESULT_FAIL);
 
-        // All incidents should be for the same GPU
+        // All incidents should be failures for the same GPU.
         for (unsigned int i = 0; i < healthResponse.incidentCount; i++)
         {
-            REQUIRE(healthResponse.incidents[i].system == DCGM_HEALTH_WATCH_ALL);
             REQUIRE(healthResponse.incidents[i].health == DCGM_HEALTH_RESULT_FAIL);
             REQUIRE(healthResponse.incidents[i].entityInfo.entityGroupId == testEntityGroupId);
             REQUIRE(healthResponse.incidents[i].entityInfo.entityId == testGpuId);
@@ -1141,7 +1339,7 @@ TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::Complete XID Flow Tes
 
         REQUIRE(healthResponse.incidentCount == 1);
         REQUIRE(healthResponse.overallHealth == DCGM_HEALTH_RESULT_FAIL);
-        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_ALL);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_MEM);
         REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_FAIL);
         REQUIRE(healthResponse.incidents[0].entityInfo.entityGroupId == testEntityGroupId);
         REQUIRE(healthResponse.incidents[0].entityInfo.entityId == testGpuId);
@@ -1380,12 +1578,13 @@ TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorGlobalHealthCh
         dcgmHealthSystems_t mask;
     };
 
-    auto test = GENERATE(TestCase { "NVLINK watch disabled - skips MonitorImex", DCGM_HEALTH_WATCH_MEM },
-                         TestCase { "NVLINK watch enabled, no cache data - returns OK", DCGM_HEALTH_WATCH_NVLINK },
+    auto test = GENERATE(TestCase { "IMEX watch disabled - skips MonitorImex", DCGM_HEALTH_WATCH_MEM },
+                         TestCase { "IMEX watch enabled, no cache data - returns OK", DCGM_HEALTH_WATCH_IMEX },
                          TestCase { "No watches enabled - no checks performed", static_cast<dcgmHealthSystems_t>(0) });
 
     DYNAMIC_SECTION(test.name)
     {
+        CAPTURE(test.mask);
         dcgmReturn_t ret = DcgmHealthWatchTestHelper::MonitorGlobalHealthChecks(healthWatch, test.mask, response);
 
         REQUIRE(ret == DCGM_ST_OK);
@@ -1481,7 +1680,7 @@ void ValidateImexResponse(DcgmHealthWatch &healthWatch,
                           dcgmError_t expectedErrorCode           = DCGM_FR_OK)
 {
     dcgmReturn_t ret
-        = DcgmHealthWatchTestHelper::MonitorGlobalHealthChecks(healthWatch, DCGM_HEALTH_WATCH_NVLINK, response);
+        = DcgmHealthWatchTestHelper::MonitorGlobalHealthChecks(healthWatch, DCGM_HEALTH_WATCH_IMEX, response);
 
     REQUIRE(ret == expectedRet);
 
@@ -1546,7 +1745,7 @@ TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorImex")
         mockLatestSample.SetFieldSample(DCGM_FI_IMEX_DAEMON_STATUS, DCGM_ST_GENERIC_ERROR);
 
         dcgmReturn_t ret
-            = DcgmHealthWatchTestHelper::MonitorGlobalHealthChecks(healthWatch, DCGM_HEALTH_WATCH_NVLINK, response);
+            = DcgmHealthWatchTestHelper::MonitorGlobalHealthChecks(healthWatch, DCGM_HEALTH_WATCH_IMEX, response);
 
         REQUIRE(ret == DCGM_ST_GENERIC_ERROR);
         // Need to verify incident was recorded despite error return
@@ -1623,10 +1822,10 @@ TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorImex skipped w
     DcgmNs::ImexTests::SetImexDomainStatus(mockLatestSample, "UNAVAILABLE");
     DcgmNs::ImexTests::SetImexDaemonStatus(mockLatestSample, DcgmImexDaemonStatus::COMMAND_ERROR);
 
-    // Register NVLINK watch for this group and call MonitorWatches directly.
-    // MonitorWatches should detect no NVLinks and skip the IMEX check.
+    // Register IMEX watch for this group and call MonitorWatches directly.
+    // MonitorWatches should detect no NVLinks and strip the IMEX bit.
     unsigned int groupId = mockLatestSample.groupId;
-    DcgmHealthWatchTestHelper::SetGroupWatchState(healthWatch, groupId, DCGM_HEALTH_WATCH_NVLINK);
+    DcgmHealthWatchTestHelper::SetGroupWatchState(healthWatch, groupId, DCGM_HEALTH_WATCH_IMEX);
 
     dcgmReturn_t ret = DcgmHealthWatchTestHelper::MonitorWatches(healthWatch, groupId, response);
 
@@ -1635,6 +1834,42 @@ TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorImex skipped w
     response.PopulateHealthResponse(healthResponse);
     REQUIRE(healthResponse.incidentCount == 0);
     REQUIRE(healthResponse.overallHealth == DCGM_HEALTH_RESULT_PASS);
+}
+
+TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorImex independent of NVLink")
+{
+    mockLatestSample.SetupGpuNvLinks(1, true);
+
+    DcgmNs::ImexTests::SetImexDomainStatus(mockLatestSample, "DOWN");
+    DcgmNs::ImexTests::SetImexDaemonStatus(mockLatestSample, DcgmImexDaemonStatus::COMMAND_ERROR);
+
+    unsigned int groupId = mockLatestSample.groupId;
+
+    SECTION("NVLINK enabled without IMEX - IMEX check skipped")
+    {
+        DcgmHealthWatchTestHelper::SetGroupWatchState(healthWatch, groupId, DCGM_HEALTH_WATCH_NVLINK);
+
+        dcgmReturn_t ret = DcgmHealthWatchTestHelper::MonitorWatches(healthWatch, groupId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 0);
+        REQUIRE(healthResponse.overallHealth == DCGM_HEALTH_RESULT_PASS);
+    }
+
+    SECTION("IMEX enabled without NVLINK - IMEX check runs")
+    {
+        DcgmHealthWatchTestHelper::SetGroupWatchState(healthWatch, groupId, DCGM_HEALTH_WATCH_IMEX);
+
+        dcgmReturn_t ret = DcgmHealthWatchTestHelper::MonitorWatches(healthWatch, groupId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 2);
+        REQUIRE(healthResponse.overallHealth == DCGM_HEALTH_RESULT_FAIL);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_IMEX);
+        REQUIRE(healthResponse.incidents[1].system == DCGM_HEALTH_WATCH_IMEX);
+    }
 }
 
 TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorConnectX")
@@ -2016,6 +2251,52 @@ TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorNVLinkErrorFie
         REQUIRE(ret == DCGM_ST_OK);
         response.PopulateHealthResponse(healthResponse);
         REQUIRE(healthResponse.incidentCount == 0);
+    }
+
+    for (auto const &testCase : ccUnavailableTestCases)
+    {
+        SECTION(std::string(testCase.name) + " with unknown arch - pre-Blackwell path, no abort")
+        {
+            // GetAllGpuInfo mock returns DCGM_CHIP_ARCH_UNKNOWN for GPU 0.
+            mockLatestSample.SetFieldSample(DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, testCase.computeCapabilityRet);
+
+            dcgmcm_sample_t sample = {};
+            sample.val.i64         = 0;
+            mockLatestSample.SetFieldSample(DCGM_FI_DEV_NVLINK_CRC_ERROR_TOTAL, DCGM_ST_OK, sample);
+            mockLatestSample.SetFieldSample(DCGM_FI_DEV_NVLINK_RECOVERY_TOTAL, DCGM_ST_OK, sample);
+            mockLatestSample.SetFieldSample(DCGM_FI_DEV_NVLINK_REPLAY_TOTAL, DCGM_ST_OK, sample);
+
+            sample.val.i64 = 2;
+            mockLatestSample.SetFieldSample(DCGM_FI_DEV_NVLINK_RECOVERY_FAILED_TOTAL, DCGM_ST_OK, sample);
+
+            dcgmReturn_t ret = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(
+                healthWatch, testEntityGroupId, testGpuId, response);
+
+            REQUIRE(ret == DCGM_ST_OK);
+            response.PopulateHealthResponse(healthResponse);
+            REQUIRE(healthResponse.incidentCount == 0);
+        }
+
+        SECTION(std::string(testCase.name) + " with unknown arch - pre-Blackwell CRC errors still fail")
+        {
+            mockLatestSample.SetFieldSample(DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, testCase.computeCapabilityRet);
+
+            dcgmcm_sample_t sample = {};
+            sample.val.i64         = 3;
+            mockLatestSample.SetFieldSample(DCGM_FI_DEV_NVLINK_CRC_ERROR_TOTAL, DCGM_ST_OK, sample);
+
+            sample.val.i64 = 5;
+            mockLatestSample.SetFieldSample(DCGM_FI_DEV_NVLINK_RECOVERY_FAILED_TOTAL, DCGM_ST_OK, sample);
+
+            dcgmReturn_t ret = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(
+                healthWatch, testEntityGroupId, testGpuId, response);
+
+            REQUIRE(ret == DCGM_ST_OK);
+            response.PopulateHealthResponse(healthResponse);
+            REQUIRE(healthResponse.incidentCount == 1);
+            REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_NVLINK);
+            REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_FAIL);
+        }
     }
 }
 
@@ -2703,239 +2984,6 @@ TEST_CASE_METHOD(DcgmHealthWatchGetSamplesFixture, "DcgmHealthWatch::MonitorNVLi
     }
 }
 
-TEST_CASE_METHOD(DcgmHealthWatchGetSamplesFixture, "DcgmHealthWatch::MonitorNVLink5Fields BER thresholds")
-{
-    std::array constexpr nvlink5Fields = { DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW,
-                                           DCGM_FI_DEV_NVLINK_RX_PACKET_MALFORMED_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_RX_PACKET_DROPPED_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_RX_REMOTE_ERROR_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW,
-                                           DCGM_FI_DEV_NVLINK_ECC_ERROR_TOTAL };
-
-    struct BerInput
-    {
-        uint64_t mantissa;
-        uint64_t exponent;
-    };
-
-    struct TestCase
-    {
-        BerInput effectiveBer;
-        BerInput symbolBer;
-        dcgmHealthWatchResults_t expectedHealth;
-        unsigned int expectedErrorCode;
-        std::string_view name;
-    };
-
-    auto encodeBer = [](uint64_t mantissa, uint64_t exponent) {
-        return static_cast<int64_t>((mantissa << 8) | exponent);
-    };
-    auto setBer = [&](unsigned short fieldId, BerInput input) {
-        dcgmcm_sample_t sample = {};
-        sample.val.i64         = encodeBer(input.mantissa, input.exponent);
-        mockGetSamples.SetGetSamplesResults(fieldId, DCGM_ST_OK, sample, sample);
-    };
-    auto setBerRaw = [&](unsigned short fieldId, int64_t rawValue) {
-        dcgmcm_sample_t sample = {};
-        sample.val.i64         = rawValue;
-        mockGetSamples.SetGetSamplesResults(fieldId, DCGM_ST_OK, sample, sample);
-    };
-    auto setDefaultNoDataForOtherFields = [&]() {
-        for (auto const fieldId : nvlink5Fields)
-        {
-            if (fieldId == DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW || fieldId == DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW)
-            {
-                continue;
-            }
-            mockGetSamples.SetGetSamplesResult(fieldId, DCGM_ORDER_ASCENDING, DCGM_ST_NO_DATA);
-            mockGetSamples.SetGetSamplesResult(fieldId, DCGM_ORDER_DESCENDING, DCGM_ST_NO_DATA);
-        }
-    };
-    auto verifyResult = [&](dcgmHealthWatchResults_t expectedHealth, unsigned int expectedErrorCode) {
-        dcgmReturn_t ret = DcgmHealthWatchTestHelper::MonitorNVLink5Fields(
-            healthWatch, testEntityGroupId, testGpuId, 0, 0, response);
-        REQUIRE(ret == DCGM_ST_OK);
-
-        auto healthResponseUptr = std::make_unique<dcgmHealthResponse_v5>();
-        auto &healthResponse    = *healthResponseUptr;
-        response.PopulateHealthResponse(healthResponse);
-        REQUIRE(healthResponse.overallHealth == expectedHealth);
-
-        if (expectedHealth == DCGM_HEALTH_RESULT_PASS)
-        {
-            REQUIRE(healthResponse.incidentCount == 0);
-        }
-        else
-        {
-            REQUIRE(healthResponse.incidentCount == 1);
-            REQUIRE(healthResponse.incidents[0].health == expectedHealth);
-            REQUIRE(healthResponse.incidents[0].entityInfo.entityId == testGpuId);
-            REQUIRE(healthResponse.incidents[0].entityInfo.entityGroupId == testEntityGroupId);
-            REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_NVLINK);
-            REQUIRE(healthResponse.incidents[0].error.code == expectedErrorCode);
-        }
-    };
-
-    std::array const testCases = {
-        TestCase { .effectiveBer      = { 9, 13 },
-                   .symbolBer         = { 15, 255 },
-                   .expectedHealth    = DCGM_HEALTH_RESULT_PASS,
-                   .expectedErrorCode = DCGM_ST_OK,
-                   .name              = "effective BER below 1e-12 passes" },
-        TestCase { .effectiveBer      = { 1, 12 },
-                   .symbolBer         = { 15, 255 },
-                   .expectedHealth    = DCGM_HEALTH_RESULT_PASS,
-                   .expectedErrorCode = DCGM_ST_OK,
-                   .name              = "effective BER at 1e-12 passes" },
-        TestCase { .effectiveBer      = { 2, 12 },
-                   .symbolBer         = { 15, 255 },
-                   .expectedHealth    = DCGM_HEALTH_RESULT_FAIL,
-                   .expectedErrorCode = DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD,
-                   .name              = "effective BER above 1e-12 fails" },
-        TestCase { .effectiveBer      = { 10, 13 },
-                   .symbolBer         = { 15, 255 },
-                   .expectedHealth    = DCGM_HEALTH_RESULT_PASS,
-                   .expectedErrorCode = DCGM_ST_OK,
-                   .name              = "effective BER at 10e-13 passes" },
-        TestCase { .effectiveBer      = { 11, 13 },
-                   .symbolBer         = { 15, 255 },
-                   .expectedHealth    = DCGM_HEALTH_RESULT_FAIL,
-                   .expectedErrorCode = DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD,
-                   .name              = "effective BER at 11e-13 fails" },
-        TestCase { .effectiveBer      = { 15, 255 },
-                   .symbolBer         = { 1, 13 },
-                   .expectedHealth    = DCGM_HEALTH_RESULT_FAIL,
-                   .expectedErrorCode = DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD,
-                   .name              = "non-zero symbol BER fails" },
-        TestCase { .effectiveBer      = { 15, 255 },
-                   .symbolBer         = { 15, 255 },
-                   .expectedHealth    = DCGM_HEALTH_RESULT_PASS,
-                   .expectedErrorCode = DCGM_ST_OK,
-                   .name              = "symbol BER at 1.5e-254 passes" },
-        TestCase { .effectiveBer      = { 15, 255 },
-                   .symbolBer         = { 0, 0 },
-                   .expectedHealth    = DCGM_HEALTH_RESULT_PASS,
-                   .expectedErrorCode = DCGM_ST_OK,
-                   .name              = "raw zero symbol BER passes" },
-        TestCase { .effectiveBer      = { 15, 255 },
-                   .symbolBer         = { 0, 5 },
-                   .expectedHealth    = DCGM_HEALTH_RESULT_PASS,
-                   .expectedErrorCode = DCGM_ST_OK,
-                   .name              = "zero mantissa nonzero exponent symbol BER passes" },
-    };
-
-    for (auto const &testCase : testCases)
-    {
-        SECTION(std::string(testCase.name))
-        {
-            setDefaultNoDataForOtherFields();
-            setBer(DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, testCase.effectiveBer);
-            setBer(DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW, testCase.symbolBer);
-            verifyResult(testCase.expectedHealth, testCase.expectedErrorCode);
-        }
-    }
-
-    struct ArchTestCase
-    {
-        std::string_view name;
-        dcgmReturn_t computeCapabilityRet;
-        int64_t computeCapability;
-        bool getAllGpuInfoEnabled;
-        dcgmChipArchitecture_t fallbackArch;
-        int64_t symbolBerRaw;
-        dcgmHealthWatchResults_t expectedHealth;
-        unsigned int expectedErrorCode;
-    };
-
-    std::array const archTestCases = {
-        ArchTestCase { .name                 = "Blackwell via compute capability aggregate symbol BER raw 73710 passes",
-                       .computeCapabilityRet = DCGM_ST_OK,
-                       .computeCapability    = (10 << 16) | 0,
-                       .getAllGpuInfoEnabled = false,
-                       .fallbackArch         = DCGM_CHIP_ARCH_UNKNOWN,
-                       .symbolBerRaw         = 73710,
-                       .expectedHealth       = DCGM_HEALTH_RESULT_PASS,
-                       .expectedErrorCode    = DCGM_ST_OK },
-        ArchTestCase { .name = "Blackwell via compute capability symbol BER worse than floor exponent fails",
-                       .computeCapabilityRet = DCGM_ST_OK,
-                       .computeCapability    = (10 << 16) | 0,
-                       .getAllGpuInfoEnabled = false,
-                       .fallbackArch         = DCGM_CHIP_ARCH_UNKNOWN,
-                       .symbolBerRaw         = encodeBer(15, 237),
-                       .expectedHealth       = DCGM_HEALTH_RESULT_FAIL,
-                       .expectedErrorCode    = DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD },
-        ArchTestCase { .name                 = "Pre-Blackwell via compute capability symbol BER floor raw 4095 passes",
-                       .computeCapabilityRet = DCGM_ST_OK,
-                       .computeCapability    = (9 << 16) | 0,
-                       .getAllGpuInfoEnabled = false,
-                       .fallbackArch         = DCGM_CHIP_ARCH_UNKNOWN,
-                       .symbolBerRaw         = encodeBer(15, 255),
-                       .expectedHealth       = DCGM_HEALTH_RESULT_PASS,
-                       .expectedErrorCode    = DCGM_ST_OK },
-        ArchTestCase {
-            .name = "Blackwell via GetAllGpuInfo fallback when compute capability unwatched aggregate 73710 passes",
-            .computeCapabilityRet = DCGM_ST_NOT_WATCHED,
-            .computeCapability    = 0,
-            .getAllGpuInfoEnabled = true,
-            .fallbackArch         = DCGM_CHIP_ARCH_BLACKWELL,
-            .symbolBerRaw         = 73710,
-            .expectedHealth       = DCGM_HEALTH_RESULT_PASS,
-            .expectedErrorCode    = DCGM_ST_OK },
-        ArchTestCase {
-            .name = "Blackwell via GetAllGpuInfo when compute capability reports pre-Blackwell aggregate 73710 passes",
-            .computeCapabilityRet = DCGM_ST_OK,
-            .computeCapability    = (9 << 16) | 0,
-            .getAllGpuInfoEnabled = true,
-            .fallbackArch         = DCGM_CHIP_ARCH_BLACKWELL,
-            .symbolBerRaw         = 73710,
-            .expectedHealth       = DCGM_HEALTH_RESULT_PASS,
-            .expectedErrorCode    = DCGM_ST_OK },
-        ArchTestCase { .name                 = "Pre-Blackwell zero mantissa nonzero exponent symbol BER passes",
-                       .computeCapabilityRet = DCGM_ST_OK,
-                       .computeCapability    = (9 << 16) | 0,
-                       .getAllGpuInfoEnabled = false,
-                       .fallbackArch         = DCGM_CHIP_ARCH_UNKNOWN,
-                       .symbolBerRaw         = encodeBer(0, 5),
-                       .expectedHealth       = DCGM_HEALTH_RESULT_PASS,
-                       .expectedErrorCode    = DCGM_ST_OK },
-        ArchTestCase { .name                 = "Blackwell zero mantissa nonzero exponent symbol BER passes",
-                       .computeCapabilityRet = DCGM_ST_OK,
-                       .computeCapability    = (10 << 16) | 0,
-                       .getAllGpuInfoEnabled = false,
-                       .fallbackArch         = DCGM_CHIP_ARCH_UNKNOWN,
-                       .symbolBerRaw         = encodeBer(0, 5),
-                       .expectedHealth       = DCGM_HEALTH_RESULT_PASS,
-                       .expectedErrorCode    = DCGM_ST_OK },
-    };
-
-    for (auto const &testCase : archTestCases)
-    {
-        SECTION(std::string(testCase.name))
-        {
-            dcgmcm_sample_t ccSample = {};
-            ccSample.val.i64         = testCase.computeCapability;
-            mockLatestSample.SetFieldSample(
-                DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, testCase.computeCapabilityRet, ccSample);
-
-            corePoster.getAllGpuInfoEnabled = testCase.getAllGpuInfoEnabled;
-            corePoster.singleGpuInfo        = {};
-            corePoster.singleGpuInfo.gpuId  = testGpuId;
-            corePoster.singleGpuInfo.arch   = testCase.fallbackArch;
-
-            setDefaultNoDataForOtherFields();
-            setBer(DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, BerInput { 15, 255 });
-            setBerRaw(DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW, testCase.symbolBerRaw);
-            verifyResult(testCase.expectedHealth, testCase.expectedErrorCode);
-        }
-    }
-}
-
 TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch: negative test for DCGM_FR_FAULTY_MEMORY")
 {
     // Set unrepairable memory flag to non-zero, triggering the faulty memory error path
@@ -3517,6 +3565,21 @@ TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorGpuRecoveryAct
         REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_FAIL);
         REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_DRIVER);
         REQUIRE(healthResponse.incidents[0].error.code == DCGM_FR_GPU_RECOVERY_DRAIN_RESET);
+    }
+
+    SECTION("RECOVER_IMEX_DOMAIN: FAIL incident on DRIVER system")
+    {
+        setAction(DCGM_ST_OK, NVML_GPU_RECOVERY_ACTION_RECOVER_IMEX_DOMAIN);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorGpuRecoveryAction(healthWatch, testEntityGroupId, testGpuId, response);
+        REQUIRE(ret == DCGM_ST_OK);
+
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_FAIL);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_DRIVER);
+        REQUIRE(healthResponse.incidents[0].error.code == DCGM_FR_GPU_RECOVERY_IMEX_DOMAIN);
     }
 }
 
@@ -4847,11 +4910,7 @@ TEST_CASE_METHOD(DcgmHealthWatchGetSamplesFixture, "DcgmHealthWatch::MonitorNVLi
     {
         dcgmReturn_t ret
             = DcgmHealthWatchTestHelper::MonitorNVLink(healthWatch, testEntityGroupId, testGpuId, 0, 0, response);
-        // MonitorNVLink5Fields returns NOT_WATCHED when its descending GetSamples sees an
-        // unwatched field whose ascending sample is non-blank (zero-init value). That bubbles
-        // up through MonitorNVLink's last-error-wins accumulation. Accept both OK and
-        // NOT_WATCHED as "clean" — the important property is zero incidents.
-        REQUIRE((ret == DCGM_ST_OK || ret == DCGM_ST_NOT_WATCHED));
+        REQUIRE(ret == DCGM_ST_OK);
         response.PopulateHealthResponse(healthResponse);
         REQUIRE(healthResponse.incidentCount == 0);
     }
@@ -4864,6 +4923,23 @@ TEST_CASE_METHOD(DcgmHealthWatchGetSamplesFixture, "DcgmHealthWatch::MonitorNVLi
         dcgmReturn_t ret
             = DcgmHealthWatchTestHelper::MonitorNVLink(healthWatch, testEntityGroupId, testGpuId, 0, 0, response);
         REQUIRE(ret == DCGM_ST_GENERIC_ERROR);
+    }
+
+    for (auto const &testCase : ccUnavailableTestCases)
+    {
+        SECTION(std::string(testCase.name) + " with unknown arch - NVLink health does not abort")
+        {
+            // GetAllGpuInfo mock returns DCGM_CHIP_ARCH_UNKNOWN; skip unwatched NVLink5 fields cleanly.
+            corePoster.getAllGpuInfoEnabled = false;
+            mockLatestSample.SetFieldSample(DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, testCase.computeCapabilityRet);
+
+            dcgmReturn_t ret
+                = DcgmHealthWatchTestHelper::MonitorNVLink(healthWatch, testEntityGroupId, testGpuId, 0, 0, response);
+
+            REQUIRE(ret == DCGM_ST_OK);
+            response.PopulateHealthResponse(healthResponse);
+            REQUIRE(healthResponse.incidentCount == 0);
+        }
     }
 }
 
@@ -4905,5 +4981,391 @@ TEST_CASE("DcgmHealthWatch string helpers")
         CHECK(std::string(EntityToString(DCGM_FE_GPU_CI)) == "Compute Instance");
         CHECK(std::string(EntityToString(DCGM_FE_LINK)) == "Link");
         CHECK(std::string(EntityToString(DCGM_FE_NONE)) == "Unknown");
+    }
+}
+
+SCENARIO("DcgmHealthWatch public watch-table operations expose configured state", "[health]")
+{
+    GIVEN("a group with no configured health watches")
+    {
+        DcgmHealthWatchFixture fixture;
+        dcgmHealthSystems_t systems = DCGM_HEALTH_WATCH_ALL;
+
+        WHEN("the public watch query is made")
+        {
+            auto const ret = fixture.healthWatch.GetWatches(1, &systems);
+
+            THEN("the query succeeds and reports an empty watch mask")
+            {
+                CHECK(ret == DCGM_ST_OK);
+                CHECK(systems == static_cast<dcgmHealthSystems_t>(0));
+            }
+        }
+    }
+
+    GIVEN("a group with watch state installed through the existing test helper seam")
+    {
+        DcgmHealthWatchFixture fixture;
+        DcgmHealthWatchTestHelper::SetGroupWatchState(
+            fixture.healthWatch, 1, static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_MEM));
+        dcgmHealthSystems_t systems = static_cast<dcgmHealthSystems_t>(0);
+
+        WHEN("the group is queried and then removed through the public API")
+        {
+            auto const beforeRemove = fixture.healthWatch.GetWatches(1, &systems);
+            fixture.healthWatch.OnGroupRemove(1);
+            dcgmHealthSystems_t afterSystems = DCGM_HEALTH_WATCH_ALL;
+            auto const afterRemove           = fixture.healthWatch.GetWatches(1, &afterSystems);
+
+            THEN("the configured mask is visible before removal and cleared after removal")
+            {
+                CHECK(beforeRemove == DCGM_ST_OK);
+                CHECK(systems == static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_MEM));
+                CHECK(afterRemove == DCGM_ST_OK);
+                CHECK(afterSystems == static_cast<dcgmHealthSystems_t>(0));
+            }
+        }
+    }
+
+    GIVEN("the all-GPU group has no stored watch state")
+    {
+        DcgmHealthWatchFixture fixture;
+
+        WHEN("AttachGpus refreshes watches")
+        {
+            auto const ret = fixture.healthWatch.AttachGpus();
+
+            THEN("the no-op refresh succeeds")
+            {
+                CHECK(ret == DCGM_ST_OK);
+            }
+        }
+    }
+}
+
+
+SCENARIO("DcgmHealthWatch public GPU monitoring aggregates subsystem outcomes", "[health]")
+{
+    GIVEN("mocked PCIe replay samples above threshold and a volatile DBE memory sample")
+    {
+        DcgmHealthWatchGetSamplesFixture fixture;
+
+        dcgmcm_sample_t sample = {};
+        sample.val.i64         = 0;
+        fixture.mockGetSamples.SetGetSamplesResult(
+            DCGM_FI_DEV_PCIE_REPLAY_TOTAL, DCGM_ORDER_ASCENDING, DCGM_ST_OK, sample);
+        sample.val.i64 = 100;
+        fixture.mockGetSamples.SetGetSamplesResult(
+            DCGM_FI_DEV_PCIE_REPLAY_TOTAL, DCGM_ORDER_DESCENDING, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 4;
+        fixture.mockLatestSample.SetFieldSample(DCGM_FI_DEV_PCIE_LINK_GEN, DCGM_ST_OK, sample);
+        sample.val.i64 = 16;
+        fixture.mockLatestSample.SetFieldSample(DCGM_FI_DEV_PCIE_LINK_WIDTH, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 1;
+        fixture.mockGetSamples.SetGetSamplesResult(
+            DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, DCGM_ORDER_DESCENDING, DCGM_ST_OK, sample);
+
+        WHEN("the public per-GPU monitor runs both watched subsystems")
+        {
+            auto const ret = fixture.healthWatch.MonitorWatchesForGpu(
+                fixture.testGpuId,
+                1,
+                2,
+                static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_MEM),
+                fixture.response);
+            fixture.response.PopulateHealthResponse(fixture.healthResponse);
+
+            THEN("successful collection reports both incidents and FAIL wins overall aggregation")
+            {
+                REQUIRE(ret == DCGM_ST_OK);
+                REQUIRE(fixture.healthResponse.incidentCount == 2);
+                CHECK(fixture.healthResponse.overallHealth == DCGM_HEALTH_RESULT_FAIL);
+
+                bool sawPcieWarn = false;
+                bool sawMemFail  = false;
+                for (unsigned int i = 0; i < fixture.healthResponse.incidentCount; ++i)
+                {
+                    auto const &incident = fixture.healthResponse.incidents[i];
+                    CHECK(incident.entityInfo.entityGroupId == DCGM_FE_GPU);
+                    CHECK(incident.entityInfo.entityId == fixture.testGpuId);
+                    sawPcieWarn
+                        = sawPcieWarn
+                          || (incident.system == DCGM_HEALTH_WATCH_PCIE && incident.health == DCGM_HEALTH_RESULT_WARN);
+                    sawMemFail
+                        = sawMemFail
+                          || (incident.system == DCGM_HEALTH_WATCH_MEM && incident.health == DCGM_HEALTH_RESULT_FAIL);
+                }
+                CHECK(sawPcieWarn);
+                CHECK(sawMemFail);
+            }
+        }
+    }
+}
+
+SCENARIO("DcgmHealthWatch public watch state follows SetWatches and GetWatches", "[health]")
+{
+    GIVEN("a mock group containing one GPU and a PCIe plus memory watch mask")
+    {
+        DcgmHealthWatchFixture fixture;
+        fixture.mockLatestSample.SetupGpuNvLinks(1, false);
+        auto const expectedSystems = static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_MEM);
+        dcgmHealthSystems_t queriedSystems = static_cast<dcgmHealthSystems_t>(0);
+
+        WHEN("the watches are set through the public API and then queried")
+        {
+            auto const setRet = fixture.healthWatch.SetWatches(1, expectedSystems, 7, 1000000, 60.0);
+            auto const getRet = fixture.healthWatch.GetWatches(1, &queriedSystems);
+
+            THEN("the configured mask is returned without requiring hardware or NVML access")
+            {
+                CHECK(setRet == DCGM_ST_OK);
+                CHECK(getRet == DCGM_ST_OK);
+                CHECK(queriedSystems == expectedSystems);
+            }
+        }
+    }
+}
+
+SCENARIO("DcgmHealthWatch public per-GPU monitoring rejects invalid GPU inputs", "[health]")
+{
+    GIVEN("a health watch with mocked core callbacks")
+    {
+        DcgmHealthWatchFixture fixture;
+
+        WHEN("the GPU id is outside the public DCGM range")
+        {
+            auto const ret = fixture.healthWatch.MonitorWatchesForGpu(
+                DCGM_MAX_NUM_DEVICES, 0, 0, DCGM_HEALTH_WATCH_MEM, fixture.response);
+            fixture.response.PopulateHealthResponse(fixture.healthResponse);
+
+            THEN("the call returns BADPARAM and leaves the response healthy")
+            {
+                CHECK(ret == DCGM_ST_BADPARAM);
+                CHECK(fixture.healthResponse.incidentCount == 0);
+                CHECK(fixture.healthResponse.overallHealth == DCGM_HEALTH_RESULT_PASS);
+            }
+        }
+    }
+}
+
+SCENARIO("DcgmHealthWatch helper watch setters register expected fields", "[health]")
+{
+    GIVEN("a recording core callback and a health watcher")
+    {
+        DcgmHealthWatchRecordingFixture fixture;
+        DcgmWatcher watcher(DcgmWatcherTypeHealthWatch, 42);
+
+        WHEN("CPU thermal watches are enabled below the minimum sample interval")
+        {
+            auto const ret = DcgmHealthWatchTestHelper::SetCpuThermal(
+                fixture.healthWatch, DCGM_FE_CPU, 3, true, watcher, 1, 123.0);
+
+            THEN("the CPU temperature fields are watched at the health-watch minimum interval")
+            {
+                CHECK(ret == DCGM_ST_OK);
+                REQUIRE(fixture.recordingContext.fieldWatches.size() == 3);
+                CHECK(ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_CPU, 3, DCGM_FI_DEV_CPU_TEMP_CELSIUS));
+                CHECK(ContainsRecordedWatch(
+                    fixture.recordingContext, DCGM_FE_CPU, 3, DCGM_FI_DEV_CPU_TEMP_WARNING_CELSIUS));
+                CHECK(ContainsRecordedWatch(
+                    fixture.recordingContext, DCGM_FE_CPU, 3, DCGM_FI_DEV_CPU_TEMP_CRITICAL_CELSIUS));
+                CHECK(fixture.recordingContext.fieldWatches[0].monitorFreqUsec == 30000000LL);
+                CHECK(fixture.recordingContext.fieldWatches[0].maxSampleAge == 123.0);
+                CHECK(fixture.recordingContext.fieldWatches[0].connectionId == 42);
+            }
+        }
+
+        WHEN("CPU power watches are enabled")
+        {
+            auto const ret = DcgmHealthWatchTestHelper::SetCpuPower(
+                fixture.healthWatch, DCGM_FE_CPU, 4, true, watcher, 30000000LL, 456.0);
+
+            THEN("the CPU power and limit fields are watched")
+            {
+                CHECK(ret == DCGM_ST_OK);
+                REQUIRE(fixture.recordingContext.fieldWatches.size() == 2);
+                CHECK(ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_CPU, 4, DCGM_FI_DEV_CPU_POWER_WATTS));
+                CHECK(
+                    ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_CPU, 4, DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS));
+            }
+        }
+
+        WHEN("ConnectX watches are enabled")
+        {
+            auto const ret = DcgmHealthWatchTestHelper::SetConnectX(
+                fixture.healthWatch, DCGM_FE_CONNECTX, 7, true, watcher, 5000000LL, 60.0);
+
+            THEN("the ConnectX health and uncorrectable error fields are watched")
+            {
+                CHECK(ret == DCGM_ST_OK);
+                REQUIRE(fixture.recordingContext.fieldWatches.size() == 3);
+                CHECK(
+                    ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_CONNECTX, 7, DCGM_FI_DEV_CONNECTX_HEALTH));
+                CHECK(ContainsRecordedWatch(
+                    fixture.recordingContext, DCGM_FE_CONNECTX, 7, DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_STATUS));
+                CHECK(ContainsRecordedWatch(
+                    fixture.recordingContext, DCGM_FE_CONNECTX, 7, DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_SEVERITY));
+                CHECK(fixture.recordingContext.fieldWatches[0].monitorFreqUsec == 5000000LL);
+            }
+        }
+    }
+}
+
+SCENARIO("DcgmHealthWatch helper watch setters handle disabled and failing collaborators", "[health]")
+{
+    GIVEN("a recording core callback and disabled helper invocations")
+    {
+        DcgmHealthWatchRecordingFixture fixture;
+        DcgmWatcher watcher(DcgmWatcherTypeHealthWatch, 19);
+
+        WHEN("CPU and ConnectX helpers are asked to disable watches")
+        {
+            auto const thermalRet
+                = DcgmHealthWatchTestHelper::SetCpuThermal(fixture.healthWatch, DCGM_FE_CPU, 1, false, watcher, 1, 1.0);
+            auto const powerRet
+                = DcgmHealthWatchTestHelper::SetCpuPower(fixture.healthWatch, DCGM_FE_CPU, 1, false, watcher, 1, 1.0);
+            auto const connectXRet = DcgmHealthWatchTestHelper::SetConnectX(
+                fixture.healthWatch, DCGM_FE_CONNECTX, 1, false, watcher, 1, 1.0);
+
+            THEN("they succeed without adding field watches")
+            {
+                CHECK(thermalRet == DCGM_ST_OK);
+                CHECK(powerRet == DCGM_ST_OK);
+                CHECK(connectXRet == DCGM_ST_OK);
+                CHECK(fixture.recordingContext.fieldWatches.empty());
+            }
+        }
+    }
+
+    GIVEN("a recording core callback that rejects field watches")
+    {
+        DcgmHealthWatchRecordingFixture fixture;
+        fixture.recordingContext.addFieldWatchRet = DCGM_ST_GENERIC_ERROR;
+        DcgmWatcher watcher(DcgmWatcherTypeHealthWatch, 20);
+
+        WHEN("CPU thermal helper tries to add its first field watch")
+        {
+            auto const ret
+                = DcgmHealthWatchTestHelper::SetCpuThermal(fixture.healthWatch, DCGM_FE_CPU, 2, true, watcher, 1, 1.0);
+
+            THEN("the collaborator error is returned and no later CPU thermal fields are attempted")
+            {
+                CHECK(ret == DCGM_ST_GENERIC_ERROR);
+                REQUIRE(fixture.recordingContext.fieldWatches.size() == 1);
+                CHECK(fixture.recordingContext.fieldWatches[0].fieldId == DCGM_FI_DEV_CPU_TEMP_CELSIUS);
+            }
+        }
+    }
+}
+
+SCENARIO("DcgmHealthWatch NvSwitch watch helper records fatal and nonfatal fields", "[health]")
+{
+    GIVEN("two switch IDs and both NvSwitch health systems enabled")
+    {
+        DcgmHealthWatchRecordingFixture fixture;
+        DcgmWatcher watcher(DcgmWatcherTypeHealthWatch, 77);
+        std::vector<unsigned int> switchIds { 5, 6 };
+        auto const systems
+            = static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL | DCGM_HEALTH_WATCH_NVSWITCH_FATAL);
+
+        WHEN("the NvSwitch watches are set through the helper seam")
+        {
+            auto const ret = DcgmHealthWatchTestHelper::SetNvSwitchWatches(
+                fixture.healthWatch, switchIds, systems, watcher, 9000000LL, 90.0);
+
+            THEN("each switch receives both SXID watch fields")
+            {
+                CHECK(ret == DCGM_ST_OK);
+                REQUIRE(fixture.recordingContext.fieldWatches.size() == 4);
+                CHECK(ContainsRecordedWatch(
+                    fixture.recordingContext, DCGM_FE_SWITCH, 5, DCGM_FI_DEV_SXID_NON_FATAL_ERROR));
+                CHECK(ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_SWITCH, 5, DCGM_FI_DEV_SXID_FATAL_ERROR));
+                CHECK(ContainsRecordedWatch(
+                    fixture.recordingContext, DCGM_FE_SWITCH, 6, DCGM_FI_DEV_SXID_NON_FATAL_ERROR));
+                CHECK(ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_SWITCH, 6, DCGM_FI_DEV_SXID_FATAL_ERROR));
+            }
+        }
+    }
+}
+
+SCENARIO("DcgmHealthWatch memory field labels are stable", "[health]")
+{
+    GIVEN("a health watch with recording callbacks")
+    {
+        DcgmHealthWatchRecordingFixture fixture;
+
+        WHEN("known and unknown memory fields are formatted")
+        {
+            auto const sbeLabel
+                = DcgmHealthWatchTestHelper::MemFieldToString(fixture.healthWatch, DCGM_FI_DEV_ECC_SBE_VOL_TOTAL);
+            auto const dbeLabel
+                = DcgmHealthWatchTestHelper::MemFieldToString(fixture.healthWatch, DCGM_FI_DEV_ECC_DBE_VOL_TOTAL);
+            auto const unknownLabel = DcgmHealthWatchTestHelper::MemFieldToString(fixture.healthWatch, 0);
+
+            THEN("the public diagnostic strings distinguish SBE, DBE, and unknown fields")
+            {
+                CHECK(sbeLabel == "Volatile SBEs");
+                CHECK(dbeLabel == "Volatile DBEs");
+                CHECK(unknownLabel == "Error");
+            }
+        }
+    }
+}
+
+SCENARIO("DcgmHealthWatch SetWatches routes safe non-GPU entity combinations", "[health]")
+{
+    GIVEN("a recording group containing CPU, ConnectX, NvSwitch, and ignored link entities")
+    {
+        DcgmHealthWatchRecordingFixture fixture;
+        fixture.recordingContext.groupEntities
+            = { { DCGM_FE_CPU, 2 }, { DCGM_FE_CONNECTX, 3 }, { DCGM_FE_SWITCH, 4 }, { DCGM_FE_LINK, 5 } };
+        auto const systems = static_cast<dcgmHealthSystems_t>(
+            DCGM_HEALTH_WATCH_THERMAL | DCGM_HEALTH_WATCH_POWER | DCGM_HEALTH_WATCH_CONNECTX
+            | DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL | DCGM_HEALTH_WATCH_NVSWITCH_FATAL);
+        dcgmHealthSystems_t queriedSystems = static_cast<dcgmHealthSystems_t>(0);
+
+        WHEN("SetWatches is invoked through the public API")
+        {
+            auto const setRet = fixture.healthWatch.SetWatches(12, systems, 88, 1, 600.0);
+            auto const getRet = fixture.healthWatch.GetWatches(12, &queriedSystems);
+
+            THEN("the safe entity-specific fields are recorded and the configured watch mask is queryable")
+            {
+                CHECK(setRet == DCGM_ST_OK);
+                CHECK(getRet == DCGM_ST_OK);
+                CHECK(queriedSystems == systems);
+                CHECK(fixture.recordingContext.updateAllFieldsCalls == 1);
+                REQUIRE(fixture.recordingContext.fieldWatches.size() == 10);
+                CHECK(ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_CPU, 2, DCGM_FI_DEV_CPU_TEMP_CELSIUS));
+                CHECK(
+                    ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_CPU, 2, DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS));
+                CHECK(
+                    ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_CONNECTX, 3, DCGM_FI_DEV_CONNECTX_HEALTH));
+                CHECK(ContainsRecordedWatch(
+                    fixture.recordingContext, DCGM_FE_SWITCH, 4, DCGM_FI_DEV_SXID_NON_FATAL_ERROR));
+                CHECK(ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_SWITCH, 4, DCGM_FI_DEV_SXID_FATAL_ERROR));
+                CHECK(!ContainsRecordedWatch(fixture.recordingContext, DCGM_FE_LINK, 5, DCGM_FI_DEV_SXID_FATAL_ERROR));
+            }
+        }
+    }
+
+    GIVEN("a recording group lookup that fails")
+    {
+        DcgmHealthWatchRecordingFixture fixture;
+        fixture.recordingContext.getGroupEntitiesRet = DCGM_ST_BADPARAM;
+
+        WHEN("SetWatches cannot resolve the group entities")
+        {
+            auto const ret = fixture.healthWatch.SetWatches(13, DCGM_HEALTH_WATCH_POWER, 0, 1, 1.0);
+
+            THEN("the lookup failure is returned without recording field watches or updating fields")
+            {
+                CHECK(ret == DCGM_ST_BADPARAM);
+                CHECK(fixture.recordingContext.fieldWatches.empty());
+                CHECK(fixture.recordingContext.updateAllFieldsCalls == 0);
+            }
+        }
     }
 }

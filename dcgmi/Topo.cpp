@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 #include "Topo.h"
+
 #include "CommandOutputController.h"
 #include "DcgmiOutput.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
+
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
+
 #include <bitset>
 #include <cstring>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 
 /* Device Info */
@@ -30,6 +34,11 @@
 
 #define HEADER_NAME "Topology Information"
 
+
+/********************************************************************************/
+Topo::Topo(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+{}
 
 /********************************************************************************/
 dcgmReturn_t Topo::DisplayGPUTopology(dcgmHandle_t mNvcmHandle, unsigned int requestedGPUId, bool json)
@@ -43,7 +52,7 @@ dcgmReturn_t Topo::DisplayGPUTopology(dcgmHandle_t mNvcmHandle, unsigned int req
     std::stringstream ss;
 
     // Get topology
-    result = dcgmGetDeviceTopology(mNvcmHandle, requestedGPUId, &gpuTopo);
+    result = m_dcgmOps->dcgmGetDeviceTopology(mNvcmHandle, requestedGPUId, &gpuTopo);
     if (result == DCGM_ST_NOT_SUPPORTED)
     {
         std::cout << "Getting topology is not supported for GPU " << requestedGPUId << std::endl;
@@ -153,7 +162,7 @@ dcgmReturn_t Topo::DisplayGroupTopology(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t r
 
     // Get group name
     stNvcmGroupInfo->version = dcgmGroupInfo_version;
-    result                   = dcgmGroupGetInfo(mNvcmHandle, requestedGroupId, stNvcmGroupInfo.get());
+    result                   = m_dcgmOps->dcgmGroupGetInfo(mNvcmHandle, requestedGroupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -163,7 +172,7 @@ dcgmReturn_t Topo::DisplayGroupTopology(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t r
     }
 
     // Get topology
-    result = dcgmGetGroupTopology(mNvcmHandle, requestedGroupId, &groupTopo);
+    result = m_dcgmOps->dcgmGetGroupTopology(mNvcmHandle, requestedGroupId, &groupTopo);
     if (result == DCGM_ST_NOT_SUPPORTED)
     {
         std::cout << "Getting topology is not supported for group " << requestedGroupId << std::endl;
@@ -443,7 +452,9 @@ std::string Topo::HelperGetNvLinkPath(dcgmGpuTopologyLevel_t path, uint64_t link
  *****************************************************************************/
 
 /*****************************************************************************/
-GetGPUTopo::GetGPUTopo(std::string hostname, unsigned int gpu, bool json)
+GetGPUTopo::GetGPUTopo(std::string hostname, unsigned int gpu, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , topoObj(dcgmOps)
 {
     m_hostName = std::move(hostname);
     mGpuId     = gpu;
@@ -464,7 +475,9 @@ dcgmReturn_t GetGPUTopo::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-GetGroupTopo::GetGroupTopo(std::string hostname, unsigned int groupId, bool json)
+GetGroupTopo::GetGroupTopo(std::string hostname, unsigned int groupId, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , topoObj(dcgmOps)
 {
     m_hostName = std::move(hostname);
     mGroupId   = (dcgmGpuGrp_t)(long long)groupId;

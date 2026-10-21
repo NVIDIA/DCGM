@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,7 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t /* handle */,
                               DcgmLoggingSeverity_t /* loggingSeverity */,
                               hostEngineAppenderCallbackFp_t /* loggingCallback */,
                               dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              NvvsCommonPtr /* nvvsCommon */,
                               HangDetectMonitor * /* monitor */)
 {
     if (pluginAttr != nullptr)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,10 @@
 #include "TestParameters.h"
 #include "dcgm_fields.h"
 
+#include <DcgmOpsAnyPtr.hpp>
+
 #include <any>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -46,7 +49,7 @@ class PluginLib
 {
 public:
     /*****************************************************************************/
-    PluginLib();
+    PluginLib(DcgmNs::DcgmOpsAnyPtr dcgmOps, NvvsCommon *nvvsCommon);
 
     /*****************************************************************************/
     PluginLib(const PluginLib &other) = delete;
@@ -58,7 +61,7 @@ public:
     PluginLib(PluginLib &&other) noexcept;
 
     /*****************************************************************************/
-    PluginLib &operator=(PluginLib &&other) noexcept;
+    PluginLib &operator=(PluginLib &&other) noexcept = delete;
 
     /*****************************************************************************/
     ~PluginLib() noexcept;
@@ -169,6 +172,8 @@ private:
 
     std::unordered_map<std::string, PluginLibTest> m_tests;
 
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; //!< DCGM API interface.
+    NvvsCommon *m_nvvsCommon;        //!< NVVS common state
     PluginCoreFunctionality m_coreFunctionality;
 
     /**

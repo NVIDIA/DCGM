@@ -24,8 +24,9 @@
 using namespace DcgmNs::Nvvs;
 
 /*****************************************************************************/
-Allowlist::Allowlist(const ConfigFileParser_v2 &configFileParser)
-    : m_configFileParser(configFileParser)
+Allowlist::Allowlist(NvvsCommon *nvvsCommon, const ConfigFileParser_v2 &configFileParser)
+    : m_nvvsCommon(nvvsCommon)
+    , m_configFileParser(configFileParser)
 {
     // initialize map of maps
     FillMap();
@@ -277,29 +278,29 @@ void Allowlist::UpdateGlobalsForDeviceId(const std::string &deviceId)
     if (deviceId == "102d" || deviceId == "1eb8" || deviceId == "1e78")
     {
         // K80 expects some clocks event issues - see bug2454355/DCGM-865 for details
-        if (nvvsCommon.clocksEventIgnoreMask == DCGM_INT64_BLANK)
+        if (m_nvvsCommon->clocksEventIgnoreMask == DCGM_INT64_BLANK)
         {
             // Override the clocks event mask only if the user has not specified a mask
-            nvvsCommon.clocksEventIgnoreMask = MAX_CLOCKS_EVENT_IGNORE_MASK_VALUE;
+            m_nvvsCommon->clocksEventIgnoreMask = MAX_CLOCKS_EVENT_IGNORE_MASK_VALUE;
         }
         return;
     }
     // V100S experiences SW clocks event
     else if (deviceId == "1df6")
     {
-        if (nvvsCommon.clocksEventIgnoreMask == DCGM_INT64_BLANK)
+        if (m_nvvsCommon->clocksEventIgnoreMask == DCGM_INT64_BLANK)
         {
-            nvvsCommon.clocksEventIgnoreMask = DCGM_CLOCKS_EVENT_REASON_SW_THERMAL;
+            m_nvvsCommon->clocksEventIgnoreMask = DCGM_CLOCKS_EVENT_REASON_SW_THERMAL;
         }
     }
     // RTX 6000 experiences HW clocks event
     else if (deviceId == "1e30")
     {
-        if (nvvsCommon.clocksEventIgnoreMask == DCGM_INT64_BLANK)
+        if (m_nvvsCommon->clocksEventIgnoreMask == DCGM_INT64_BLANK)
         {
-            nvvsCommon.clocksEventIgnoreMask = DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN
-                                               | DCGM_CLOCKS_EVENT_REASON_HW_THERMAL
-                                               | DCGM_CLOCKS_EVENT_REASON_SW_THERMAL;
+            m_nvvsCommon->clocksEventIgnoreMask = DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN
+                                                  | DCGM_CLOCKS_EVENT_REASON_HW_THERMAL
+                                                  | DCGM_CLOCKS_EVENT_REASON_SW_THERMAL;
         }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,29 +17,39 @@
 #ifndef DCGM_MNDIAG_STRUCTS_HPP
 #define DCGM_MNDIAG_STRUCTS_HPP
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
 #include <dcgm_module_structs.h>
 #include <dcgm_multinode_internal.h>
 #include <dcgm_structs.h>
+#include <functional>
 #include <string_view>
 #include <sys/types.h>
 
 namespace MnDiagConstants
 {
 //! Environment variables
-constexpr std::string_view ENV_MPIRUN_PATH       = "DCGM_MNDIAG_MPIRUN_PATH";
-constexpr std::string_view ENV_MNUBERGEMM_PATH   = "DCGM_MNDIAG_MNUBERGEMM_PATH";
-constexpr std::string_view ENV_SUPPORTED_SKUS    = "DCGM_MNDIAG_SUPPORTED_SKUS";
-constexpr std::string_view ENV_ALLOW_RUN_AS_ROOT = "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT";
+constexpr std::string_view ENV_MPIRUN_PATH        = "DCGM_MNDIAG_MPIRUN_PATH";
+constexpr std::string_view ENV_MNUBERGEMM_PATH    = "DCGM_MNDIAG_MNUBERGEMM_PATH";
+constexpr std::string_view ENV_MNNVBANDWIDTH_PATH = "DCGM_MNDIAG_MNNVBANDWIDTH_PATH";
+constexpr std::string_view ENV_SUPPORTED_SKUS     = "DCGM_MNDIAG_SUPPORTED_SKUS";
+constexpr std::string_view ENV_ALLOW_RUN_AS_ROOT  = "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT";
+constexpr std::string_view ENV_NVLOOM_PATH        = "DCGM_MNDIAG_NVLOOM_PATH";
 
 //! Default paths
 constexpr std::string_view DEFAULT_MPIRUN_PATH             = "/usr/bin/mpirun";
 constexpr std::array<std::string_view, 3> TRUSTED_IP_PATHS = { "/sbin/ip", "/usr/sbin/ip", "/bin/ip" };
+constexpr std::string_view DEFAULT_MNUBERGEMM_BIN          = "mnubergemm";
+constexpr std::string_view DEFAULT_NVLOOM_BIN              = "nvloom_cli";
+constexpr std::string_view DEFAULT_NVBANDWIDTH_BINARY      = "mnnvbandwidth";
 
 //! Default CUDA versions
 constexpr std::array<int, 2> CUDA_VERSIONS_SUPPORTED = { 13, 12 };
+static_assert(!CUDA_VERSIONS_SUPPORTED.empty(), "CUDA_VERSIONS_SUPPORTED must not be empty");
+static_assert(std::ranges::is_sorted(CUDA_VERSIONS_SUPPORTED, std::ranges::greater {}),
+              "CUDA_VERSIONS_SUPPORTED must be sorted in descending order");
 
 //! Process detection retry parameters
 //! Total timeout for detecting MPI processes on GPUs (60 seconds)
@@ -84,9 +94,22 @@ struct dcgm_mndiag_msg_run_v1
     uid_t effectiveUid;
     dcgmMnDiagResponse_v1 response;
 };
-using dcgm_mndiag_msg_run_t = dcgm_mndiag_msg_run_v1;
 #define dcgm_mndiag_msg_run_version1 MAKE_DCGM_VERSION(dcgm_mndiag_msg_run_v1, 1)
-#define dcgm_mndiag_msg_run_version  dcgm_mndiag_msg_run_version1
+
+/**
+ * @brief Message structure for running multi-node diagnostic (version 2)
+ * Uses v2 params and v2 response with enlarged arrays.
+ */
+struct dcgm_mndiag_msg_run_v2
+{
+    dcgm_module_command_header_t header;
+    dcgmRunMnDiag_v2 params;
+    uid_t effectiveUid;
+    dcgmMnDiagResponse_v2 response;
+};
+using dcgm_mndiag_msg_run_t = dcgm_mndiag_msg_run_v2;
+#define dcgm_mndiag_msg_run_version2 MAKE_DCGM_VERSION(dcgm_mndiag_msg_run_v2, 2)
+#define dcgm_mndiag_msg_run_version  dcgm_mndiag_msg_run_version2
 
 /**
  * @brief Response structure for stopping the multi-node diagnostic
@@ -167,8 +190,18 @@ struct dcgm_mndiag_msg_node_info_v1
     dcgm_module_command_header_t header; //!< Command header
     dcgmMultinodeNodeInfo_v1 nodeInfo;
 };
-using dcgm_mndiag_msg_node_info_t = dcgm_mndiag_msg_node_info_v1;
+
+/**
+ * @brief Message structure for node info command with GPU inventory.
+ */
+struct dcgm_mndiag_msg_node_info_v2
+{
+    dcgm_module_command_header_t header; //!< Command header
+    dcgmMultinodeNodeInfo_v2 nodeInfo;
+};
+using dcgm_mndiag_msg_node_info_t = dcgm_mndiag_msg_node_info_v2;
 #define dcgm_mndiag_msg_node_info_version1 MAKE_DCGM_VERSION(dcgm_mndiag_msg_node_info_v1, 1)
-#define dcgm_mndiag_msg_node_info_version  dcgm_mndiag_msg_node_info_version1
+#define dcgm_mndiag_msg_node_info_version2 MAKE_DCGM_VERSION(dcgm_mndiag_msg_node_info_v2, 2)
+#define dcgm_mndiag_msg_node_info_version  dcgm_mndiag_msg_node_info_version2
 
 #endif // DCGM_MNDIAG_STRUCTS_HPP

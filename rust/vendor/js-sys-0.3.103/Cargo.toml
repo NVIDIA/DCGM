@@ -1,0 +1,71 @@
+[dependencies.cfg-if]
+version = "1.0.0"
+
+[dependencies.futures-core]
+default-features = false
+optional = true
+version = "0.3.8"
+
+[dependencies.futures-util]
+default-features = false
+features = ["std"]
+optional = true
+version = "0.3.31"
+
+[dependencies.wasm-bindgen]
+default-features = false
+version = "=0.2.126"
+
+[features]
+default = ["std", "unsafe-eval"]
+futures-core-03-stream = ["dep:futures-util", "dep:futures-core"]
+std = ["wasm-bindgen/std", "dep:futures-util"]
+unsafe-eval = []
+
+[lib]
+path = "src/lib.rs"
+
+[lints.clippy]
+large_enum_variant = "allow"
+new_without_default = "allow"
+overly_complex_bool_expr = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+
+[lints.rust.unexpected_cfgs]
+check-cfg = ["cfg(js_sys_unstable_apis)"]
+level = "warn"
+priority = 0
+
+[package]
+authors = ["The wasm-bindgen Developers"]
+autobenches = false
+autobins = false
+autoexamples = false
+autolib = false
+autotests = false
+categories = ["wasm"]
+description = """
+Bindings for all JS global objects and functions in all JS environments like
+Node.js and browsers, built on `#[wasm_bindgen]` using the `wasm-bindgen` crate.
+"""
+documentation = "https://docs.rs/js-sys"
+edition = "2021"
+homepage = "https://wasm-bindgen.github.io/wasm-bindgen/"
+include = ["/LICENSE-*", "/src"]
+license = "MIT OR Apache-2.0"
+name = "js-sys"
+readme = "README.md"
+repository = "https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys"
+rust-version = "1.77"
+version = "0.3.103"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies.futures-channel]
+version = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies.futures-lite]
+default-features = false
+version = "2"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies.half]
+version = "2"

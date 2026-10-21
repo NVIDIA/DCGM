@@ -45,6 +45,58 @@ env NVML_INJECTION_MODE=True NVML_YAML_FILE=<path-to-yaml-file> ./apps/amd64/nv-
 
 Please note that the YAML file path depends on your system.
 
+### Event wait injection
+
+`nvmlEventSetWait_v2` and `nvmlEventSetWait_v3` read events from
+`/run/nvml-injection/event.yaml`. The `uuid` field is required. Other fields use the names from
+`nvmlEventData_t` and `nvmlEventSetWait_v3_t` and default to zero when omitted; MIG instance IDs default to
+`NVML_GPU_INSTANCE_ID_ANY` and `NVML_COMPUTE_INSTANCE_ID_ANY`.
+
+```yaml
+uuid: GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5
+sourceModule: GSP
+eventType: 8
+eventData: 79
+dataType: 1
+gpuInstanceId: 4294967295
+computeInstanceId: 4294967295
+severity: 40
+logLevel: 50
+```
+
+V3 also accepts an `events` sequence (or the sequence directly at the YAML root). Events are returned in order,
+one per successful wait. Each event can
+include context metadata and raw payload bytes for `nvmlEventSetGetContextCount_v1`,
+`nvmlEventSetGetContextInfo_v1`, and `nvmlEventSetGetContextData_v1`:
+
+```yaml
+events:
+  - uuid: GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5
+    dataType: 1
+    instanceId: 100
+    contexts:
+      - nvmlGpuOperationalEventContextType: 1
+        sourceEventContextType: 42
+        dataFormatVersion: 1
+        data: [79, 0, 0, 0]
+  - uuid: GPU-8b14ec27-097f-42f6-92b6-f17ce5698c08
+    dataType: 1
+    contexts: []
+```
+
+Context `dataSize` is derived from the byte sequence. Contexts are replaced by each successful v3 wait,
+including an event with no contexts, and remain available until the next successful v3 wait for that event set
+or until the event set is freed. When `nvmlGpuOperationalEventContextType` is
+`NVML_GPU_OPERATIONAL_EVENT_CONTEXT_TYPE_LEGACY_XID`, the payload begins with the native `xidCode` bytes and
+can also be decoded with
+`nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1`.
+
+For v2, `uuid` must identify a GPU in the injected configuration and is converted to the corresponding
+`nvmlDevice_t`. V3 copies the UUID and any extended fields into `nvmlEventSetWait_v3_t` while preserving its
+input `timeoutMs`. A successfully loaded file is removed, with any remaining v3 events retained in memory until
+later waits consume them. If the file is absent, malformed, or refers to an unknown v2 UUID, the call waits for
+the requested timeout and returns `NVML_ERROR_TIMEOUT` without changing the caller's output.
+
 ## generate_nvml_stubs.py
 
 This script is used to auto-generate nvml YAML parser as well as fake implementation of nvml functions.

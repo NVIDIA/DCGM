@@ -27,6 +27,7 @@
 #include "CommandOutputController.h"
 #include "yaml-cpp/yaml.h"
 #include "json/json.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <dcgm_structs_internal.h>
 
 #include <DcgmThread.h>
@@ -40,7 +41,7 @@ std::string Sanitize(std::string sanitize);
 class Diag
 {
 public:
-    Diag(unsigned int iterations, const std::string &hostname);
+    Diag(unsigned int iterations, const std::string &hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~Diag();
     dcgmReturn_t RunStartDiag(dcgmHandle_t mNvcmHandle);
 
@@ -63,9 +64,7 @@ public:
 
     void SetEmbeddedHostEngine(bool embeddedHostEngine);
 
-#ifndef DCGMI_TESTS
-private:
-#endif
+protected:
     enum displayDiagResultWarn_enum
     {
         DDR_NO_DISPLAY_WARN,
@@ -89,7 +88,7 @@ private:
     void HelperDisplayMetadata(dcgmDiagResponse_v12 const &response) const;
     void HelperDisplayVersionAndDevIds(dcgmDiagResponse_v12 const &response) const;
     void HelperDisplayCpuInfo(dcgmDiagResponse_v12 const &response) const;
-    void HelperDisplayEudTestsVersion(dcgmDiagResponse_v12 const &response) const;
+    void HelperDisplayTestVersions(dcgmDiagResponse_v12 const &response) const;
 
     std::string const HelperJsonGetEntityGroupTag(dcgm_field_entity_group_t const) const;
     void HelperJsonAddCategory(Json::Value &output, Json::Value &category);
@@ -111,6 +110,7 @@ private:
 
     /*****************************************************************************/
     dcgmReturn_t ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v12 &response);
+    std::string HelperBuildFailureMessage(dcgmDiagResponse_v12 const &response, dcgmReturn_t result) const;
 
     /*
      * Displays a complete failure message for the diag accounting for JSON or normal output
@@ -119,6 +119,7 @@ private:
     void HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t ret);
 
     dcgmRunDiag_v10 m_drd;
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; //!< DCGM API interface.
     bool m_jsonOutput;
     unsigned int m_iterations;
     std::string m_hostname;
@@ -136,7 +137,7 @@ class RemoteDiagExecutor : public DcgmThread
 {
 public:
     /*****************************************************************************/
-    RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v10 &drd);
+    RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v10 &drd, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
     /*****************************************************************************/
     void run(void) override;
@@ -148,6 +149,7 @@ public:
     dcgmDiagResponse_v12 const &GetResponse() const;
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; //!< DCGM API interface.
     dcgmHandle_t m_handle;
     dcgmRunDiag_v10 m_drd;
     std::unique_ptr<dcgmDiagResponse_v12> m_response;
@@ -166,7 +168,8 @@ public:
               const std::string &configPath,
               bool jsonOutput,
               dcgmRunDiag_v10 &drd,
-              unsigned int iterations);
+              unsigned int iterations,
+              DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -189,7 +192,7 @@ private:
 class AbortDiag : public Command
 {
 public:
-    AbortDiag(std::string hostname);
+    AbortDiag(std::string hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

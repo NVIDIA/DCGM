@@ -1680,7 +1680,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_UTIL_RATIO,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_UTIL,
                                              DCGM_FT_INT64,
                                              8,
                                              "gpu_utilization",
@@ -3503,7 +3503,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
     DcgmFieldsPopulateOneFieldWithFormatting(
-        DCGM_FI_DEV_NVLINK_GET_STATE,
+        DCGM_FI_DEV_NVLINK_LINK_STATUS,
         DCGM_FT_INT64,
         8,
         "nvlink_state",
@@ -3514,7 +3514,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
         "",
         DCGM_FE_LINK,
         getWidthForEnum(DCGM_FIELD_WIDTH_10));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_ppcnt_ibpc_port_xmit_wait",
@@ -4477,7 +4477,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_TOTAL,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_RATIO,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "cpu_utilization_total",
@@ -4488,7 +4488,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_CPU_CORE,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_USER,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_USER_RATIO,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "cpu_utilization_user",
@@ -4499,7 +4499,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_CPU_CORE,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_NICE,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_NICE_RATIO,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "cpu_utilization_nice",
@@ -4510,7 +4510,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_CPU_CORE,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_SYS,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_SYS_RATIO,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "cpu_utilization_sys",
@@ -4521,7 +4521,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_CPU_CORE,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_IRQ,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_UTIL_IRQ_RATIO,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "cpu_utilization_irq",
@@ -4598,7 +4598,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_CPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MODULE_POWER_UTIL_CURRENT,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MODULE_POWER_WATTS,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "module_power_utilization",
@@ -4609,7 +4609,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_CPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_SYSIO_POWER_UTIL_CURRENT,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_SYSIO_POWER_WATTS,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "sysio_power_utilization",
@@ -4873,6 +4873,17 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_NONE,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_DIAG_CPU_SDC_RESULT,
+                                             DCGM_FT_INT64,
+                                             sizeof(std::int64_t),
+                                             "cpu_sdc_test_result",
+                                             DCGM_FS_GLOBAL,
+                                             0,
+                                             "CPUSDCRES",
+                                             "",
+                                             DCGM_FE_NONE,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_TX_PACKET_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
@@ -4973,7 +4984,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_TX_DISCARD_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_xmit_discards",
@@ -5143,7 +5154,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_CONNECTX,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_7));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_STATUS,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERROR_STATUS,
                                              DCGM_FT_INT64,
                                              8,
                                              "cx_correctable_err_status",
@@ -5153,7 +5164,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_CONNECTX,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_MASK,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERROR_MASK,
                                              DCGM_FT_INT64,
                                              8,
                                              "cx_correctable_err_mask",
@@ -5193,7 +5204,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_CONNECTX,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "cx_dev_temp",
@@ -5277,7 +5288,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              getTextForEnum(DCGM_FIELD_UNIT_BW_MBPS),
                                              DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK_ID,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_tx_bytes_per_link",
@@ -5287,7 +5298,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK_ID,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_rx_bytes_per_link",
@@ -5298,7 +5309,8 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateNvLinkProfileFieldRange(DCGM_FI_PROF_NVLINK_L0_TX_BYTES, DCGM_FI_PROF_NVLINK_L17_RX_BYTES, 0);
+    DcgmFieldsPopulateNvLinkProfileFieldRange(
+        DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_FIRST, DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_LAST, 0);
 
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_C2C_TX_ALL_BYTES,
                                              DCGM_FT_INT64,
@@ -5621,10 +5633,10 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SINCE_LAST_SECONDS,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvlink_ppcnt_recovery_time_since_last",
+                                             "nvlink_ppcnt_recovery_since_last_seconds",
                                              DCGM_FS_ENTITY,
                                              0,
                                              "NLRECLAST",
@@ -5753,7 +5765,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_ERROR_INTR,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_ERROR_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "c2c_link_error_intr",
@@ -5764,7 +5776,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "c2c_link_error_replay",
@@ -5775,7 +5787,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_B2B_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "c2c_link_error_replay_b2b",
@@ -5786,7 +5798,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_POWER_STATE,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_POWER_STATUS,
                                              DCGM_FT_INT64,
                                              8,
                                              "c2c_link_power_state",
@@ -5797,7 +5809,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_0_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count0",
@@ -5808,7 +5820,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_1_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count1",
@@ -5819,7 +5831,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_2_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count2",
@@ -5830,7 +5842,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_3_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count3",
@@ -5841,7 +5853,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_4_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count4",
@@ -5852,7 +5864,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_5_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count5",
@@ -5863,7 +5875,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_6_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count6",
@@ -5874,7 +5886,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_7_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count7",
@@ -5885,7 +5897,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_8_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count8",
@@ -5896,7 +5908,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_9_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count9",
@@ -5907,7 +5919,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_10_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count10",
@@ -5918,7 +5930,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_11_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count11",
@@ -5929,7 +5941,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_12_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count12",
@@ -5940,7 +5952,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_13_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count13",
@@ -5951,7 +5963,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_14_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count14",
@@ -5962,7 +5974,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_FEC_HISTORY_15_TOTAL,
                                              DCGM_FT_INT64,
                                              8,
                                              "nvlink_fec_history_count15",
@@ -6061,7 +6073,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL_WATTS,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "power_smoothing_applied_tmp_ceil",
@@ -6072,7 +6084,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR_WATTS,
                                              DCGM_FT_DOUBLE,
                                              8,
                                              "power_smoothing_applied_tmp_floor",
@@ -6116,7 +6128,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_MAX_PRESET_PROFILES,
                                              DCGM_FT_INT64,
                                              8,
                                              "power_smoothing_max_num_preset_profiles",
@@ -6301,6 +6313,518 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_NONE,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    /* Base unit fields (1600-1799) */
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_BAR1_CAPACITY_BYTES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "bar1_capacity_bytes",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "B1CAPB",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_BAR1_USED_BYTES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "bar1_used_bytes",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "B1USEB",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_BAR1_FREE_BYTES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "bar1_free_bytes",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "B1FREB",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_SM_CLOCK_HERTZ,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "sm_clock_hertz",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "SMCLHZ",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MEMORY_CLOCK_HERTZ,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "memory_clock_hertz",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "MMCLHZ",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VIDEO_CLOCK_HERTZ,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "video_clock_hertz",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VICLHZ",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_SM_APP_CLOCK_HERTZ,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "sm_app_clock_hertz",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "SACLHZ",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MEMORY_APP_CLOCK_HERTZ,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "memory_app_clock_hertz",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "MACLHZ",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_SM_MAX_CLOCK_HERTZ,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "sm_max_clock_hertz",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "SMMXHZ",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MEMORY_MAX_CLOCK_HERTZ,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "memory_max_clock_hertz",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "MMMXHZ",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VIDEO_MAX_CLOCK_HERTZ,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "video_max_clock_hertz",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VIMXHZ",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_ENERGY_JOULES_TOTAL,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "gpu_energy_joules_total",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_TOTAL_ENERGY_CONSUMPTION,
+                                             "GPENJT",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_16));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FAN_SPEED_RATIO,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "fan_speed_ratio",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "FANSR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_UTIL_RATIO,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "gpu_util_ratio",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "GPUTR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MEMORY_UTIL_RATIO,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "memory_util_ratio",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "MEMUR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_ENC_UTIL_RATIO,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "enc_util_ratio",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "ECUTR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_DEC_UTIL_RATIO,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "dec_util_ratio",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "DCUTR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_POWER_THROTTLE_SECONDS_TOTAL,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "gpu_power_throttle_seconds_total",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_PERF_POLICY_POWER,
+                                             "GPTHST",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_THERMAL_THROTTLE_SECONDS_TOTAL,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "gpu_thermal_throttle_seconds_total",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_PERF_POLICY_THERMAL,
+                                             "GTTHST",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_SYNC_BOOST_THROTTLE_SECONDS_TOTAL,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "gpu_sync_boost_throttle_seconds_total",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_PERF_POLICY_SYNC_BOOST,
+                                             "GSTHST",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_LIMIT_THROTTLE_SECONDS_TOTAL,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "gpu_limit_throttle_seconds_total",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_PERF_POLICY_BOARD_LIMIT,
+                                             "GLITHST",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_LOW_UTIL_THROTTLE_SECONDS_TOTAL,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "gpu_low_util_throttle_seconds_total",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_PERF_POLICY_LOW_UTILIZATION,
+                                             "GLUTHST",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_RELIABILITY_THROTTLE_SECONDS_TOTAL,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "gpu_reliability_throttle_seconds_total",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_PERF_POLICY_RELIABILITY,
+                                             "GRTHST",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_APP_THROTTLE_SECONDS_TOTAL,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "gpu_app_throttle_seconds_total",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_PERF_POLICY_TOTAL_APP_CLOCKS,
+                                             "GATHST",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GPU_BASE_THROTTLE_SECONDS_TOTAL,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "gpu_base_throttle_seconds_total",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_PERF_POLICY_TOTAL_BASE_CLOCKS,
+                                             "GBTHST",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FB_CAPACITY_BYTES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "fb_capacity_bytes",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "FBCAPB",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FB_FREE_BYTES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "fb_free_bytes",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "FBFREB",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FB_USED_BYTES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "fb_used_bytes",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "FBUSEB",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FB_RESERVED_BYTES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "fb_reserved_bytes",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "FBRSVB",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_MAX_BANDWIDTH_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "c2c_max_bandwidth_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_C2C_LINK_GET_MAX_BW,
+                                             "C2CBWBPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L0_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l0_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL0BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L1_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l1_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL1BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L2_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l2_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL2BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L3_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l3_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL3BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L4_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l4_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL4BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L5_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l5_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL5BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L6_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l6_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL6BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L7_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l7_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL7BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L8_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l8_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL8BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L9_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l9_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL9BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L10_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l10_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL10BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L11_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l11_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL11BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L12_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l12_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL12BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L13_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l13_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL13BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L14_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l14_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL14BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L15_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l15_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL15BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L16_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l16_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL16BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_L17_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_l17_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPL17BPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_THROUGHPUT_BYTES_PER_SECOND,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "nvlink_throughput_bytes_per_second",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NTPBPS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_FB_USED_BYTES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "vgpu_fb_used_bytes",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VFBUSEB",
+                                             "",
+                                             DCGM_FE_VGPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_LAST_GAP_SECONDS,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "nvlink_ppcnt_recovery_last_gap_seconds",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLRECGAP",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
     return 0;
 }
@@ -6521,18 +7045,29 @@ static unsigned int NvLinkLinkIndexToGpmMetricId(unsigned int linkIndex, bool is
     return 0;
 }
 
-unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId, bool &isPercentageField, unsigned int linkIndex)
+unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId,
+                                          dcgm_field_entity_group_t entityGroupId,
+                                          bool &isPercentageField,
+                                          unsigned int linkIndex)
 {
     static_assert(DCGM_FI_PROF_LAST_ID == DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL);
 
     isPercentageField = false;
 
+    if (fieldId >= DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_FIRST && fieldId <= DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_LAST)
+    {
+        unsigned int const offset          = fieldId - DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_FIRST;
+        unsigned int const legacyLinkIndex = offset / 2;
+        bool const isRx                    = (offset % 2) != 0;
+        return NvLinkLinkIndexToGpmMetricId(legacyLinkIndex, isRx);
+    }
+
     switch (fieldId)
     {
-        case DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK:
+        case DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK_ID:
             return NvLinkLinkIndexToGpmMetricId(linkIndex, /* isRx */ false);
 
-        case DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK:
+        case DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK_ID:
             return NvLinkLinkIndexToGpmMetricId(linkIndex, /* isRx */ true);
 
         case DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO:
@@ -6574,9 +7109,17 @@ unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId, bool &isPercenta
             return NVML_GPM_METRIC_PCIE_RX_PER_SEC;
 
         case DCGM_FI_PROF_NVLINK_TX_BYTES:
+            if (entityGroupId == DCGM_FE_LINK)
+            {
+                return NvLinkLinkIndexToGpmMetricId(linkIndex, /* isRx */ false);
+            }
             return NVML_GPM_METRIC_NVLINK_TOTAL_TX_PER_SEC;
 
         case DCGM_FI_PROF_NVLINK_RX_BYTES:
+            if (entityGroupId == DCGM_FE_LINK)
+            {
+                return NvLinkLinkIndexToGpmMetricId(linkIndex, /* isRx */ true);
+            }
             return NVML_GPM_METRIC_NVLINK_TOTAL_RX_PER_SEC;
 
         case DCGM_FI_PROF_IMMA_UTIL_RATIO:
@@ -6666,114 +7209,6 @@ unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId, bool &isPercenta
         case DCGM_FI_PROF_NVOFA_UTIL_1_RATIO:
             isPercentageField = true;
             return NVML_GPM_METRIC_NVOFA_1_UTIL;
-
-        case DCGM_FI_PROF_NVLINK_L0_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L0_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L0_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L0_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L1_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L1_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L1_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L1_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L2_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L2_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L2_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L2_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L3_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L3_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L3_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L3_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L4_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L4_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L4_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L4_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L5_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L5_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L5_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L5_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L6_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L6_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L6_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L6_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L7_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L7_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L7_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L7_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L8_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L8_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L8_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L8_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L9_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L9_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L9_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L9_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L10_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L10_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L10_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L10_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L11_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L11_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L11_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L11_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L12_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L12_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L12_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L12_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L13_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L13_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L13_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L13_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L14_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L14_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L14_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L14_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L15_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L15_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L15_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L15_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L16_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L16_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L16_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L16_RX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L17_TX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L17_TX_PER_SEC;
-
-        case DCGM_FI_PROF_NVLINK_L17_RX_BYTES:
-            return NVML_GPM_METRIC_NVLINK_L17_RX_PER_SEC;
 
         case DCGM_FI_PROF_C2C_TX_ALL_BYTES:
             return NVML_GPM_METRIC_C2C_TOTAL_TX_PER_SEC;

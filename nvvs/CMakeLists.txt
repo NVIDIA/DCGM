@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,13 +13,13 @@
 # limitations under the License.
 
 target_include_directories(nvvs_interface INTERFACE
-    include
-    "${JSON_CPP_INCLUDE_PATH}")
+    include)
 
 target_link_libraries(nvvs_interface
     INTERFACE
         common_interface
-        dcgm_interface)
+        dcgm_interface
+        dcgm_ops)
 
 configure_file(diag-skus.yaml.in diag-skus.yaml @ONLY)
 
@@ -29,7 +29,7 @@ add_subdirectory(mock)
 
 install(FILES nvvs.conf
         DESTINATION "${CMAKE_INSTALL_DOCDIR}/examples/"
-        COMPONENT Core)
+        COMPONENT libdcgmmodulediag)
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/diag-skus.yaml"
         DESTINATION "${DCGM_TESTS_INSTALL_DIR}/${CMAKE_INSTALL_DATADIR}/nvvs"

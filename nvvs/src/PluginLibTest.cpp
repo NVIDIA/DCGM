@@ -244,6 +244,17 @@ void PluginLibTest::PopulateEntityResults(dcgmDiagEntityResults_v2 const &entity
                       entityResult.errors[i].msg);
             continue;
         }
+
+        dcgmDiagErrorDetail_v2 error {};
+        SafeCopyTo(error.msg, entityResult.errors[i].msg);
+        error.gpuId    = entityResult.errors[i].entity.entityGroupId == DCGM_FE_GPU
+                             ? static_cast<int>(entityResult.errors[i].entity.entityId)
+                             : -1;
+        error.code     = entityResult.errors[i].code;
+        error.category = entityResult.errors[i].category;
+        error.severity = entityResult.errors[i].severity;
+        m_errors.push_back(error);
+
         m_entityResult.errors[m_entityResult.numErrors] = entityResult.errors[i];
         m_entityResult.numErrors += 1;
     }

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,20 @@
 
 add_subdirectory(tests)
 
+if (BUILD_TESTING)
+    target_sources(nvbandwidthtests
+        PRIVATE
+            NVBandwidthPlugin.cpp
+            NVBandwidthWrapper.cpp
+    )
+endif()
+
 declare_nvvs_plugin(nvbandwidth .)
 
 add_subdirectory(Cuda12)
 add_subdirectory(Cuda13)
 target_link_libraries(NVBandwidth_12 PRIVATE
+    nvbandwidth_common
     serialize
     fmt::fmt
     dcgm_common
@@ -28,6 +37,7 @@ target_link_libraries(NVBandwidth_12 PRIVATE
     rt)
 
 target_link_libraries(NVBandwidth_13 PRIVATE
+    nvbandwidth_common
     serialize
     fmt::fmt
     dcgm_common

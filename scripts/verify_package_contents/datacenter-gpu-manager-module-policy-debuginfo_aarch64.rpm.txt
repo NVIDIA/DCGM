@@ -1,0 +1,5 @@
+/usr/lib/debug
+/usr/lib/debug/usr
+/usr/lib/debug/usr/libexec
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulepolicy.so.<SOFTWAREVERSION>-<PACKAGEVERSION>.aarch64.debug

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include "DcgmStringHelpers.h"
 #include "PluginInterface.h"
 
+#include <CudaCompatibility.h>
 #include <DcgmBuildInfo.hpp>
 #include <DcgmHandle.h>
 #include <DcgmSystem.h>
@@ -49,8 +50,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-extern DcgmSystem dcgmSystem;
-extern DcgmHandle dcgmHandle;
 extern std::atomic_int32_t main_should_stop;
 
 namespace impl
@@ -147,31 +146,12 @@ template <typename PluginLibT,
           typename DynamicLibraryLoaderT,
           typename SoftwarePluginFrameworkT,
           typename FileSystemOperatorT>
-TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, FileSystemOperatorT>::TestFramework()
-    : m_completedTests(0)
-    , m_monitor(nullptr)
-    , m_numTestsToRun(0)
-    , m_testList()
-    , m_testCategories()
-    , dlList()
-    , skipRest(false)
-    , m_nvvsOwnerUid(0)
-    , m_nvvsOwnerGid(0)
-    , m_validGpuId()
-    , m_plugins()
-    , m_entityInfo()
-    , m_skipLibraryList()
-{
-    InitSkippedLibraries();
-}
-
-/*****************************************************************************/
-template <typename PluginLibT,
-          typename DynamicLibraryLoaderT,
-          typename SoftwarePluginFrameworkT,
-          typename FileSystemOperatorT>
 TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, FileSystemOperatorT>::TestFramework(
-    std::vector<std::unique_ptr<EntitySet>> &entitySets)
+    std::vector<std::unique_ptr<EntitySet>> &entitySets,
+    DcgmNs::DcgmOpsAnyPtr dcgmOps,
+    NvvsCommon *nvvsCommon,
+    DcgmHandle *dcgmHandle,
+    DcgmSystemBase *dcgmSystem)
     : m_completedTests(0)
     , m_monitor(nullptr)
     , m_numTestsToRun(0)
@@ -182,6 +162,10 @@ TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, FileS
     , m_nvvsOwnerUid(0)
     , m_nvvsOwnerGid(0)
     , m_validGpuId()
+    , m_dcgmOps(dcgmOps)
+    , m_nvvsCommon(nvvsCommon)
+    , m_dcgmHandle(dcgmHandle)
+    , m_dcgmSystem(dcgmSystem)
     , m_plugins()
     , m_entityInfo()
     , m_skipLibraryList()
@@ -211,8 +195,12 @@ template <typename PluginLibT,
 void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, FileSystemOperatorT>::
     InitSkippedLibraries()
 {
+    m_skipLibraryList.push_back("libcublas.so");
+    m_skipLibraryList.push_back("libcublasLt.so");
     m_skipLibraryList.push_back("libcurand.so");
+    m_skipLibraryList.push_back("libcusparseLt.so");
     m_skipLibraryList.push_back("libcupti.so");
+    m_skipLibraryList.push_back("libnccl.so");
 }
 
 /*****************************************************************************/
@@ -278,7 +266,7 @@ std::string TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrame
     m_nvvsOwnerUid = statBuf.st_uid;
     m_nvvsOwnerGid = statBuf.st_gid;
 
-    if (nvvsCommon.pluginPath.size() == 0)
+    if (m_nvvsCommon->pluginPath.size() == 0)
     {
         binaryPath = binaryPath.substr(0, binaryPath.find_last_of("/"));
 
@@ -305,7 +293,7 @@ std::string TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrame
     }
     else
     {
-        pluginsPath = nvvsCommon.pluginPath;
+        pluginsPath = m_nvvsCommon->pluginPath;
         if (!m_fileSystem.IsDirectory(pluginsPath))
         {
             throw std::runtime_error("Plugins directory was not found.  Please check paths or use -p to set it.");
@@ -324,8 +312,8 @@ std::optional<std::string> TestFramework<PluginLibT,
                                          SoftwarePluginFrameworkT,
                                          FileSystemOperatorT>::GetPluginCudaDirExtension() const
 {
-    unsigned int cudaMajorVersion = dcgmSystem.GetCudaMajorVersion();
-    unsigned int cudaMinorVersion = dcgmSystem.GetCudaMinorVersion();
+    unsigned int cudaMajorVersion = m_dcgmSystem->GetCudaMajorVersion();
+    unsigned int cudaMinorVersion = m_dcgmSystem->GetCudaMinorVersion();
     if (cudaMajorVersion == 0)
     {
         log_error("Unable to detect Cuda version.");
@@ -338,7 +326,8 @@ std::optional<std::string> TestFramework<PluginLibT,
 
     if (m_validGpuId.has_value())
     {
-        cudaMajorVersion = GetCompatibleCudaMajorVersion(*m_validGpuId, cudaMajorVersion, cudaMinorVersion);
+        cudaMajorVersion = GetCompatibleCudaMajorVersionForGpu(
+            m_dcgmOps, m_dcgmHandle->GetHandle(), *m_validGpuId, cudaMajorVersion, cudaMinorVersion);
     }
 
     log_debug("The following Cuda version will be used for plugins: {}.{}", cudaMajorVersion, cudaMinorVersion);
@@ -365,47 +354,6 @@ std::optional<std::string> TestFramework<PluginLibT,
 
     // NOT-REACHED
     return std::nullopt;
-}
-
-/*****************************************************************************/
-template <typename PluginLibT,
-          typename DynamicLibraryLoaderT,
-          typename SoftwarePluginFrameworkT,
-          typename FileSystemOperatorT>
-unsigned int TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, FileSystemOperatorT>::
-    GetCompatibleCudaMajorVersion(unsigned int gpuId,
-                                  unsigned int cudaDriverMajorVersion,
-                                  unsigned int cudaDriverMinorVersion)
-{
-    if (cudaDriverMajorVersion == 0)
-    {
-        log_warning("User provided CUDA version is 0. Using default.");
-        return cudaDriverMajorVersion;
-    }
-
-    auto chipArchitecture = dcgmSystem.GetGpuChipArchitecture(gpuId);
-    if (chipArchitecture.is_error())
-    {
-        log_warning(
-            "Unable to get GPU chip architecture for GPU {}, error: {}. Using provided cudaDriverMajorVersion: {}",
-            gpuId,
-            chipArchitecture.error(),
-            cudaDriverMajorVersion);
-        return cudaDriverMajorVersion;
-    }
-
-    // CUDA 13.0 drops support for everything that is < 7.5 SM Cuda Compatibility. These older SKUs need to run
-    // a 12.9-linked application.
-    // Note: We only check one GPU because NVVS can only run on homogenous GPUs.
-    if ((*chipArchitecture == DCGM_CHIP_ARCH_MAXWELL || *chipArchitecture == DCGM_CHIP_ARCH_PASCAL
-         || *chipArchitecture == DCGM_CHIP_ARCH_VOLTA)
-        && cudaDriverMajorVersion == 13 && cudaDriverMinorVersion == 0)
-    {
-        log_info("Using CUDA 12 for GPU {} because it is Maxwell, Pascal, or Volta and CUDA 13.0 is detected", gpuId);
-        return 12;
-    }
-
-    return cudaDriverMajorVersion;
 }
 
 template <typename PluginLibT,
@@ -445,7 +393,7 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
     }
     else
     {
-        auto pl = std::make_unique<PluginLibT>();
+        auto pl = std::make_unique<PluginLibT>(m_dcgmOps, m_nvvsCommon);
         if (m_monitor != nullptr)
         {
             pl->SetHangDetectMonitor(m_monitor);
@@ -455,7 +403,7 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
         if (ret == DCGM_ST_OK)
         {
             int pluginId = m_plugins.size();
-            ret          = pl->InitializePlugin(dcgmHandle.GetHandle(), pluginId);
+            ret          = pl->InitializePlugin(m_dcgmHandle->GetHandle(), pluginId);
             if (ret == DCGM_ST_OK)
             {
                 ret = pl->GetPluginInfo();
@@ -829,13 +777,13 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
         }
     }
 
-    if (nvvsCommon.channelFd == -1)
+    if (m_nvvsCommon->channelFd == -1)
     {
         m_diagResponse.Print();
     }
     else
     {
-        if (!FdChannelClient(nvvsCommon.channelFd).Write(m_diagResponse.RawBinaryBlob()))
+        if (!FdChannelClient(m_nvvsCommon->channelFd).Write(m_diagResponse.RawBinaryBlob()))
         {
             log_error("failed to write diag response to caller.");
         }
@@ -937,7 +885,7 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
     diagInfo.errorCode = errorCode;
     std::span<char const> infoBinary(reinterpret_cast<char const *>(&diagInfo), sizeof(diagInfo));
     log_debug("Writing diag info for test {}", testName);
-    if (!FdChannelClient(nvvsCommon.channelFd).Write(infoBinary))
+    if (!FdChannelClient(m_nvvsCommon->channelFd).Write(infoBinary))
     {
         log_error("Failed to write diag info to caller.");
     }
@@ -991,15 +939,15 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
             if (testName == PULSE_TEST_PLUGIN_NAME)
             {
                 // Add the iterations parameters
-                tp->AddDouble(PULSE_TEST_STR_CURRENT_ITERATION, nvvsCommon.currentIteration);
-                tp->AddDouble(PULSE_TEST_STR_TOTAL_ITERATIONS, nvvsCommon.totalIterations);
+                tp->AddDouble(PULSE_TEST_STR_CURRENT_ITERATION, m_nvvsCommon->currentIteration);
+                tp->AddDouble(PULSE_TEST_STR_TOTAL_ITERATIONS, m_nvvsCommon->totalIterations);
             }
 
             std::chrono::milliseconds testDuration { 0 };
             if (!skipRest && !main_should_stop)
             {
                 std::unordered_map<dcgm_field_eid_t, std::string> savedSkips;
-                if (nvvsCommon.isEudOnly)
+                if (m_nvvsCommon->isEudOnly)
                 {
                     savedSkips = entitySet->SaveAndClearRowRemapSkips();
                     if (!savedSkips.empty())
@@ -1040,7 +988,7 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
                 }
                 entitySet->UpdateSkippedEntities(entityResults);
 
-                if (nvvsCommon.isEudOnly && !savedSkips.empty())
+                if (m_nvvsCommon->isEudOnly && !savedSkips.empty())
                 {
                     restoreSkips.Trigger();
                     log_debug("Restored {} row-remapping skip(s) after EUD", savedSkips.size());
@@ -1057,12 +1005,13 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
 
             m_diagResponse.AddTestCategory(testName, test->GetCategory());
 
-            log_debug("{}",
-                      FormatTestEndMessage(
-                          testName, m_plugins[pluginIndex]->GetResult(testName), testDuration, nvvsCommon.configless));
+            log_info(
+                "{}",
+                FormatTestEndMessage(
+                    testName, m_plugins[pluginIndex]->GetResult(testName), testDuration, m_nvvsCommon->configless));
 
             if (m_plugins[pluginIndex]->GetResult(testName) == NVVS_RESULT_FAIL
-                && ((!nvvsCommon.configless) || nvvsCommon.failEarly))
+                && ((!m_nvvsCommon->configless) || m_nvvsCommon->failEarly))
 
             {
                 skipRest = true;
@@ -1130,8 +1079,8 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
         }
 
         GpuSet *gpuSet = ToGpuSet(entitySet.get());
-        m_softwarePluginFrameworks.push_back(
-            std::make_unique<SoftwarePluginFrameworkT>(gpuSet->GetGpuObjs(), *entitySet));
+        m_softwarePluginFrameworks.push_back(std::make_unique<SoftwarePluginFrameworkT>(
+            gpuSet->GetGpuObjs(), *entitySet, m_dcgmOps, m_nvvsCommon, m_dcgmHandle, m_dcgmSystem));
     }
 }
 
@@ -1170,7 +1119,7 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
         {
             continue;
         }
-        m_softwarePluginFrameworks[gpuIdx++]->Run(m_diagResponse, pluginAttr, nvvsCommon.parms);
+        m_softwarePluginFrameworks[gpuIdx++]->Run(m_diagResponse, pluginAttr, m_nvvsCommon->parms);
     }
 
     unsigned int firstError = DCGM_FR_TEST_SKIPPED;

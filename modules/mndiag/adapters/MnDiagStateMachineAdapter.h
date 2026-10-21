@@ -122,10 +122,11 @@ public:
      * @brief Set the process execution timeout
      *
      * @param timeoutInSeconds The timeout for the process execution
+     * @param keepReserved Keep resources reserved for the same duration while no process is detected
      */
-    void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds) override
+    void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds, bool keepReserved = false) override
     {
-        m_stateMachine.SetProcessExecutionTimeout(timeoutInSeconds);
+        m_stateMachine.SetProcessExecutionTimeout(timeoutInSeconds, keepReserved);
     }
 
     /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,18 @@
 #include "NvvsCommon.h"
 #include "timelib.h"
 #include <DcgmGroup.h>
-#include <DcgmHandle.h>
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmSystem.h>
 
 /*****************************************************************************/
 
-extern DcgmHandle dcgmHandle;
-extern DcgmSystem dcgmSystem;
-
-/*****************************************************************************/
-NvvsDevice::NvvsDevice(Plugin *plugin)
+NvvsDevice::NvvsDevice(Plugin *plugin, DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t handle)
+    : m_dcgmOps(dcgmOps)
 {
     /* Initialize to bad values */
     m_gpuId  = 0xFFFFFFFF;
     m_plugin = plugin;
+    m_handle = handle;
 
     memset(&m_savedState, 0, sizeof(m_savedState));
 }
@@ -62,6 +60,7 @@ int NvvsDevice::SaveState(std::string const &testName, nvvs_device_state_t *save
     savedState->populated = 1;
 
     /* Save compute mode */
+    DcgmSystem dcgmSystem(m_dcgmOps, m_handle);
     dcgmReturn_t ret = dcgmSystem.GetGpuLatestValue(m_gpuId, DCGM_FI_DEV_GPU_COMPUTE_MODE, flags, computeModeVal);
 
     if (ret != DCGM_ST_OK)
@@ -118,14 +117,14 @@ int NvvsDevice::RestoreState(std::string const &testName)
     /* Auto boost clocks */
     if (m_savedState.computeModeSupported && m_savedState.computeMode != afterState.computeMode)
     {
-        DcgmGroup dg;
+        DcgmGroup dg(m_dcgmOps);
         std::stringstream groupName;
         groupName << "restore" << m_gpuId;
-        dg.Init(dcgmHandle.GetHandle(), groupName.str());
+        dg.Init(m_handle, groupName.str());
         dcgmReturn_t ret = dg.AddGpu(m_gpuId);
         if (ret == DCGM_ST_OK)
         {
-            ret = dcgmConfigSet(dcgmHandle.GetHandle(), dg.GetGroupId(), &config, 0);
+            ret = m_dcgmOps->dcgmConfigSet(m_handle, dg.GetGroupId(), &config, 0);
         }
 
         if (ret != DCGM_ST_OK)
@@ -198,9 +197,11 @@ void NvvsDevice::RecordWarning(std::string const &testName, DcgmError const &d, 
 /*****************************************************************************/
 /*****************************************************************************/
 /*****************************************************************************/
-NvvsDeviceList::NvvsDeviceList(Plugin *plugin)
+NvvsDeviceList::NvvsDeviceList(Plugin *plugin, DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t handle)
+    : m_dcgmOps(dcgmOps)
 {
     m_plugin = plugin;
+    m_handle = handle;
 }
 
 /*****************************************************************************/
@@ -225,7 +226,7 @@ int NvvsDeviceList::Init(std::string const &testName, std::vector<unsigned int> 
     {
         unsigned int gpuId = gpuIds[i];
 
-        nvvsDevice = std::make_unique<NvvsDevice>(m_plugin);
+        nvvsDevice = std::make_unique<NvvsDevice>(m_plugin, m_dcgmOps, m_handle);
         int st     = nvvsDevice->Init(testName, gpuId);
         if (st)
         {

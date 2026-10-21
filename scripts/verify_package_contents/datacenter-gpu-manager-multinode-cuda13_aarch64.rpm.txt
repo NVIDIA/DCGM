@@ -1,6 +1,8 @@
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/mnnvbandwidth
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/mnubergemm
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/nvloom_cli
 /usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-multinode-cuda13-<BASEPACKAGEVERSION>
 /usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-multinode-cuda13-<BASEPACKAGEVERSION>/LICENSE

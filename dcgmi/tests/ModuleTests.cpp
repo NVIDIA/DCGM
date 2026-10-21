@@ -16,37 +16,24 @@
 
 #include <catch2/catch_all.hpp>
 
-#define DCGMI_TESTS
-#include "TestHelpers.hpp"
-#include <Module.h>
+#include <CerrCapture.hpp>
+#include <CoutCapture.hpp>
 
+#include <MockDcgmOps.h>
+#include <Module.h>
 #include <dcgm_agent.h>
 #include <dcgm_structs.h>
 #include <tclap/ArgException.h>
 
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace
 {
-struct ModuleApiState
-{
-    dcgmReturn_t denylistReturn = DCGM_ST_OK;
-    dcgmReturn_t statusesReturn = DCGM_ST_OK;
-
-    int denylistCallCount = 0;
-    int statusesCallCount = 0;
-
-    dcgmHandle_t lastHandle          = 0;
-    dcgmModuleId_t lastDenylistId    = DcgmModuleIdCount;
-    dcgmModuleGetStatuses_t statuses = {};
-};
-
-ModuleApiState g_moduleApi;
-
 struct ModuleDenylistTestCase
 {
     std::string_view moduleName;
@@ -87,52 +74,19 @@ public:
     }
 };
 
-void ResetModuleApi()
-{
-    g_moduleApi                  = {};
-    g_moduleApi.lastDenylistId   = DcgmModuleIdCount;
-    g_moduleApi.statuses.version = dcgmModuleGetStatuses_version;
-}
-
-void AddStatus(unsigned int index, dcgmModuleId_t id, dcgmModuleStatus_t status)
+void AddStatus(dcgmModuleGetStatuses_t &statuses, unsigned int index, dcgmModuleId_t id, dcgmModuleStatus_t status)
 {
     REQUIRE(index < DCGM_MODULE_STATUSES_CAPACITY);
-    g_moduleApi.statuses.statuses[index].id     = id;
-    g_moduleApi.statuses.statuses[index].status = status;
-    g_moduleApi.statuses.numStatuses            = std::max(g_moduleApi.statuses.numStatuses, index + 1);
+    statuses.statuses[index].id     = id;
+    statuses.statuses[index].status = status;
+    statuses.numStatuses            = std::max(statuses.numStatuses, index + 1);
 }
 } // namespace
 
-extern "C" dcgmReturn_t dcgmModuleDenylist(dcgmHandle_t dcgmHandle, dcgmModuleId_t moduleId)
-{
-    g_moduleApi.denylistCallCount++;
-    g_moduleApi.lastHandle     = dcgmHandle;
-    g_moduleApi.lastDenylistId = moduleId;
-    return g_moduleApi.denylistReturn;
-}
-
-extern "C" dcgmReturn_t dcgmModuleGetStatuses(dcgmHandle_t dcgmHandle, dcgmModuleGetStatuses_t *moduleStatuses)
-{
-    g_moduleApi.statusesCallCount++;
-    g_moduleApi.lastHandle = dcgmHandle;
-
-    if (moduleStatuses == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (g_moduleApi.statusesReturn != DCGM_ST_OK)
-    {
-        return g_moduleApi.statusesReturn;
-    }
-
-    *moduleStatuses = g_moduleApi.statuses;
-    return DCGM_ST_OK;
-}
-
 TEST_CASE("Module conversion helpers")
 {
-    Module module;
+    DcgmNs::MockDcgmOps mockDcgmOps;
+    Module module(&mockDcgmOps);
 
     SECTION("Known module IDs map to names")
     {
@@ -183,18 +137,19 @@ TEST_CASE("Module conversion helpers")
 
 TEST_CASE("DenylistModule::DoExecuteConnected")
 {
-    ResetModuleApi();
+    DcgmNs::MockDcgmOps mockDcgmOps;
     auto handle = static_cast<dcgmHandle_t>(0x20);
 
     SECTION("Numeric module ID is denylisted")
     {
         CoutCapture capture;
-        TestDenylistModule command("localhost", std::to_string(static_cast<unsigned int>(DcgmModuleIdHealth)), false);
+        TestDenylistModule command(
+            "localhost", std::to_string(static_cast<unsigned int>(DcgmModuleIdHealth)), false, &mockDcgmOps);
 
         CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
-        CHECK(g_moduleApi.denylistCallCount == 1);
-        CHECK(g_moduleApi.lastHandle == handle);
-        CHECK(g_moduleApi.lastDenylistId == DcgmModuleIdHealth);
+        CHECK(mockDcgmOps.m_moduleState.denylistCallCount == 1);
+        CHECK(mockDcgmOps.m_moduleState.lastHandle == handle);
+        CHECK(mockDcgmOps.m_moduleState.lastDenylistId == DcgmModuleIdHealth);
         CHECK(capture.str().find("Denylist Module") != std::string::npos);
         CHECK(capture.str().find("Successfully added module to the denylist Health") != std::string::npos);
     }
@@ -202,10 +157,10 @@ TEST_CASE("DenylistModule::DoExecuteConnected")
     SECTION("Module name is matched case-insensitively")
     {
         CoutCapture capture;
-        TestDenylistModule command("localhost", "pOlIcY", true);
+        TestDenylistModule command("localhost", "pOlIcY", true, &mockDcgmOps);
 
         CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
-        CHECK(g_moduleApi.lastDenylistId == DcgmModuleIdPolicy);
+        CHECK(mockDcgmOps.m_moduleState.lastDenylistId == DcgmModuleIdPolicy);
         CHECK(capture.str().find("Policy") != std::string::npos);
     }
 
@@ -220,61 +175,65 @@ TEST_CASE("DenylistModule::DoExecuteConnected")
         {
             DYNAMIC_SECTION("module name: " << testCase.moduleName)
             {
-                ResetModuleApi();
+                DcgmNs::MockDcgmOps sectionDcgmOps;
                 CoutCapture capture;
-                TestDenylistModule command("localhost", std::string(testCase.moduleName), true);
+                TestDenylistModule command("localhost", std::string(testCase.moduleName), true, &sectionDcgmOps);
 
                 CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
-                CHECK(g_moduleApi.denylistCallCount == 1);
-                CHECK(g_moduleApi.lastHandle == handle);
-                CHECK(g_moduleApi.lastDenylistId == testCase.moduleId);
+                CHECK(sectionDcgmOps.m_moduleState.denylistCallCount == 1);
+                CHECK(sectionDcgmOps.m_moduleState.lastHandle == handle);
+                CHECK(sectionDcgmOps.m_moduleState.lastDenylistId == testCase.moduleId);
             }
         }
     }
 
     SECTION("Unknown module name throws command-line parse exception")
     {
-        TestDenylistModule command("localhost", "not-a-module", false);
+        TestDenylistModule command("localhost", "not-a-module", false, &mockDcgmOps);
 
         CHECK_THROWS_AS(command.RunWithHandle(handle), TCLAP::CmdLineParseException);
-        CHECK(g_moduleApi.denylistCallCount == 0);
+        CHECK(mockDcgmOps.m_moduleState.denylistCallCount == 0);
     }
 
     SECTION("Out-of-range numeric module ID throws command-line parse exception")
     {
-        TestDenylistModule command("localhost", std::to_string(static_cast<unsigned int>(DcgmModuleIdCount)), false);
+        TestDenylistModule command(
+            "localhost", std::to_string(static_cast<unsigned int>(DcgmModuleIdCount)), false, &mockDcgmOps);
 
         CHECK_THROWS_AS(command.RunWithHandle(handle), TCLAP::CmdLineParseException);
-        CHECK(g_moduleApi.denylistCallCount == 0);
+        CHECK(mockDcgmOps.m_moduleState.denylistCallCount == 0);
     }
 
     SECTION("DCGM denylist failure is reported")
     {
         CoutCapture capture;
-        g_moduleApi.denylistReturn = DCGM_ST_IN_USE;
-        TestDenylistModule command("localhost", "Health", false);
+        mockDcgmOps.m_moduleState.denylistReturn = DCGM_ST_IN_USE;
+        TestDenylistModule command("localhost", "Health", false, &mockDcgmOps);
 
         CHECK(command.RunWithHandle(handle) == DCGM_ST_IN_USE);
-        CHECK(g_moduleApi.denylistCallCount == 1);
+        CHECK(mockDcgmOps.m_moduleState.denylistCallCount == 1);
         CHECK(capture.str().find("Could not add module to the denylist Health") != std::string::npos);
     }
 }
 
 TEST_CASE("ListModule::DoExecuteConnected")
 {
-    ResetModuleApi();
+    DcgmNs::MockDcgmOps mockDcgmOps;
     auto handle = static_cast<dcgmHandle_t>(0x21);
 
     SECTION("Lists module statuses")
     {
         CoutCapture capture;
-        AddStatus(0, DcgmModuleIdCore, DcgmModuleStatusLoaded);
-        AddStatus(1, DcgmModuleIdPolicy, DcgmModuleStatusDenylisted);
-        TestListModule command("localhost", false);
+        dcgmModuleGetStatuses_t statuses {};
+        statuses.version = dcgmModuleGetStatuses_version;
+        AddStatus(statuses, 0, DcgmModuleIdCore, DcgmModuleStatusLoaded);
+        AddStatus(statuses, 1, DcgmModuleIdPolicy, DcgmModuleStatusDenylisted);
+        mockDcgmOps.m_moduleState.statuses = statuses;
+        TestListModule command("localhost", false, &mockDcgmOps);
 
         CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
-        CHECK(g_moduleApi.statusesCallCount == 1);
-        CHECK(g_moduleApi.lastHandle == handle);
+        CHECK(mockDcgmOps.m_moduleState.statusesCallCount == 1);
+        CHECK(mockDcgmOps.m_moduleState.lastHandle == handle);
         CHECK(capture.str().find("List Modules") != std::string::npos);
         CHECK(capture.str().find("Core") != std::string::npos);
         CHECK(capture.str().find("Loaded") != std::string::npos);
@@ -285,8 +244,11 @@ TEST_CASE("ListModule::DoExecuteConnected")
     SECTION("JSON output uses returned status data")
     {
         CoutCapture capture;
-        AddStatus(0, DcgmModuleIdSysmon, DcgmModuleStatusPaused);
-        TestListModule command("localhost", true);
+        dcgmModuleGetStatuses_t statuses {};
+        statuses.version = dcgmModuleGetStatuses_version;
+        AddStatus(statuses, 0, DcgmModuleIdSysmon, DcgmModuleStatusPaused);
+        mockDcgmOps.m_moduleState.statuses = statuses;
+        TestListModule command("localhost", true, &mockDcgmOps);
 
         CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
         CHECK(capture.str().find("SysMon") != std::string::npos);
@@ -296,8 +258,11 @@ TEST_CASE("ListModule::DoExecuteConnected")
     SECTION("Invalid module id from DCGM returns generic error")
     {
         CoutCapture capture;
-        AddStatus(0, DcgmModuleIdCount, DcgmModuleStatusLoaded);
-        TestListModule command("localhost", false);
+        dcgmModuleGetStatuses_t statuses {};
+        statuses.version = dcgmModuleGetStatuses_version;
+        AddStatus(statuses, 0, DcgmModuleIdCount, DcgmModuleStatusLoaded);
+        mockDcgmOps.m_moduleState.statuses = statuses;
+        TestListModule command("localhost", false, &mockDcgmOps);
 
         CHECK(command.RunWithHandle(handle) == DCGM_ST_GENERIC_ERROR);
         CHECK(capture.str().find("Could not find module name") != std::string::npos);
@@ -306,8 +271,11 @@ TEST_CASE("ListModule::DoExecuteConnected")
     SECTION("Invalid status from DCGM returns generic error")
     {
         CoutCapture capture;
-        AddStatus(0, DcgmModuleIdCore, static_cast<dcgmModuleStatus_t>(99));
-        TestListModule command("localhost", false);
+        dcgmModuleGetStatuses_t statuses {};
+        statuses.version = dcgmModuleGetStatuses_version;
+        AddStatus(statuses, 0, DcgmModuleIdCore, static_cast<dcgmModuleStatus_t>(99));
+        mockDcgmOps.m_moduleState.statuses = statuses;
+        TestListModule command("localhost", false, &mockDcgmOps);
 
         CHECK(command.RunWithHandle(handle) == DCGM_ST_GENERIC_ERROR);
         CHECK(capture.str().find("Could not find status string") != std::string::npos);
@@ -316,23 +284,23 @@ TEST_CASE("ListModule::DoExecuteConnected")
     SECTION("DCGM status query failure returns generic error")
     {
         CoutCapture capture;
-        g_moduleApi.statusesReturn = DCGM_ST_BADPARAM;
-        TestListModule command("localhost", false);
+        mockDcgmOps.m_moduleState.statusesReturn = DCGM_ST_BADPARAM;
+        TestListModule command("localhost", false, &mockDcgmOps);
 
         CHECK(command.RunWithHandle(handle) == DCGM_ST_GENERIC_ERROR);
-        CHECK(g_moduleApi.statusesCallCount == 1);
+        CHECK(mockDcgmOps.m_moduleState.statusesCallCount == 1);
         CHECK(capture.str().find("List Modules") != std::string::npos);
     }
 }
 
 TEST_CASE("Module command connection failures")
 {
-    ResetModuleApi();
+    DcgmNs::MockDcgmOps mockDcgmOps;
 
     SECTION("Denylist command reports connection failure")
     {
         CerrCapture cerrCapture;
-        TestDenylistModule command("localhost", "Health", false);
+        TestDenylistModule command("localhost", "Health", false, &mockDcgmOps);
 
         CHECK(command.RunConnectionFailure(DCGM_ST_CONNECTION_NOT_VALID) == DCGM_ST_CONNECTION_NOT_VALID);
         CHECK(cerrCapture.str().find("Unable to connect to host engine") != std::string::npos);
@@ -341,7 +309,7 @@ TEST_CASE("Module command connection failures")
     SECTION("List command reports connection failure")
     {
         CerrCapture cerrCapture;
-        TestListModule command("localhost", false);
+        TestListModule command("localhost", false, &mockDcgmOps);
 
         CHECK(command.RunConnectionFailure(DCGM_ST_CONNECTION_NOT_VALID) == DCGM_ST_CONNECTION_NOT_VALID);
         CHECK(cerrCapture.str().find("Unable to connect to host engine") != std::string::npos);

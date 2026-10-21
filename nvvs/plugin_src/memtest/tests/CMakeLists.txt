@@ -20,33 +20,28 @@ add_executable(memtesttests)
 target_sources(memtesttests
     PRIVATE
         MemtestPluginTests.cpp
+        MemoryChunkManagerTests.cpp
         ../Memtest.cpp
         ../memtest_wrapper.cpp
-        ../MemtestWrapper.cpp
         ../MemoryChunkManager.cpp
+        ../../cuda_common/CudaCommon.cpp
 )
 
-target_include_directories(memtesttests PRIVATE ${CUDA12_INCLUDE_DIR})
-target_include_directories(memtesttests PRIVATE ${PROJECT_SOURCE_DIR}/cublas_proxy)
-target_include_directories(memtesttests PRIVATE ..) # include the plugin dir
-target_include_directories(memtesttests PRIVATE ../../include) # include the plugin_src/include dir
-
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
-# NOTE: linking cuda is not allowed for this library. We are using a CUDA stub library instead (testing_cuda_stubs)
-#
 target_link_libraries(memtesttests
     PRIVATE
         nvvs_without_main_objects
+        nvvs_plugins_memtest_interface
         Catch2::Catch2WithMain
-        testing_cuda_stubs
-        testing_cuda_stubs_interface
-        testing_dcgm_cublas_stubs
-        cuda_common_interface
+        mock_cuda_ops
+        mock_cuda_common
+        mock_cublas_ops
+        mock_common
+        mock_dcgm_ops
+        test-utils
 )
 target_link_libraries(memtesttests PUBLIC nvvs_interface)
-target_link_libraries(memtesttests PRIVATE ${YAML_STATIC_LIBS} rt dl)
-target_link_libraries(memtesttests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(memtesttests PRIVATE yaml-cpp::yaml-cpp rt dl)
+target_link_libraries(memtesttests PRIVATE Threads::Threads)
 target_link_libraries(memtesttests PRIVATE sdk_nvml_loader)
 target_link_libraries(memtesttests PRIVATE sdk_nvml_essentials_objects)
 target_link_libraries(memtesttests PUBLIC nvvs_plugins_common_objects)

@@ -251,7 +251,7 @@ def test_dcgm_prof_requires_root_privileges(handle, gpuIds):
         dcgmGroup.Delete()
 
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus()
@@ -1379,11 +1379,16 @@ def test_gpm_cumulative_metrics(handle, gpuIds):
         dcgmSystem.UpdateAllFields(1)
         values = group.samples.GetLatest_v2(fieldGroup)
         sample = values.values[dcgm_fields.DCGM_FE_GPU][gpuId]
-        if not sample[dcgm_fields.DCGM_FI_PROF_SM_CYCLES_ELAPSED_TOTAL][0].isBlank:
+        if all(not sample[field_id][0].isBlank for field_id in field_ids):
             break
         time.sleep(0.1)
     else:
-        raise AssertionError("Cumulative metrics should have been updated")
+        missing_fields = [
+            field_id for field_id in field_ids if sample[field_id][0].isBlank
+        ]
+        raise AssertionError(
+            f"Cumulative metrics should have been updated. "
+            f"Missing fields: {missing_fields}")
 
     for field_id, expected in all_fields.items():
         val = sample[field_id][0]

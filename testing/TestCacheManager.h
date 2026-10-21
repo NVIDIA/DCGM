@@ -21,6 +21,90 @@
 #include "dcgm_fields.h"
 #include "timelib.h"
 
+/**
+ * Test adapter that exposes cache-manager helpers used by the legacy cache tests.
+ */
+class TestDcgmCacheManager : public DcgmCacheManager
+{
+public:
+    using DcgmCacheManager::AddFakeGpu;
+    using DcgmCacheManager::AddFieldWatch;
+    using DcgmCacheManager::AddMetaGroupWatchedField;
+    using DcgmCacheManager::AppendEntityBlob;
+    using DcgmCacheManager::AppendEntityDouble;
+    using DcgmCacheManager::AppendEntityInt64;
+    using DcgmCacheManager::AppendEntityString;
+    using DcgmCacheManager::AppendSamples;
+    using DcgmCacheManager::AreAllGpuIdsSameSku;
+    using DcgmCacheManager::AreAnyGpusInHostVGPUMode;
+    using DcgmCacheManager::CreateAllNvlinksP2PStatus;
+    using DcgmCacheManager::EmptyCache;
+    using DcgmCacheManager::EntityKeySupportsGpm;
+    using DcgmCacheManager::EntityPairSupportsGpm;
+    using DcgmCacheManager::FilterActiveEntities;
+    using DcgmCacheManager::FreeSamples;
+    using DcgmCacheManager::GetAllEntitiesOfEntityGroup;
+    using DcgmCacheManager::GetAllGpuInfo;
+    using DcgmCacheManager::GetCacheManagerFieldInfo;
+    using DcgmCacheManager::GetComputeInstanceEntityId;
+    using DcgmCacheManager::GetCudaVersion;
+    using DcgmCacheManager::GetDriverVersion;
+    using DcgmCacheManager::GetEntityNvLinkLinkStatus;
+    using DcgmCacheManager::GetEntityStatus;
+    using DcgmCacheManager::GetEntityWatchInfo;
+    using DcgmCacheManager::GetEntityWatchInfoSnapshot;
+    using DcgmCacheManager::GetFp64SummaryData;
+    using DcgmCacheManager::GetGlobalWatchInfo;
+    using DcgmCacheManager::GetGpuArch;
+    using DcgmCacheManager::GetGpuBrand;
+    using DcgmCacheManager::GetGpuCount;
+    using DcgmCacheManager::GetGpuExcludeList;
+    using DcgmCacheManager::GetGpuIdForEntity;
+    using DcgmCacheManager::GetGpuIds;
+    using DcgmCacheManager::GetGpuStatus;
+    using DcgmCacheManager::GetInstanceEntityId;
+    using DcgmCacheManager::GetInstanceProfile;
+    using DcgmCacheManager::GetInt64SummaryData;
+    using DcgmCacheManager::GetIsValidEntityId;
+    using DcgmCacheManager::GetLatestProcessInfo;
+    using DcgmCacheManager::GetLatestSample;
+    using DcgmCacheManager::GetMigComputeInstancePopulation;
+    using DcgmCacheManager::GetMigGpuPopulation;
+    using DcgmCacheManager::GetMigIndicesForEntity;
+    using DcgmCacheManager::GetMigInstancePopulation;
+    using DcgmCacheManager::GetMultipleLatestLiveSamples;
+    using DcgmCacheManager::GetMultipleLatestSamples;
+    using DcgmCacheManager::GetProfModuleServicedEntities;
+    using DcgmCacheManager::GetRuntimeStats;
+    using DcgmCacheManager::GetSamples;
+    using DcgmCacheManager::GetUniquePidLists;
+    using DcgmCacheManager::GetUniquePidUtilLists;
+    using DcgmCacheManager::GetValidFieldIds;
+    using DcgmCacheManager::GetWorkloadPowerProfilesInfo;
+    using DcgmCacheManager::GpuIdToNvmlIndex;
+    using DcgmCacheManager::InjectSamples;
+    using DcgmCacheManager::IsGpuAllowlisted;
+    using DcgmCacheManager::ManageVgpuList;
+    using DcgmCacheManager::NvmlIndexToGpuId;
+    using DcgmCacheManager::OnConnectionRemove;
+    using DcgmCacheManager::Pause;
+    using DcgmCacheManager::PopulateMigHierarchy;
+    using DcgmCacheManager::PopulateNvLinkLinkStatus;
+    using DcgmCacheManager::RecordBindUnbindEvent;
+    using DcgmCacheManager::RemoveFieldWatch;
+    using DcgmCacheManager::RemoveMetaGroupWatchedField;
+    using DcgmCacheManager::Resume;
+    using DcgmCacheManager::SelectGpusByTopology;
+    using DcgmCacheManager::SetEntityNvLinkLinkState;
+    using DcgmCacheManager::SetGpuNvLinkLinkState;
+    using DcgmCacheManager::ShouldSkipDriverCalls;
+    using DcgmCacheManager::Start;
+    using DcgmCacheManager::SubscribeForEvent;
+    using DcgmCacheManager::UpdateAllFields;
+    using DcgmCacheManager::UpdateFieldWatch;
+    using DcgmCacheManager::UpdateWatchFromWatchers;
+};
+
 /*****************************************************************************/
 class TestCacheManager : public TestDcgmModule
 {
@@ -87,8 +171,8 @@ private:
     int TestPublicMethodRaceAndDeadlock();
 
     // Helper functions for field group testing
-    int TestSingleFieldNoDataSample(unsigned short fieldId, DcgmCacheManager &cacheManager);
-    int TestSingleFieldNoDataFvBuffer(unsigned short fieldId, DcgmCacheManager &cacheManager);
+    int TestSingleFieldNoDataSample(unsigned short fieldId, TestDcgmCacheManager &cacheManager);
+    int TestSingleFieldNoDataFvBuffer(unsigned short fieldId, TestDcgmCacheManager &cacheManager);
 
     /*************************************************************************/
     /*
@@ -97,7 +181,7 @@ private:
      *
      */
 
-    int InjectSampleHelper(DcgmCacheManager *cacheManager,
+    int InjectSampleHelper(TestDcgmCacheManager *cacheManager,
                            dcgm_field_meta_p fieldMeta,
                            dcgm_field_entity_group_t entityGroupId,
                            dcgm_field_eid_t entityId,
@@ -108,7 +192,7 @@ private:
      * Helper for injecting user provided sample
      *
      */
-    int InjectUserProvidedSampleHelper(DcgmCacheManager *cacheManager,
+    int InjectUserProvidedSampleHelper(TestDcgmCacheManager *cacheManager,
                                        dcgmcm_sample_t sample,
                                        dcgm_field_meta_p fieldMeta,
                                        unsigned int gpuId);
@@ -117,7 +201,7 @@ private:
     /*
      * Helper for adding a watch on all GPUs for power usage
      */
-    int AddPowerUsageWatchAllGpusHelper(DcgmCacheManager *cacheManager);
+    int AddPowerUsageWatchAllGpusHelper(TestDcgmCacheManager *cacheManager);
 
     /*************************************************************************/
     /*
@@ -154,13 +238,14 @@ private:
     /*
      * Helper to check if all entities are in the OK status
      */
-    int CheckAllEntityStatusesAreOk(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities);
+    int CheckAllEntityStatusesAreOk(TestDcgmCacheManager &cacheManager,
+                                    std::vector<dcgmGroupEntityPair_t> const &entities);
 
     /*************************************************************************/
     /*
      * Helper to check if all fields are watched
      */
-    int CheckFieldsAreWatched(DcgmCacheManager &cacheManager,
+    int CheckFieldsAreWatched(TestDcgmCacheManager &cacheManager,
                               std::vector<unsigned short> const &fieldIds,
                               std::vector<bool> const &watchedFields);
 

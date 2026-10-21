@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,6 @@ target_sources(mock_nvvs PRIVATE
     MockSoftwarePluginFramework.h)
 
 target_include_directories(mock_nvvs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(mock_nvvs PUBLIC mock_common nvvs_interface)
+target_link_libraries(mock_nvvs PUBLIC mock_common mock_dcgm_ops nvvs_interface)
 
 add_subdirectory(tests)

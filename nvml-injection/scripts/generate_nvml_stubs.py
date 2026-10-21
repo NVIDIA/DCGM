@@ -824,9 +824,14 @@ def write_function(stub_file, funcinfo, all_functypes):
         for i in range(len(arguments)):
             argument = arguments[i]
             if is_pointer_type(arg_types[i]):
-                print_body_line(
-                    "preparedValues.push_back(InjectionArgument(%s));" %
-                    argument.strip(), stub_file, 1)
+                if arg_types[i] == "void *":
+                    print_body_line(
+                        "preparedValues.push_back(InjectionArgument(static_cast<char *>(%s)));" %
+                        argument.strip(), stub_file, 1)
+                else:
+                    print_body_line(
+                        "preparedValues.push_back(InjectionArgument(%s));" %
+                        argument.strip(), stub_file, 1)
             else:
                 if arg_types[i] != "unsigned int" or not arg_is_count(
                         argument):
@@ -1259,7 +1264,7 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
         for member_type, member_name in member_list:
             if member_type == "nvmlVgpuSchedulerParams_t" or member_type == "nvmlVgpuSchedulerSetParams_t":
                 print_body_line(
-                    f'NVML_LOG_ERR("{member_type} conatins union, and cannot compare now. May cause problems...");',
+                    f'NVML_LOG_ERR("{member_type} contains union, and cannot compare now. May cause problems...");',
                     out_file,
                     0)
             elif "union nvmlPRMTLV_v1_t::" in member_type:
@@ -1348,6 +1353,16 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
                 print_body_line("{", out_file, 0)
                 print_body_line(
                     f"return *a.{member_name} < *b.{member_name};", out_file, 1)
+                print_body_line("}", out_file, 0)
+            elif member_type == "void *":
+                print_generator_source_info(out_file, 1)
+                print_body_line(
+                    f"if (a.{member_name} != b.{member_name})", out_file, 0)
+                print_body_line("{", out_file, 0)
+                print_body_line(
+                    f"return std::less<void const *>{{}}(a.{member_name}, b.{member_name}) ? -1 : 1;",
+                    out_file,
+                    1)
                 print_body_line("}", out_file, 0)
             elif is_pointer_type(member_type):
                 # call the appropriate compare function to compare for member
@@ -1491,7 +1506,7 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
                 'for (unsigned i = 0; i < m_arrLen; ++i)', out_file, 4)
             print_body_line('{', out_file, 4)
             print_body_line(
-                f'if (auto ret = {compare_func}(*m_value.{variable_name_ptr}, *other.m_value.{variable_name_ptr}); ret)',
+                f'if (auto ret = {compare_func}(m_value.{variable_name_ptr}[i], other.m_value.{variable_name_ptr}[i]); ret)',
                 out_file,
                 5)
             print_body_line('{', out_file, 5)
@@ -1566,7 +1581,8 @@ def write_injection_argument_cpp(output_dir, struct_with_member, all_enum):
         injectionCpp.write('#include <%s>\n' % INJECTION_ARGUMENT_HEADER)
         injectionCpp.write('#include "NvmlLogging.h"\n')
         injectionCpp.write('#include <limits.h>\n')
-        injectionCpp.write('#include <cstring>\n\n\n')
+        injectionCpp.write('#include <cstring>\n')
+        injectionCpp.write('#include <functional>\n\n\n')
 
         print_generator_source_info(injectionCpp, 0)
         injectionCpp.write('namespace\n{\n\n')
@@ -1730,11 +1746,77 @@ def get_handlers():
 
 
 def get_const_type():
-    return ["nvmlGpuInstancePlacement_t", "char"]
+    return ["nvmlGpuInstancePlacement_t", "nvmlGpuOperationalEventConfig_v1_t", "char"]
 
 
 def get_not_well_defined_type():
     return ["nvmlGpmSample_t", "nvmlEventSet_t"]
+
+
+def get_dcgm_ver_structs():
+    return {
+        "nvmlEventSetGetContextCount_v1_t": [
+            ("count", "c_uint"),
+        ],
+        "nvmlEventSetGetContextInfo_v1_t": [
+            ("index", "c_uint"),
+            ("nvmlGpuOperationalEventContextType", "c_uint"),
+            ("sourceEventContextType", "c_uint"),
+            ("dataSize", "c_uint"),
+            ("dataFormatVersion", "c_ushort"),
+        ],
+        "nvmlEventSetGetContextData_v1_t": [
+            ("data", "c_void_p"),
+            ("index", "c_uint"),
+            ("dataSize", "c_uint"),
+        ],
+        "nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t": [
+            ("index", "c_uint"),
+            ("xidCode", "c_uint"),
+        ],
+        "nvmlGpuOperationalEventConfig_v1_t": [
+            ("uuid", "c_char * NVML_DEVICE_UUID_V2_BUFFER_SIZE"),
+            ("minLogLevel", "c_uint"),
+            ("minSeverity", "c_uint"),
+        ],
+        "nvmlEventSetWait_v3_t": [
+            ("timeoutMs", "c_uint"),
+            ("dataType", "c_uint"),
+            ("uuid", "c_char * NVML_DEVICE_UUID_V2_BUFFER_SIZE"),
+            ("sourceModule", "c_char * 16"),
+            ("eventType", "c_ulonglong"),
+            ("eventData", "c_ulonglong"),
+            ("groupCursor", "c_ulonglong"),
+            ("instanceId", "c_ulonglong"),
+            ("timestampUsec", "c_ulonglong"),
+            ("traceId", "c_ulonglong"),
+            ("gpuInstanceId", "c_uint"),
+            ("computeInstanceId", "c_uint"),
+            ("severity", "c_uint"),
+            ("categoryId", "c_uint"),
+            ("moduleEventCode", "c_uint"),
+            ("scope", "c_uint"),
+            ("originator", "c_uint"),
+            ("moduleInstance", "c_uint"),
+            ("chipletId", "c_uint"),
+            ("logLevel", "c_uint"),
+            ("attributes", "c_uint"),
+            ("groupCperSize", "c_uint"),
+            ("groupAttributes", "c_uint"),
+            ("groupSize", "c_ubyte"),
+            ("groupIndex", "c_ubyte"),
+        ],
+    }
+
+
+def write_dcgm_ver_struct(out_file, struct_name, fields):
+    print_body_line(
+        f"class c_{struct_name}_dcgm_ver(Structure):", out_file, 0)
+    print_body_line("_fields_ = [", out_file, 1)
+    for field_name, field_type in fields:
+        print_body_line(
+            f'(\"{field_name}\", {field_type}),', out_file, 2)
+    print_body_line("]\n", out_file, 1)
 
 
 def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
@@ -1837,6 +1919,11 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("(\"bUnrepairableMemory\", c_uint),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
+        dcgm_ver_structs = get_dcgm_ver_structs()
+        for struct_name, fields in dcgm_ver_structs.items():
+            write_dcgm_ver_struct(out_file, struct_name, fields)
+
+        print_body_line("# autopep8: off", out_file, 0)
         print_body_line('class c_simpleValue_t(Union):', out_file, 0)
         print_body_line("_fields_ = [", out_file, 1)
         for struct_name, _ in struct_with_member.items():
@@ -1845,7 +1932,7 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
             print_body_line(
                 f"(\"{variable_name_ptr}\", c_void_p),", out_file, 2)
             if is_pynvml_missing_struct(struct_name):
-                # we don't know the structure declarition now, comment out and
+                # we don't know the structure declaration now, comment out and
                 # wait for PyNVML updates.
                 print_body_line(
                     f"# (\"{variable_name}\", c_{struct_name}),", out_file, 2)
@@ -1875,6 +1962,10 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
             elif struct_name == "nvmlGpuFabricInfoV_t":
                 # nvmlGpuFabricInfoV_t is wrong in PyNVML, use our own
                 # definition
+                print_body_line(
+                    f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
+            elif struct_name in dcgm_ver_structs:
+                # These structures are not available in older PyNVML versions.
                 print_body_line(
                     f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
             elif struct_name == "nvmlPlatformInfo_t":
@@ -1963,7 +2054,8 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
             name, name_ptr = get_struct_variable_name(t)
             print_body_line(f"(\"{name}\", c_void_p),", out_file, 2)
             print_body_line(f"(\"{name_ptr}\", c_void_p),", out_file, 2)
-        print_body_line("]\n", out_file, 1)
+        print_body_line("]", out_file, 1)
+        print_body_line("# autopep8: on\n", out_file, 0)
 
         print_body_line('class c_injectionArgType_t(c_int):', out_file, 0)
         index = 0
@@ -2007,7 +2099,7 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("f\"a definition for {str(e)}.\")", out_file, 1)
         print_body_line("nvml_injection_usable = False", out_file, 0)
 
-    logging.info(f"{INJECTION_STRUCTS_PY_NAME} genereted")
+    logging.info(f"{INJECTION_STRUCTS_PY_NAME} generated")
 
 
 def write_injection_structs_header(struct_with_member, output_dir, all_enum):
@@ -2071,7 +2163,7 @@ def write_injection_structs_header(struct_with_member, output_dir, all_enum):
         print_body_line('injectionArgType_t type;', injectionStructs, 0)
         injectionStructs.write('} injectNvmlVal_t;\n\n')
 
-    logging.info(f"{INJECTION_STRUCTS_PATH} genereted")
+    logging.info(f"{INJECTION_STRUCTS_PATH} generated")
 
     return
 
@@ -2419,7 +2511,7 @@ def write_injection_argument_header(output_dir, struct_with_member, all_enum):
 
         injectionHeader.write('};\n')
 
-    logging.info(f"{INJECTION_ARGUMENT_PATH} genereted")
+    logging.info(f"{INJECTION_ARGUMENT_PATH} generated")
 
 
 def write_key_file(output_dir):
@@ -2432,7 +2524,7 @@ def write_key_file(output_dir):
                 "const char *INJECTION_%s_KEY = \"%s\"; // Function name(s): %s\n" %
                 (key.upper(), key, g_key_to_function[key]))
 
-    logging.info(f"{KEY_LIST_PATH} genereted")
+    logging.info(f"{KEY_LIST_PATH} generated")
 
     key_header_path = "%s/%s" % (output_dir, KEY_LIST_HEADER_PATH)
     with open(key_header_path, 'w') as key_header:
@@ -2442,7 +2534,7 @@ def write_key_file(output_dir):
             key_header.write(
                 "extern const char *INJECTION_%s_KEY;\n" % (key.upper()))
 
-    logging.info(f"{KEY_LIST_HEADER_PATH} genereted")
+    logging.info(f"{KEY_LIST_HEADER_PATH} generated")
 
 
 def write_linux_defs(output_dir, func_dict):
@@ -2482,7 +2574,7 @@ def write_linux_defs(output_dir, func_dict):
         print_body_line('};', linux_defs_file, 1)
         linux_defs_file.write('};')
 
-    logging.info(f"{LINUX_DEFS_PATH} genereted")
+    logging.info(f"{LINUX_DEFS_PATH} generated")
 
 
 def get_entry_points_all_functions(entry_points_contents):
@@ -2546,7 +2638,7 @@ def parse_entry_points_contents(contents, output_dir):
         stub_file.write("\n#pragma GCC diagnostic pop\n\n")
         stub_file.write('// END nvml_generated_stubs')
 
-    logging.info(f"{STUB_PATH} genereted")
+    logging.info(f"{STUB_PATH} generated")
 
     write_key_file(output_dir)
     write_linux_defs(output_dir, all_functions.func_dict)
@@ -2575,7 +2667,7 @@ def separate_struct_by_generable(struct_with_member, all_enum):
         struct_with_member)
     struct_cannot_gen_parsers = {}
     # The following types are not used in entry_point.h. In this case,
-    # InjectionArgument.h does not have relevent constructor.
+    # InjectionArgument.h does not have relevant constructor.
     struct_cannot_gen_parsers["nvmlBridgeChipInfo_t"] = True
     struct_cannot_gen_parsers["nvmlClkMonFaultInfo_t"] = True
     struct_cannot_gen_parsers["nvmlVgpuLicenseExpiry_t"] = True
@@ -3342,7 +3434,7 @@ def get_cannot_write_deserializer_struct(struct_with_member):
             if "union " in member_type:
                 cannot_write_deserializer_struct[struct_name] = True
                 continue
-            if "unnamed struct" in member_type:
+            if "unnamed struct" in member_type or "struct (unnamed" in member_type:
                 cannot_write_deserializer_struct[struct_name] = True
                 continue
             if "nvmlDevice_t" == member_type:
@@ -3390,7 +3482,8 @@ def write_deserializer_definition(
             f"{struct_name} *{func_name}(const YAML::Node &node)\n{{\n")
         variable_name = lowercase_first_letter(struct_name[4:-2])
         print_body_line(
-            f"auto *{variable_name} = reinterpret_cast<{struct_name} *>(malloc(sizeof({struct_name})));",
+            f"std::unique_ptr<{struct_name}, decltype(&free)> {variable_name}"
+            f"(reinterpret_cast<{struct_name} *>(malloc(sizeof({struct_name}))), free);",
             out_file,
             0)
         print_body_line(f"if ({variable_name} == nullptr)", out_file, 0)
@@ -3398,10 +3491,11 @@ def write_deserializer_definition(
         print_body_line('return nullptr;', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            f'memset({variable_name}, 0, sizeof(*{variable_name}));',
+            f'memset({variable_name}.get(), 0, sizeof(*{variable_name}));',
             out_file,
             0)
         tmp_cnt = 0
+        pointer_member_guards = []
         for member_type, name in member_list:
             if struct_name == "nvmlAccountingStats_t" and name == "reserved":
                 continue
@@ -3415,10 +3509,17 @@ def write_deserializer_definition(
             # nvmlProcessInfo_t
             if struct_name == "nvmlProcessInfo_t" and name == "usedGpuCcProtectedMemory":
                 continue
+            if is_basic_ptr_type(member_type):
+                guard_variable = f"{name}Guard"
+                pointer_member_guards.append((guard_variable, name))
+                print_body_line(
+                    f'std::unique_ptr<{remove_ptr_if_any(member_type)}, decltype(&free)> {guard_variable}(nullptr, free);',
+                    out_file,
+                    0)
             print_body_line(f'if (node["{name}"])', out_file, 0)
             print_body_line('{', out_file, 0)
             if is_basic_type(member_type):
-                # basic type uses build-in yaml-cpp convertion method
+                # basic type uses built-in yaml-cpp conversion method
                 print_generator_source_info(out_file, 2)
                 print_body_line(
                     f'{variable_name}->{name} = node["{name}"].as<{member_type}>();',
@@ -3429,26 +3530,30 @@ def write_deserializer_definition(
                 # a separate struct member.
                 type_name = remove_ptr_if_any(member_type)
                 print_generator_source_info(out_file, 2)
-                tmp_varialbe = f"tmp{tmp_cnt}"
+                tmp_variable = f"tmp{tmp_cnt}"
                 tmp_cnt += 1
                 print_body_line(
-                    f'auto const {tmp_varialbe} = node["{name}"].as<std::vector<{type_name}>>();',
+                    f'auto const {tmp_variable} = node["{name}"].as<std::vector<{type_name}>>();',
                     out_file,
                     1)
                 print_body_line(
-                    f'{variable_name}->{name} = reinterpret_cast<{type_name} *>(malloc(sizeof({type_name}) * {tmp_varialbe}.size()));',
+                    f'{guard_variable} = std::unique_ptr<{type_name}, decltype(&free)>(reinterpret_cast<{type_name} *>(malloc(sizeof({type_name}) * {tmp_variable}.size())), free);',
                     out_file,
                     1)
                 print_body_line(
-                    f'for (unsigned int ii = 0; ii < {tmp_varialbe}.size(); ++ii)',
+                    f'{variable_name}->{name} = {guard_variable}.get();',
+                    out_file,
+                    1)
+                print_body_line(
+                    f'for (unsigned int ii = 0; ii < {tmp_variable}.size(); ++ii)',
                     out_file,
                     1)
                 print_body_line('{', out_file, 1)
                 print_body_line(
-                    f'{variable_name}->{name}[ii] = {tmp_varialbe}[ii];', out_file, 2)
+                    f'{variable_name}->{name}[ii] = {tmp_variable}[ii];', out_file, 2)
                 print_body_line('}', out_file, 1)
             elif is_enum_type(member_type, all_enum):
-                # enum type uses build-in yaml-cpp convertion method to covert
+                # enum type uses built-in yaml-cpp conversion method to convert
                 # to int and cast to enum type
                 print_generator_source_info(out_file, 2)
                 print_body_line(
@@ -3481,17 +3586,18 @@ def write_deserializer_definition(
                 type_name = member_type.split("[")[0]
                 print_generator_source_info(out_file, 2)
                 if is_basic_type(type_name):
-                    tmp_varialbe = f"tmp{tmp_cnt}"
-                    tmp_cnt += 1
                     print_body_line(
-                        f'auto const {tmp_varialbe} = node["{name}"].as<std::vector<{type_name}>>();',
+                        f'auto const size = sizeof({variable_name}->{name}) / sizeof({variable_name}->{name}[0]);',
                         out_file,
                         1)
+                    print_body_line('unsigned int ii = 0;', out_file, 1)
                     print_body_line(
-                        f'for (unsigned int ii = 0; ii < {tmp_varialbe}.size(); ++ii)', out_file, 1)
+                        f'for (YAML::const_iterator it = node["{name}"].begin(); it != node["{name}"].end() && ii < size; ++it)',
+                        out_file,
+                        1)
                     print_body_line('{', out_file, 1)
                     print_body_line(
-                        f'{variable_name}->{name}[ii] = {tmp_varialbe}[ii];', out_file, 2)
+                        f'{variable_name}->{name}[ii++] = it->as<{type_name}>();', out_file, 2)
                     print_body_line('}', out_file, 1)
                 else:
                     print_body_line('int idx = 0;', out_file, 1)
@@ -3504,18 +3610,17 @@ def write_deserializer_definition(
                         out_file,
                         1)
                     print_body_line('{', out_file, 1)
-                    deserialzier_name = struct_name_to_deserializer_name(
-                        type_name)
-                    print_body_line(
-                        f'auto *tmp = {deserialzier_name}(*it);', out_file, 2)
-                    print_body_line('if (!tmp)', out_file, 2)
-                    print_body_line('{', out_file, 2)
-                    print_body_line(f'free({variable_name});', out_file, 3)
-                    print_body_line('return nullptr;', out_file, 3)
-                    print_body_line('}', out_file, 2)
                     print_body_line('if (idx >= size)', out_file, 2)
                     print_body_line('{', out_file, 2)
                     print_body_line('break;', out_file, 3)
+                    print_body_line('}', out_file, 2)
+                    deserializer_name = struct_name_to_deserializer_name(
+                        type_name)
+                    print_body_line(
+                        f'auto *tmp = {deserializer_name}(*it);', out_file, 2)
+                    print_body_line('if (!tmp)', out_file, 2)
+                    print_body_line('{', out_file, 2)
+                    print_body_line('return nullptr;', out_file, 3)
                     print_body_line('}', out_file, 2)
                     print_body_line(
                         f'std::memcpy(&{variable_name}->{name}[idx++], tmp, sizeof({type_name}));',
@@ -3525,8 +3630,8 @@ def write_deserializer_definition(
                     print_body_line('}', out_file, 1)
             elif is_pointer_type(member_type):
                 type_name = remove_ptr_if_any(member_type)
-                deserialzier_name = struct_name_to_deserializer_name(type_name)
-                tmp_varialbe = f"tmp{tmp_cnt}"
+                deserializer_name = struct_name_to_deserializer_name(type_name)
+                tmp_variable = f"tmp{tmp_cnt}"
                 tmp_cnt += 1
                 print_generator_source_info(out_file, 2)
                 if type_name in cannot_write_deserializer_struct or type_name not in struct_with_member:
@@ -3536,24 +3641,23 @@ def write_deserializer_definition(
                         1)
                 else:
                     print_body_line(
-                        f'auto *{tmp_varialbe} = {deserialzier_name}(node["{name}"]);', out_file, 1)
-                    print_body_line(f'if (!{tmp_varialbe})', out_file, 1)
+                        f'auto *{tmp_variable} = {deserializer_name}(node["{name}"]);', out_file, 1)
+                    print_body_line(f'if (!{tmp_variable})', out_file, 1)
                     print_body_line('{', out_file, 1)
-                    print_body_line(f'free({variable_name});', out_file, 2)
                     print_body_line('return nullptr;', out_file, 2)
                     print_body_line('}', out_file, 1)
                     print_body_line(
-                        f'std::memcpy({variable_name}->{name}, {tmp_varialbe}, sizeof({type_name}));',
+                        f'std::memcpy({variable_name}->{name}, {tmp_variable}, sizeof({type_name}));',
                         out_file,
                         1)
-                    print_body_line(f'free({tmp_varialbe});', out_file, 1)
+                    print_body_line(f'free({tmp_variable});', out_file, 1)
             else:
                 # custom type
                 # we call corresponding deserializer and memcpy the result to
                 # our struct
-                deserialzier_name = struct_name_to_deserializer_name(
+                deserializer_name = struct_name_to_deserializer_name(
                     member_type)
-                tmp_varialbe = f"tmp{tmp_cnt}"
+                tmp_variable = f"tmp{tmp_cnt}"
                 tmp_cnt += 1
                 print_generator_source_info(out_file, 2)
                 if member_type in cannot_write_deserializer_struct or member_type not in struct_with_member:
@@ -3563,17 +3667,16 @@ def write_deserializer_definition(
                         1)
                 else:
                     print_body_line(
-                        f'auto *{tmp_varialbe} = {deserialzier_name}(node["{name}"]);', out_file, 1)
-                    print_body_line(f'if (!{tmp_varialbe})', out_file, 1)
+                        f'auto *{tmp_variable} = {deserializer_name}(node["{name}"]);', out_file, 1)
+                    print_body_line(f'if (!{tmp_variable})', out_file, 1)
                     print_body_line('{', out_file, 1)
-                    print_body_line(f'free({variable_name});', out_file, 2)
                     print_body_line('return nullptr;', out_file, 2)
                     print_body_line('}', out_file, 1)
                     print_body_line(
-                        f'std::memcpy(&{variable_name}->{name}, {tmp_varialbe}, sizeof({member_type}));',
+                        f'std::memcpy(&{variable_name}->{name}, {tmp_variable}, sizeof({member_type}));',
                         out_file,
                         1)
-                    print_body_line(f'free({tmp_varialbe});', out_file, 1)
+                    print_body_line(f'free({tmp_variable});', out_file, 1)
             print_body_line('}', out_file, 0)
             # PyNVML will return function not found in
             # nvmlDeviceGetMemoryInfo_v2
@@ -3587,13 +3690,16 @@ def write_deserializer_definition(
                 out_file,
                 1)
             print_body_line('}', out_file, 0)
-        print_body_line(f'return {variable_name};', out_file, 0)
+        for guard_variable, member_name in pointer_member_guards:
+            print_body_line(
+                f'[[maybe_unused]] auto *{member_name} = {guard_variable}.release();', out_file, 0)
+        print_body_line(f'return {variable_name}.release();', out_file, 0)
         out_file.write("}\n\n")
 
 
 def write_basic_type_parser(out_file):
     print_generator_source_info(out_file, 0)
-    out_file.write("template <typename underlyType, typename resultType>\n")
+    out_file.write("template <typename underlyingType, typename resultType>\n")
     out_file.write(
         "std::optional<NvmlFuncReturn> BasicTypeParser(const YAML::Node &node)\n{\n")
     print_body_line("if (!node || !node[\"FunctionReturn\"])", out_file, 0)
@@ -3609,7 +3715,7 @@ def write_basic_type_parser(out_file):
     print_body_line('return NvmlFuncReturn(ret);', out_file, 1)
     print_body_line('}', out_file, 0)
     print_body_line(
-        'auto value = static_cast<resultType>(node["ReturnValue"].as<underlyType>());',
+        'auto value = static_cast<resultType>(node["ReturnValue"].as<underlyingType>());',
         out_file,
         0)
     print_body_line(
@@ -3619,7 +3725,7 @@ def write_basic_type_parser(out_file):
 
 def write_basic_key_type_parser(out_file):
     print_generator_source_info(out_file, 0)
-    out_file.write("template <typename underlyType, typename resultType>\n")
+    out_file.write("template <typename underlyingType, typename resultType>\n")
     out_file.write(
         "std::optional<InjectionArgument> BasicKeyTypeParser(const YAML::Node &node)\n{\n")
     print_body_line("if (!node)", out_file, 0)
@@ -3627,7 +3733,7 @@ def write_basic_key_type_parser(out_file):
     print_body_line('return std::nullopt;', out_file, 1)
     print_body_line('}', out_file, 0)
     print_body_line(
-        'return static_cast<resultType>(node.as<underlyType>());', out_file, 0)
+        'return static_cast<resultType>(node.as<underlyingType>());', out_file, 0)
     out_file.write("}\n\n")
 
 # some functions only have return without attribute (e.g.
@@ -3681,9 +3787,9 @@ def write_known_struct_parser(
         print_body_line('{', out_file, 0)
         print_body_line('return NvmlFuncReturn(ret);', out_file, 1)
         print_body_line('}', out_file, 0)
-        derserializer_name = struct_name_to_deserializer_name(struct_name)
+        deserializer_name = struct_name_to_deserializer_name(struct_name)
         print_body_line(
-            f"auto *{variable_name} = {derserializer_name}(node[\"ReturnValue\"]);",
+            f"auto *{variable_name} = {deserializer_name}(node[\"ReturnValue\"]);",
             out_file,
             0)
         print_body_line(f"if ({variable_name} == nullptr)", out_file, 0)
@@ -3763,9 +3869,10 @@ def write_array_funcs_parser(
             0)
         print_body_line('unsigned int idx = 0;', out_file, 0)
         print_body_line(
-            f'auto *valPtr = reinterpret_cast<{parameters[target_idx].type}>'
+            f'std::unique_ptr<{remove_ptr_if_any(parameters[target_idx].type)}, decltype(&free)> valPtr'
+            f'(reinterpret_cast<{parameters[target_idx].type}>'
             f'(malloc(sizeof({remove_ptr_if_any(parameters[target_idx].type)}) '
-            f'* size));',
+            f'* size)), free);',
             out_file,
             0)
         print_body_line(
@@ -3774,19 +3881,19 @@ def write_array_funcs_parser(
             0)
         print_body_line('{', out_file, 0)
         if is_basic_ptr_type(parameters[target_idx].type):
-            # basic type uses build-in yaml-cpp convertion
+            # basic type uses built-in yaml-cpp conversion
             print_generator_source_info(out_file, 2)
             print_body_line(
-                f'valPtr[idx++] = it->as<'
+                f'valPtr.get()[idx++] = it->as<'
                 f'{remove_ptr_if_any(parameters[target_idx].type)}>();',
                 out_file,
                 1)
-        elif is_enum_type(remove_ptr_if_any(parameters[target_idx].type, all_enum)):
-            # enum type uses build-in yaml-cpp int convertion and cast to
+        elif is_enum_type(remove_ptr_if_any(parameters[target_idx].type), all_enum):
+            # enum type uses built-in yaml-cpp int conversion and cast to
             # corresponding enum
             print_generator_source_info(out_file, 2)
             print_body_line(
-                f'valPtr[idx++] = static_cast<'
+                f'valPtr.get()[idx++] = static_cast<'
                 f'{remove_ptr_if_any(parameters[target_idx].type)}>'
                 f'(it->as<int>());',
                 out_file,
@@ -3800,11 +3907,10 @@ def write_array_funcs_parser(
                 f'auto *tmp = {deserializer_name}(*it);', out_file, 1)
             print_body_line('if (!tmp)', out_file, 1)
             print_body_line('{', out_file, 1)
-            print_body_line('free(valPtr);', out_file, 2)
             print_body_line('return std::nullopt;', out_file, 2)
             print_body_line('}', out_file, 1)
             print_body_line(
-                f'std::memcpy(&valPtr[idx++], tmp, sizeof('
+                f'std::memcpy(&valPtr.get()[idx++], tmp, sizeof('
                 f'{remove_ptr_if_any(parameters[target_idx].type)}));',
                 out_file,
                 1)
@@ -3817,12 +3923,18 @@ def write_array_funcs_parser(
                 'std::vector<InjectionArgument> args;', out_file, 0)
             print_body_line('args.emplace_back(idx);', out_file, 0)
             print_body_line(
-                'args.emplace_back(valPtr, idx, true);', out_file, 0)
+                'args.emplace_back(valPtr.get(), idx, true);', out_file, 0)
+            print_body_line('(void)valPtr.release();', out_file, 0)
             print_body_line('return NvmlFuncReturn(ret, args);', out_file, 0)
         else:
             print_generator_source_info(out_file, 2)
             print_body_line(
-                'return NvmlFuncReturn(ret, {valPtr, size, true});',
+                'InjectionArgument returnValue(valPtr.get(), size, true);',
+                out_file,
+                0)
+            print_body_line('(void)valPtr.release();', out_file, 0)
+            print_body_line(
+                'return NvmlFuncReturn(ret, returnValue);',
                 out_file,
                 0)
         out_file.write("}\n\n")
@@ -3892,10 +4004,10 @@ def write_two_attrs_funcs_parser(
                 0)
             print_body_line('int idx = 0;', out_file, 0)
             print_body_line(
-                f'auto *valPtr = reinterpret_cast<'
-                f'{parameters[second_point_idx].type}>'
+                f'std::unique_ptr<{remove_ptr_if_any(parameters[second_point_idx].type)}, decltype(&free)> valPtr'
+                f'(reinterpret_cast<{parameters[second_point_idx].type}>'
                 f'(malloc(sizeof({remove_ptr_if_any(parameters[second_point_idx].type)}) '
-                f'* size));',
+                f'* size)), free);',
                 out_file,
                 0)
             print_body_line(
@@ -3904,19 +4016,19 @@ def write_two_attrs_funcs_parser(
                 0)
             print_body_line('{', out_file, 0)
             if is_basic_ptr_type(parameters[second_point_idx].type):
-                # basic type uses build-in yaml-cpp convertion
+                # basic type uses built-in yaml-cpp conversion
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    f'valPtr[idx++] = it->as<'
+                    f'valPtr.get()[idx++] = it->as<'
                     f'{remove_ptr_if_any(parameters[second_point_idx].type)}>();',
                     out_file,
                     1)
             elif is_enum_type(remove_ptr_if_any(parameters[second_point_idx].type), all_enum):
-                # enum type uses build-in yaml-cpp int convertion and cast to
+                # enum type uses built-in yaml-cpp int conversion and cast to
                 # corresponding enum
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    f'valPtr[idx++] = static_cast<'
+                    f'valPtr.get()[idx++] = static_cast<'
                     f'{remove_ptr_if_any(parameters[second_point_idx].type)}>'
                     f'(it->as<int>());',
                     out_file,
@@ -3930,11 +4042,10 @@ def write_two_attrs_funcs_parser(
                     f'auto *tmp = {deserializer_name}(*it);', out_file, 1)
                 print_body_line('if (!tmp)', out_file, 1)
                 print_body_line('{', out_file, 1)
-                print_body_line('free(valPtr);', out_file, 2)
                 print_body_line('return std::nullopt;', out_file, 2)
                 print_body_line('}', out_file, 1)
                 print_body_line(
-                    f'std::memcpy(&valPtr[idx++], tmp, sizeof('
+                    f'std::memcpy(&valPtr.get()[idx++], tmp, sizeof('
                     f'{remove_ptr_if_any(parameters[second_point_idx].type)}));',
                     out_file,
                     1)
@@ -3942,7 +4053,8 @@ def write_two_attrs_funcs_parser(
             print_body_line('}', out_file, 0)
             print_body_line('args.emplace_back(size);', out_file, 0)
             print_body_line(
-                'args.emplace_back(valPtr, size, true);', out_file, 0)
+                'args.emplace_back(valPtr.get(), size, true);', out_file, 0)
+            print_body_line('(void)valPtr.release();', out_file, 0)
         else:
             # actual two attributes
             print_generator_source_info(out_file, 1)
@@ -3950,14 +4062,14 @@ def write_two_attrs_funcs_parser(
                 param_name = parameters[i].name
                 param_type = remove_ptr_if_any(parameters[i].type)
                 if is_basic_ptr_type(parameters[i].type):
-                    # basic type uses build-in yaml-cpp convertion
+                    # basic type uses built-in yaml-cpp conversion
                     line = (
                         f'args.emplace_back(node["ReturnValue"]'
                         f'["{param_name}"].as<{param_type}>());'
                     )
                     print_body_line(line, out_file, 0)
                 else:
-                    # enum type uses build-in yaml-cpp int convertion and
+                    # enum type uses built-in yaml-cpp int conversion and
                     # cast to corresponding enum
                     line = (
                         f'args.emplace_back(static_cast<{param_type}>'
@@ -4255,7 +4367,9 @@ def nvml_return_deserializer_cpp_writer(
         # Some structs parser are generated but not used in this time
         out_file.write('#pragma GCC diagnostic ignored "-Wunused-function"\n')
         out_file.write('#include "NvmlReturnDeserializer.h"\n\n')
+        out_file.write('#include <cstdlib>\n')
         out_file.write('#include <functional>\n')
+        out_file.write('#include <memory>\n')
         out_file.write('#include <optional>\n')
         out_file.write('#include <unordered_map>\n\n')
         out_file.write('#include "dcgm_nvml.h"\n')
@@ -4440,7 +4554,7 @@ def nvml_return_deserializer_cpp_writer(
             if func_name in handled_funcs:
                 continue
             logging.debug(func_name)
-    logging.info(f"{NVML_RETURN_DESERIALIZER_CPP_PATH} genereted")
+    logging.info(f"{NVML_RETURN_DESERIALIZER_CPP_PATH} generated")
 
 
 def nvml_return_deserializer_header_writer(out_dir):
@@ -4547,7 +4661,7 @@ def nvml_return_deserializer_header_writer(out_dir):
             0)
         out_file.write('};\n')
 
-    logging.info(f"{NVML_RETURN_DESERIALIZER_HEADER_PATH} genereted")
+    logging.info(f"{NVML_RETURN_DESERIALIZER_HEADER_PATH} generated")
 
 
 def extract_struct(cursor):

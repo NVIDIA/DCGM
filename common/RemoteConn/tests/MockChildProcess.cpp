@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <functional>
 #include <thread>
+#include <utility>
 
 namespace DcgmNs::Common::RemoteConn::Mock
 {
@@ -28,7 +29,9 @@ void MockChildProcess::Create(IoContext &,
                               std::optional<std::vector<std::string>> const &args,
                               std::optional<std::unordered_map<std::string, std::string>> const &env,
                               std::optional<std::string> const &username,
-                              std::optional<int> channelFd)
+                              std::optional<int> channelFd,
+                              DcgmNs::Common::Subprocess::ChildProcessEnvironmentMode,
+                              std::optional<DcgmNs::Common::Subprocess::ChildProcessFds> const &)
 {
     // This mock cannot be used without passing in the args.
     if (!args.has_value())
@@ -52,6 +55,20 @@ void MockChildProcess::Create(IoContext &,
 
     // Store the function arguments. IoContext is skipped because it's not a copyable type.
     MockStateCache::StoreFuncArgs(m_addressFwdSession, __func__, path, args, env, username, channelFd);
+    if (m_legacyChannelFd.has_value())
+    {
+        m_framedChannels.erase(*m_legacyChannelFd);
+        m_channelTimeouts.erase(*m_legacyChannelFd);
+        m_registeredFramedChannelFds.erase(
+            std::remove(m_registeredFramedChannelFds.begin(), m_registeredFramedChannelFds.end(), *m_legacyChannelFd),
+            m_registeredFramedChannelFds.end());
+        m_legacyChannelFd = std::nullopt;
+    }
+    if (channelFd.has_value())
+    {
+        m_legacyChannelFd = *channelFd;
+        AddFramedChannel(*channelFd);
+    }
 }
 
 void MockChildProcess::Run()
@@ -66,7 +83,7 @@ std::string MockChildProcess::GetAddressFwdSessionKey()
     return m_addressFwdSession;
 }
 
-void MockChildProcess::Stop(bool force) noexcept
+void MockChildProcess::Stop(bool force)
 {
     MockStateCache::IncrementMockCallCount(m_addressFwdSession, __func__);
     MockStateCache::StoreFuncArgs(m_addressFwdSession, __func__, force);
@@ -117,7 +134,7 @@ std::optional<pid_t> MockChildProcess::GetPid() const
     return std::nullopt;
 }
 
-void MockChildProcess::Kill(int timeoutSec) noexcept
+void MockChildProcess::Kill(int timeoutSec)
 {
     MockStateCache::IncrementMockCallCount(m_addressFwdSession, __func__);
     MockStateCache::StoreFuncArgs(m_addressFwdSession, __func__, timeoutSec);
@@ -273,14 +290,94 @@ void MockStateCache::ClearMockCallWaitTimes(std::string const &addressFwdSession
     m_mockCallWaitTimes.erase(addressFwdSession);
 }
 
-// The following functions are not required by the tests and are implemented as no-ops
+// The following functions are not required by the ssh tunnel tests.
 
 void MockChildProcess::GetStdOutBuffer(fmt::memory_buffer &, bool)
 {}
 
 std::optional<std::reference_wrapper<DcgmNs::Common::Subprocess::FramedChannel>> MockChildProcess::GetFdChannel()
 {
-    return std::nullopt;
+    if (!m_legacyChannelFd.has_value())
+    {
+        return std::nullopt;
+    }
+    return GetFdChannel(*m_legacyChannelFd);
+}
+
+void MockChildProcess::AddFramedChannel(int fd)
+{
+    if (!m_framedChannels.contains(fd))
+    {
+        m_registeredFramedChannelFds.push_back(fd);
+    }
+    m_framedChannels.insert_or_assign(fd, std::make_unique<DcgmNs::Common::Subprocess::FramedChannel>());
+}
+
+std::optional<std::reference_wrapper<DcgmNs::Common::Subprocess::FramedChannel>> MockChildProcess::GetFdChannel(int fd)
+{
+    auto it = m_framedChannels.find(fd);
+    if (it == m_framedChannels.end())
+    {
+        return std::nullopt;
+    }
+    return std::reference_wrapper<DcgmNs::Common::Subprocess::FramedChannel>(*it->second);
+}
+
+std::expected<void, DcgmNs::Common::Subprocess::ChannelTimeoutError> MockChildProcess::OnChannelTimeout(
+    int fd,
+    std::chrono::milliseconds duration,
+    std::function<void()> handler)
+{
+    if (duration <= std::chrono::milliseconds { 0 })
+    {
+        return std::unexpected(DcgmNs::Common::Subprocess::ChannelTimeoutError::InvalidDuration);
+    }
+    if (!m_channelTimeoutRegistrationSucceeds || !m_framedChannels.contains(fd))
+    {
+        return std::unexpected(DcgmNs::Common::Subprocess::ChannelTimeoutError::NotRegistered);
+    }
+    m_channelTimeouts.insert_or_assign(fd,
+                                       ChannelTimeoutRegistration {
+                                           .duration = duration,
+                                           .handler  = std::move(handler),
+                                       });
+    return {};
+}
+
+void MockChildProcess::SetChannelTimeoutRegistrationResult(bool succeeds)
+{
+    m_channelTimeoutRegistrationSucceeds = succeeds;
+}
+
+std::vector<int> MockChildProcess::GetRegisteredFramedChannelFds() const
+{
+    return m_registeredFramedChannelFds;
+}
+
+std::optional<std::chrono::milliseconds> MockChildProcess::GetChannelTimeoutDuration(int fd) const
+{
+    auto it = m_channelTimeouts.find(fd);
+    if (it == m_channelTimeouts.end())
+    {
+        return std::nullopt;
+    }
+    return it->second.duration;
+}
+
+bool MockChildProcess::TriggerChannelTimeout(int fd)
+{
+    auto it = m_channelTimeouts.find(fd);
+    if (it == m_channelTimeouts.end() || !it->second.handler)
+    {
+        return false;
+    }
+    it->second.handler();
+    return true;
+}
+
+bool MockChildProcess::FailedToLaunch() const
+{
+    return false;
 }
 
 std::optional<int> MockChildProcess::ReceivedSignal() const

@@ -22,15 +22,18 @@
 #define QUERY_H_
 
 #include "Command.h"
-#include <DcgmiOutput.h>
+#include "DcgmiOutput.h"
+
+#include <DcgmOpsAnyPtr.hpp>
 #include <dcgm_structs_internal.h>
+
 #include <utility>
 #include <vector>
 
 class Query
 {
 public:
-    Query();
+    explicit Query(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~Query();
 
     /*****************************************************************************
@@ -107,6 +110,8 @@ private:
     void HelperDisplayWorkloadPowerProfiles(dcgmHandle_t dcgmHandle, unsigned int gpuId);
 
     dcgmReturn_t HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle);
+
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
 };
 
 /*****************************************************************************
@@ -119,7 +124,7 @@ private:
 class QueryDeviceInfo : public Command
 {
 public:
-    QueryDeviceInfo(std::string hostname, unsigned int device, std::string attributes);
+    QueryDeviceInfo(std::string hostname, unsigned int device, std::string attributes, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -136,7 +141,7 @@ private:
 class QueryCpuInfo : public Command
 {
 public:
-    QueryCpuInfo(std::string hostname, unsigned int cpu, std::string attributes);
+    QueryCpuInfo(std::string hostname, unsigned int cpu, std::string attributes, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -153,7 +158,11 @@ private:
 class QueryGroupInfo : public Command
 {
 public:
-    QueryGroupInfo(std::string hostname, unsigned int device, std::string attributes, bool verbose);
+    QueryGroupInfo(std::string hostname,
+                   unsigned int device,
+                   std::string attributes,
+                   bool verbose,
+                   DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -171,8 +180,7 @@ private:
 class QueryDeviceList : public Command
 {
 public:
-    QueryDeviceList(std::string hostname);
-    QueryDeviceList(std::string hostname, bool showAll);
+    QueryDeviceList(std::string hostname, bool showAll, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -185,7 +193,7 @@ private:
 class QueryHierarchyInfo : public Command
 {
 public:
-    explicit QueryHierarchyInfo(std::string hostname);
+    explicit QueryHierarchyInfo(std::string hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

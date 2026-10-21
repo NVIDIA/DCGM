@@ -101,7 +101,7 @@ def main():
     print('\n\nUsing custom fields through the dictionary interface...')
     customFields = [
         dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL,
-        dcgm_fields.DCGM_FI_DEV_GPU_UTIL_RATIO,
+        dcgm_fields.DCGM_FI_DEV_GPU_UTIL,
         dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS]
     DcgmReaderDictionary(field_ids=customFields)
 

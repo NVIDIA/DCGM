@@ -177,9 +177,9 @@ static unsigned int getNvsdmConnextXFieldId(unsigned int dcgmFieldId)
             return NVSDM_CONNECTX_TELEM_CTR_EXPECT_PCIE_LINK_WIDTH;
         case DCGM_FI_DEV_CONNECTX_EXPECT_PCIE_LINK_SPEED:
             return NVSDM_CONNECTX_TELEM_CTR_EXPECT_PCIE_LINK_SPEED;
-        case DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_STATUS:
+        case DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERROR_STATUS:
             return NVSDM_CONNECTX_TELEM_CTR_CORRECTABLE_ERR_STATUS;
-        case DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_MASK:
+        case DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERROR_MASK:
             return NVSDM_CONNECTX_TELEM_CTR_CORRECTABLE_ERR_MASK;
         case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_STATUS:
             return NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_STATUS;
@@ -187,7 +187,7 @@ static unsigned int getNvsdmConnextXFieldId(unsigned int dcgmFieldId)
             return NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_MASK;
         case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_SEVERITY:
             return NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_SEVERITY;
-        case DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE:
+        case DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS:
             return NVSDM_CONNECTX_TELEM_CTR_DEVICE_TEMPERATURE;
     }
     return NVSDM_CONNECTX_TELEM_CTR_NONE;
@@ -427,6 +427,58 @@ static dcgmReturn_t nvsdmAddValToFvBuffer(const dcgm_field_entity_group_t entity
             log_error("Unhandled field value output type: {}", fieldMeta->fieldType);
             break;
     }
+
+    return DCGM_ST_OK;
+}
+
+static bool isNvsdmTelemetryUnsupported(nvsdmRet_t ret)
+{
+    return ret == NVSDM_ERROR_NOT_SUPPORTED || ret == NVSDM_ERROR_INVALID_CTR;
+}
+
+static bool isNvsdmTelemetryUnsupported(uint16_t status)
+{
+    return isNvsdmTelemetryUnsupported(static_cast<nvsdmRet_t>(status));
+}
+
+static dcgmReturn_t nvsdmAddUnsupportedToFvBuffer(dcgm_field_entity_group_t const entityGroupId,
+                                                  unsigned int const entityId,
+                                                  unsigned short fieldId,
+                                                  timelib64_t now,
+                                                  DcgmFvBuffer &buf)
+{
+    if (buf.AddBlankValue(entityGroupId, entityId, fieldId, now, DCGM_ST_NOT_SUPPORTED) == nullptr)
+    {
+        log_error("Failed to add unsupported blank value to buffer for eg {}, entityId {}, fieldId {}",
+                  entityGroupId,
+                  entityId,
+                  fieldId);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    return DCGM_ST_OK;
+}
+
+static dcgmReturn_t nvsdmAddAndLogUnsupported(dcgm_field_entity_group_t const entityGroupId,
+                                              unsigned int const entityId,
+                                              unsigned short fieldId,
+                                              timelib64_t now,
+                                              DcgmFvBuffer &buf,
+                                              nvsdmTelemParam_t const &param)
+{
+    dcgmReturn_t ret = nvsdmAddUnsupportedToFvBuffer(entityGroupId, entityId, fieldId, now, buf);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    log_debug("Unsupported telemetry value from nvsdm for eg {}, entityId {}, fieldId {}, telemetry type {}, "
+              "counter {}",
+              entityGroupId,
+              entityId,
+              fieldId,
+              param.telemValsArray[0].telemType,
+              param.telemValsArray[0].telemCtr);
 
     return DCGM_ST_OK;
 }
@@ -897,8 +949,36 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
         {
             nvsdmReturn = m_nvsdm->nvsdmPortGetTelemetryValues(targetPort, &param);
         }
-        if (nvsdmReturn != NVSDM_SUCCESS || param.telemValsArray[0].status != NVSDM_SUCCESS)
+        if (nvsdmReturn != NVSDM_SUCCESS)
         {
+            if (isNvsdmTelemetryUnsupported(nvsdmReturn))
+            {
+                dcgmReturn = nvsdmAddAndLogUnsupported(entity.entityGroupId, entity.entityId, fieldId, now, buf, param);
+                if (dcgmReturn != DCGM_ST_OK)
+                {
+                    return dcgmReturn;
+                }
+
+                continue;
+            }
+            log_error("Failed to get telemetry values from nvsdm for telemetry type {}, and counter {} returned {}",
+                      param.telemValsArray[0].telemType,
+                      param.telemValsArray[0].telemCtr,
+                      nvsdmReturn);
+            return DCGM_ST_NVML_ERROR;
+        }
+        if (param.telemValsArray[0].status != NVSDM_SUCCESS)
+        {
+            if (isNvsdmTelemetryUnsupported(param.telemValsArray[0].status))
+            {
+                dcgmReturn = nvsdmAddAndLogUnsupported(entity.entityGroupId, entity.entityId, fieldId, now, buf, param);
+                if (dcgmReturn != DCGM_ST_OK)
+                {
+                    return dcgmReturn;
+                }
+
+                continue;
+            }
             log_error(
                 "Failed to get telemetry values from nvsdm for telemetry type {}, counter {} and status {}, returned {}",
                 param.telemValsArray[0].telemType,
@@ -1770,7 +1850,7 @@ dcgm_nvswitch_info_t *DcgmNvsdmManager::GetNvSwitchObject(dcgm_field_entity_grou
     return nullptr;
 }
 
-static const char *c_backendName = "NVSDM";
+static const char *c_nvsdmBackendName = "NVSDM";
 
 dcgmReturn_t DcgmNvsdmManager::GetBackend(dcgm_nvswitch_msg_get_backend_v1 *msg)
 {
@@ -1780,7 +1860,7 @@ dcgmReturn_t DcgmNvsdmManager::GetBackend(dcgm_nvswitch_msg_get_backend_v1 *msg)
     }
 
     msg->active = CheckConnectionStatus() == ConnectionStatus::Ok ? true : false;
-    SafeCopyTo(msg->backendName, c_backendName);
+    SafeCopyTo(msg->backendName, c_nvsdmBackendName);
 
     return DCGM_ST_OK;
 }

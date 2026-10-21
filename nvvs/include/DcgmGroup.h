@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,13 @@
 
 #include "DcgmGdFieldGroup.h"
 #include "dcgm_structs.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <memory>
 
 class DcgmGroup
 {
 public:
-    DcgmGroup();
+    explicit DcgmGroup(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     DcgmGroup(DcgmGroup &&other) noexcept;
     ~DcgmGroup();
 
@@ -116,9 +117,10 @@ private:
     dcgmReturn_t RefreshGroupInfo();
 
     dcgmGpuGrp_t m_groupId; // Owned here
-    dcgmHandle_t m_handle;  // Not owned here
+    dcgmHandle_t m_handle;  // DCGM connection handle.
     std::unique_ptr<dcgmGroupInfo_t> m_info;
     DcgmGdFieldGroup *m_fieldGroup;
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; // DCGM API interface.
 };
 
 #endif

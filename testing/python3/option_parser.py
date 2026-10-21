@@ -104,6 +104,13 @@ def parse_options():
         help="Run mocked hardware *_mock tests and don't initially validate hardware."
     )
     parser.add_option(
+        "--fail-on-test-failure",
+        dest="fail_on_test_failure",
+        action="store_true",
+        default=False,
+        help="Exit with a non-zero status code when one or more tests fail."
+    )
+    parser.add_option(
         "-c", "--clear-lint-artifacts",
         dest="clear_lint_artifacts",
         action="store_true",
@@ -306,6 +313,7 @@ class OptionParserStub():
         self.non_root_user = None
         self.lint = False
         self.no_hw = False
+        self.fail_on_test_failure = False
         self.clear_lint_artifacts = False
         self.burn = False
         self.log_dir = None

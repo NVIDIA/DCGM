@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ target_sources(nvvscoretests
         NvidiaValidationSuiteTests.cpp
         TestParametersTests.cpp
         DcgmRecorderTests.cpp
-        DcgmDiagUnitTestCommon.cpp
+        DcgmSystemTests.cpp
         ConfigFileParser_v2Tests.cpp
         DcgmValuesSinceHolderTests.cpp
         AllowlistTests.cpp
@@ -39,36 +39,32 @@ target_sources(nvvscoretests
         SoftwarePluginFrameworkTests.cpp
         SoftwareTests.cpp
         CpuSetTests.cpp
+        EarlyFailCheckerTests.cpp
         DcgmNvvsResponseWrapperTests.cpp
         IgnoreErrorCodesHelperTests.cpp
         NvvsDeviceListTests.cpp
         EntitySetTests.cpp
         FdChannelClientTests.cpp
+        NvvsCommonTests.cpp
         )
 
-target_include_directories(nvvscoretests
-    PRIVATE
-        ${JSONCPP_INCLUDE_DIR}
-        ${YAML_INCLUDE_DIR})
-
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
 target_link_libraries(nvvscoretests
     PRIVATE
-        ${CMAKE_THREAD_LIBS_INIT}
-        ${JSONCPP_STATIC_LIBS}
-        ${YAML_STATIC_LIBS}
+        Threads::Threads
+        jsoncpp_static
+        yaml-cpp::yaml-cpp
         Catch2::Catch2
-        common_tests_includes
         dcgm_logging
         dl
         fmt::fmt
         nvvs_without_main_objects
         mock_common
+        mock_dcgm_ops
         mock_nvvs
         rt
         sdk_nvml_loader
-        serialize)
+        serialize
+        test-utils)
 
 target_link_options(nvvscoretests PRIVATE -rdynamic)
 

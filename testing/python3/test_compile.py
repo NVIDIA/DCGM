@@ -256,6 +256,7 @@ def get_all_functions(test_file_names,
                     if trampolined_file not in trampoline_functions:
                         trampoline_functions[trampolined_file] = []
 
+                    # We check for dupes later in check_dupes
                     trampoline_functions[trampolined_file].append(node.name)
 
                 except NotTrampoline:
@@ -349,6 +350,62 @@ def get_all_functions(test_file_names,
 
     return decorator_index
 
+# check_dupes
+#
+# This checks for duplicate test function names in the same file. It sorts
+# the functions under each file and looks for sequential identical functions
+# so has O(n log n) complexity. Checking at each addition would have been
+# O(n^2).
+#
+# Arguments:
+#
+#    trampoline_functions : functions trampolined from *_mock directories
+# to call existing tests in regular test * directories.
+#
+#    amortized_decorators_map : map of amortized function names to decorators
+# and list of function tuples using them.
+#
+
+
+def check_dupes(trampoline_functions, amortized_decorators_map):
+
+    dupe = False
+
+    for file, functions in trampoline_functions.items():
+        # because trampolined files strip _mock.
+        file = file.replace("/", "_mock/", 1)
+        functions.sort()  # (O(n log n))
+        last_name = ""
+
+        for function_name in functions:  # O(n)
+            if function_name == last_name:
+                logger.error("Found duplicate test name %s in module %s.py. Change the name to something unique." %
+                             (function_name, file))
+                dupe = True
+
+            last_name = function_name
+
+    dupe_files = []
+
+    for items in amortized_decorators_map.values():
+        for [file, function_name] in items[1]:  # zero element is decorator tuple
+            dupe_files.append([file, function_name])
+
+    dupe_files.sort()  # O(n log n)
+    last_file = []
+
+    for [file, function_name] in dupe_files:
+        if [file, function_name] == last_file:  # O(n)
+            logger.error("Found duplicate test name %s in module %s.py. Change the name to something unique." %
+                         (function_name, file))
+            dupe = True
+
+        last_file = [file, function_name]
+
+    if dupe:
+        raise Exception("Found duplicate test names.")
+
+
 # generate_function_calls
 #
 # Arguments:
@@ -356,8 +413,6 @@ def get_all_functions(test_file_names,
 #    amortized_decorators_map : map of amortized function names to decorators
 # and list of function tuples using them.
 #
-
-
 def generate_function_calls(amortized_decorators_map):
     file_content = ""
 
@@ -453,6 +508,8 @@ def run_compilation():
 
     decorator_index = get_all_functions(trampoline_functions.keys(
     ), True, trampoline_functions, decorators_map, amortized_decorators_map, decorator_index)
+
+    check_dupes(trampoline_functions, amortized_decorators_map)
 
     # Add imports that decorator requirements require.
     new_file_content += "import os\n\n"                    # import utilities

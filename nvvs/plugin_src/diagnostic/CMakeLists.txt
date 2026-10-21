@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,4 +20,7 @@ add_compile_options(-Wno-deprecated-declarations)
 
 foreach(CUDA_VER IN LISTS SUPPORTED_CUDA_VERSIONS)
     add_subdirectory(Cuda${CUDA_VER})
+    target_link_libraries(Diagnostic_${CUDA_VER}
+        PRIVATE
+            cublas_ops${CUDA_VER})
 endforeach()

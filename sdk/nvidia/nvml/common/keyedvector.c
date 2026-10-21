@@ -58,7 +58,7 @@ keyedvector_p keyedvector_alloc(int elemSize,
     else if (subBlockSize != 0)
         kv->subBlockSize = subBlockSize;
 
-    if (elemSize > kv->subBlockSize || elemSize < 0)
+    if (elemSize > kv->subBlockSize || elemSize <= 0)
     {
         keyedvector_destroy(kv);
         kv       = 0;
@@ -170,21 +170,20 @@ static int keyedvector_grow_blocks(keyedvector_p kv, int newSize)
     if (newSize <= kv->maxBlocks)
         return KV_ST_OK; /* Nothing to do */
 
-    kv->maxBlocks = newSize;
-
-    tmpBlock = kv_realloc(kv->blocks, sizeof(void *) * kv->maxBlocks);
+    tmpBlock = kv_realloc(kv->blocks, sizeof(void *) * newSize);
     if (!tmpBlock)
     {
       return KV_ST_MEMORY;
     }
     kv->blocks = (void**)tmpBlock;
 
-    tmpBlock = kv_realloc(kv->blockNelem, sizeof(int) * kv->maxBlocks);
+    tmpBlock = kv_realloc(kv->blockNelem, sizeof(int) * newSize);
     if (!tmpBlock)
     {
       return KV_ST_MEMORY;
     }
     kv->blockNelem = (int*)tmpBlock;
+    kv->maxBlocks = newSize;
 
     /* Zero out new elements */
     memset(&kv->blocks[oldSize], 0, sizeof(void *) * (newSize - oldSize));
@@ -478,6 +477,15 @@ int keyedvector_insert(keyedvector_p kv, void *element, kv_cursor_p cursor)
 
     if (!kv || !element || !cursor)
         return KV_ST_BADPARAM;
+
+    if (kv->elemSize <= 0)
+        return KV_ST_CORRUPT;
+
+    if (kv->Nblocks > 0
+        && kv->blockNelem[kv->Nblocks - 1] > kv->subBlockSize / kv->elemSize)
+    {
+        return KV_ST_CORRUPT;
+    }
 
     /* See if our element is past the entire keyedvector, which is a common usecase
        when records are being appended to the end, like in timeseries. Handle this

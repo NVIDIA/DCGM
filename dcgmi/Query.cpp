@@ -19,24 +19,28 @@
  */
 
 #include "Query.h"
+
 #include "CommandOutputController.h"
-#include "DcgmStringHelpers.h"
 #include "DcgmiOutput.h"
-#include "EntityListHelpers.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
 #include "dcgmi_common.h"
+
+#include <DcgmStringHelpers.h>
+#include <Defer.hpp>
+#include <EntityListHelpers.h>
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
+#include <dcgm_structs_internal.h>
+
 #include <cassert>
 #include <ctype.h>
-#include <dcgm_structs_internal.h>
 #include <iostream>
-#include <map>
 #include <ranges>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string.h>
 #include <string_view>
+#include <unordered_map>
 
 
 /**************************************************************************************/
@@ -86,14 +90,124 @@ static const char c_cpuId[] = "CPU ID";
 
 /*****************************************************************************************/
 
-Query::Query()
-{
-    // TODO Auto-generated constructor stub
-}
+Query::Query(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+{}
 
 Query::~Query()
 {
     // TODO Auto-generated destructor stub
+}
+
+/********************************************************************************/
+static std::unordered_map<dcgm_field_eid_t, std::string> HelperGetCpuModels(
+    dcgmHandle_t dcgmHandle,
+    std::vector<dcgm_field_eid_t> const &entityIds,
+    DcgmNs::DcgmOpsAnyPtr *dcgmOps)
+{
+    std::unordered_map<dcgm_field_eid_t, std::string> cpuModels;
+    cpuModels.reserve(entityIds.size());
+    if (entityIds.empty())
+    {
+        return cpuModels;
+    }
+
+    std::vector<dcgmGroupEntityPair_t> entities;
+    entities.reserve(entityIds.size());
+    for (auto const entityId : entityIds)
+    {
+        entities.push_back({ .entityGroupId = DCGM_FE_CPU, .entityId = entityId });
+    }
+
+    dcgmGpuGrp_t groupId = DCGM_GROUP_NULL;
+    DcgmNs::Defer destroyGroup([&groupId, dcgmHandle, dcgmOps] {
+        if (groupId == DCGM_GROUP_NULL)
+        {
+            return;
+        }
+
+        dcgmReturn_t const destroyResult = (*dcgmOps)->dcgmGroupDestroy(dcgmHandle, groupId);
+        if (destroyResult != DCGM_ST_OK)
+        {
+            log_warning("Unable to destroy temporary CPU discovery group {}: {}", groupId, errorString(destroyResult));
+        }
+    });
+
+    dcgmReturn_t result = dcgmi_create_entity_group(dcgmHandle, DCGM_GROUP_EMPTY, &groupId, entities, *dcgmOps);
+    if (result != DCGM_ST_OK)
+    {
+        log_warning("Unable to create temporary CPU discovery group: {}", errorString(result));
+        return cpuModels;
+    }
+
+    unsigned short fieldId = DCGM_FI_DEV_CPU_MODEL;
+    std::vector<unsigned short> const fieldIds { fieldId };
+    dcgmFieldGrp_t fieldGroupId {};
+    result = dcgmi_create_field_group(dcgmHandle, &fieldGroupId, fieldIds, *dcgmOps);
+    if (result != DCGM_ST_OK)
+    {
+        log_warning("Unable to create a temporary CPU model field group: {}", errorString(result));
+        return cpuModels;
+    }
+
+    DcgmNs::Defer destroyFieldGroup([dcgmHandle, dcgmOps, fieldGroupId] {
+        dcgmReturn_t const destroyResult = (*dcgmOps)->dcgmFieldGroupDestroy(dcgmHandle, fieldGroupId);
+        if (destroyResult != DCGM_ST_OK)
+        {
+            log_warning(
+                "Unable to destroy temporary CPU model field group {}: {}", fieldGroupId, errorString(destroyResult));
+        }
+    });
+
+    result = (*dcgmOps)->dcgmWatchFields(dcgmHandle, groupId, fieldGroupId, 1000000, 30.0, 1);
+    if (result != DCGM_ST_OK)
+    {
+        log_warning("Unable to watch the CPU model field: {}", errorString(result));
+        return cpuModels;
+    }
+
+    DcgmNs::Defer unwatchFields([dcgmHandle, dcgmOps, groupId, fieldGroupId] {
+        dcgmReturn_t const unwatchResult = (*dcgmOps)->dcgmUnwatchFields(dcgmHandle, groupId, fieldGroupId);
+        if (unwatchResult != DCGM_ST_OK)
+        {
+            log_warning("Unable to unwatch the CPU model field: {}", errorString(unwatchResult));
+        }
+    });
+
+    // Force the first watched sample and wait for collection to finish before querying it.
+    result = (*dcgmOps)->dcgmUpdateAllFields(dcgmHandle, 1);
+    if (result != DCGM_ST_OK)
+    {
+        log_warning("Unable to update watched fields before retrieving CPU models: {}", errorString(result));
+        return cpuModels;
+    }
+
+    std::vector<dcgmFieldValue_v2> values(entityIds.size());
+    result = (*dcgmOps)->dcgmEntitiesGetLatestValues(
+        dcgmHandle, entities.data(), entities.size(), &fieldId, 1, 0, values.data());
+    if (result != DCGM_ST_OK)
+    {
+        log_warning("Unable to retrieve CPU model values: {}", errorString(result));
+        return cpuModels;
+    }
+
+    for (auto const &value : values)
+    {
+        if (value.status != DCGM_ST_OK || value.fieldType != DCGM_FT_STRING || value.value.str[0] == '\0'
+            || DCGM_STR_IS_BLANK(value.value.str))
+        {
+            log_debug("Ignoring CPU {} model value: status={} ({}), fieldType='{}'",
+                      value.entityId,
+                      value.status,
+                      errorString(static_cast<dcgmReturn_t>(value.status)),
+                      value.fieldType);
+            continue;
+        }
+
+        cpuModels[value.entityId] = value.value.str;
+    }
+
+    return cpuModels;
 }
 
 /********************************************************************************/
@@ -130,7 +244,7 @@ dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
     }
     else
     {
-        result = dcgmGetCpuHierarchy_v2(dcgmHandle, &stCpuHierarchy);
+        result = m_dcgmOps->dcgmGetCpuHierarchy_v2(dcgmHandle, &stCpuHierarchy);
         if (result != DCGM_ST_OK)
         {
             SHOW_AND_LOG_ERROR << fmt::format(
@@ -138,6 +252,8 @@ dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
             return result;
         }
     }
+
+    auto const cpuModels = HelperGetCpuModels(dcgmHandle, entityIds, &m_dcgmOps);
 
     std::cout << fmt::format("{} CPU{} found.", entityIds.size(), (entityIds.size() == 1 ? "" : "s")) << std::endl;
     for (auto const &entityId : entityIds)
@@ -154,7 +270,9 @@ dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
 
         auto coreMap = HelperBuildCpuListFromRanges(
             HelperGetCpuRangesFromBitmask(stCpuHierarchy.cpus[entityId].ownedCores.bitmask, DCGM_MAX_NUM_CPU_CORES));
-        out[idStr][c_info].setOrAppend(std::string(c_name) + ": Grace");
+        auto const model = cpuModels.find(entityId);
+        out[idStr][c_info].setOrAppend(
+            fmt::format("{}: {}", c_name, model == cpuModels.end() ? "Unknown" : model->second));
         out[idStr][c_info].setOrAppend(std::string("Serial number : ") + stCpuHierarchy.cpus[entityId].serial);
         out[idStr][c_info].setOrAppend(coreMap);
     }
@@ -166,15 +284,16 @@ dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
 /********************************************************************************/
 auto HelperGetFilteredGpuStatuses(dcgmHandle_t dcgmHandle,
                                   std::vector<dcgm_field_eid_t> const &entityIds,
-                                  bool showAll) noexcept
+                                  bool showAll,
+                                  DcgmNs::DcgmOpsAnyPtr *dcgmOps) noexcept
 {
     assert(std::ranges::is_sorted(entityIds));
 
     using StatusPair_t = std::pair<dcgm_field_eid_t, DcgmEntityStatus_t>;
 
-    auto const getGpuStatus = [dcgmHandle](dcgm_field_eid_t entityId) -> StatusPair_t {
+    auto getGpuStatus = [dcgmHandle, dcgmOps](dcgm_field_eid_t entityId) -> StatusPair_t {
         DcgmEntityStatus_t gpuStatus = DcgmEntityStatusUnknown;
-        dcgmGetGpuStatus(dcgmHandle, entityId, &gpuStatus);
+        (*dcgmOps)->dcgmGetGpuStatus(dcgmHandle, entityId, &gpuStatus);
         return { entityId, gpuStatus };
     };
 
@@ -253,7 +372,7 @@ dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle, bool showA
         std::ranges::sort(entityIds);
 
         // Get filtered GPU statuses as lazy view
-        auto filteredGpus = HelperGetFilteredGpuStatuses(dcgmHandle, entityIds, showAll);
+        auto filteredGpus = HelperGetFilteredGpuStatuses(dcgmHandle, entityIds, showAll, &m_dcgmOps);
 
         // Iterate and count as we go
         std::size_t filteredCount = 0;
@@ -262,7 +381,7 @@ dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle, bool showA
             ++filteredCount;
 
             stDeviceAttributes.version = dcgmDeviceAttributes_version;
-            result                     = dcgmGetDeviceAttributes(dcgmHandle, gpuId, &stDeviceAttributes);
+            result                     = m_dcgmOps->dcgmGetDeviceAttributes(dcgmHandle, gpuId, &stDeviceAttributes);
 
             if (DCGM_ST_OK != result)
             {
@@ -359,7 +478,7 @@ dcgmReturn_t Query::DisplayDeviceInfo(dcgmHandle_t dcgmHandle,
         return result;
     }
 
-    result = dcgmGetDeviceAttributes(dcgmHandle, requestedGpuId, &stDeviceAttributes);
+    result = m_dcgmOps->dcgmGetDeviceAttributes(dcgmHandle, requestedGpuId, &stDeviceAttributes);
 
     if (result != DCGM_ST_OK)
     {
@@ -436,7 +555,7 @@ dcgmReturn_t Query::DisplayCpuInfo(dcgmHandle_t dcgmHandle, unsigned int request
     // Check if input attribute flags are valid
     dcgmReturn_t result = DCGM_ST_OK;
 
-    result = dcgmGetCpuHierarchy_v2(dcgmHandle, &stCpuHierarchy);
+    result = m_dcgmOps->dcgmGetCpuHierarchy_v2(dcgmHandle, &stCpuHierarchy);
     if (result != DCGM_ST_OK)
     {
         SHOW_AND_LOG_ERROR << fmt::format("Unable to get CPU hierarchy. Error: {}: {}", result, errorString(result));
@@ -489,7 +608,7 @@ dcgmReturn_t Query::DisplayGroupInfo(dcgmHandle_t mNvcmHandle,
     std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
 
     stNvcmGroupInfo->version = dcgmGroupInfo_version;
-    result = dcgmGroupGetInfo(mNvcmHandle, (dcgmGpuGrp_t)(long long)requestedGroupId, stNvcmGroupInfo.get());
+    result = m_dcgmOps->dcgmGroupGetInfo(mNvcmHandle, (dcgmGpuGrp_t)(long long)requestedGroupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -560,7 +679,8 @@ dcgmReturn_t Query::HelperDisplayNonVerboseGroup(dcgmHandle_t mNvcmHandle,
         }
 
         stDeviceAttributes[i].version = dcgmDeviceAttributes_version;
-        result = dcgmGetDeviceAttributes(mNvcmHandle, stNvcmGroupInfo.entityList[i].entityId, &stDeviceAttributes[i]);
+        result                        = m_dcgmOps->dcgmGetDeviceAttributes(
+            mNvcmHandle, stNvcmGroupInfo.entityList[i].entityId, &stDeviceAttributes[i]);
 
         if (result != DCGM_ST_OK)
         {
@@ -794,7 +914,7 @@ dcgmReturn_t Query::HelperDisplayNonVerboseGroup(dcgmHandle_t mNvcmHandle,
         }
     }
 
-    std::cout << "**** Non-homogenous settings across group. Use with –v flag to see details.\n";
+    std::cout << "**** Non-homogenous settings across group. Use with -v flag to see details.\n";
 
     return DCGM_ST_OK;
 }
@@ -809,7 +929,7 @@ void Query::HelperDisplayWorkloadPowerProfiles(dcgmHandle_t dcgmHandle, unsigned
     profilesInfo.version  = dcgmWorkloadPowerProfileProfilesInfo_version1;
     profileStatus.version = dcgmDeviceWorkloadPowerProfilesStatus_version1;
 
-    result = dcgmGetDeviceWorkloadPowerProfileInfo(dcgmHandle, gpuId, &profilesInfo, &profileStatus);
+    result = m_dcgmOps->dcgmGetDeviceWorkloadPowerProfileInfo(dcgmHandle, gpuId, &profilesInfo, &profileStatus);
 
     if (result != DCGM_ST_OK)
     {
@@ -1027,7 +1147,7 @@ dcgmReturn_t Query::DisplayHierarchyInfo(dcgmHandle_t handle)
     dcgmMigHierarchy_v2 hierarchy {};
     hierarchy.version = dcgmMigHierarchy_version2;
 
-    dcgmReturn_t ret = dcgmGetGpuInstanceHierarchy(handle, &hierarchy);
+    dcgmReturn_t ret = m_dcgmOps->dcgmGetGpuInstanceHierarchy(handle, &hierarchy);
     if (ret != DCGM_ST_OK)
     {
         std::cout << "Error: Cannot get hierarchy information from the hostengine. Return: " << errorString(ret)
@@ -1054,7 +1174,7 @@ dcgmReturn_t Query::HelperGetEntityList(dcgmHandle_t dcgmHandle,
 
     entityIds.clear();
 
-    result = dcgmGetEntityGroupEntities(dcgmHandle, entityGroup, entities, &numItems, 0);
+    result = m_dcgmOps->dcgmGetEntityGroupEntities(dcgmHandle, entityGroup, entities, &numItems, 0);
     if (DCGM_ST_OK != result)
     {
         if (result != DCGM_ST_MODULE_NOT_LOADED && DCGM_ST_NOT_SUPPORTED != result
@@ -1211,8 +1331,13 @@ std::vector<std::pair<uint32_t, uint32_t>> HelperGetCpuRangesFromBitmask(uint64_
  *****************************************************************************/
 
 /*****************************************************************************/
-QueryDeviceInfo::QueryDeviceInfo(std::string hostname, unsigned int device, std::string attributes)
-    : deviceNum(device)
+QueryDeviceInfo::QueryDeviceInfo(std::string hostname,
+                                 unsigned int device,
+                                 std::string attributes,
+                                 DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , queryObj(dcgmOps)
+    , deviceNum(device)
     , attributes(std::move(attributes))
 {
     m_hostName = std::move(hostname);
@@ -1231,8 +1356,13 @@ dcgmReturn_t QueryDeviceInfo::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-QueryCpuInfo::QueryCpuInfo(std::string hostname, unsigned int cpu, std::string attributes)
-    : cpuNum(cpu)
+QueryCpuInfo::QueryCpuInfo(std::string hostname,
+                           unsigned int cpu,
+                           std::string attributes,
+                           DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , queryObj(dcgmOps)
+    , cpuNum(cpu)
     , attributes(std::move(attributes))
 {
     m_hostName = std::move(hostname);
@@ -1251,8 +1381,14 @@ dcgmReturn_t QueryCpuInfo::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-QueryGroupInfo::QueryGroupInfo(std::string hostname, unsigned int group, std::string attributes, bool verbose)
-    : groupNum(group)
+QueryGroupInfo::QueryGroupInfo(std::string hostname,
+                               unsigned int group,
+                               std::string attributes,
+                               bool verbose,
+                               DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , queryObj(dcgmOps)
+    , groupNum(group)
     , attributes(std::move(attributes))
     , verbose(verbose)
 {
@@ -1273,12 +1409,10 @@ dcgmReturn_t QueryGroupInfo::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-QueryDeviceList::QueryDeviceList(std::string hostname)
-    : QueryDeviceList(std::move(hostname), false)
-{}
-
-QueryDeviceList::QueryDeviceList(std::string hostname, bool showAll)
-    : m_showAll(showAll)
+QueryDeviceList::QueryDeviceList(std::string hostname, bool showAll, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , queryObj(dcgmOps)
+    , m_showAll(showAll)
 {
     m_hostName = std::move(hostname);
 }
@@ -1296,7 +1430,9 @@ dcgmReturn_t QueryDeviceList::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-QueryHierarchyInfo::QueryHierarchyInfo(std::string hostname)
+QueryHierarchyInfo::QueryHierarchyInfo(std::string hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , m_queryObj(dcgmOps)
 {
     m_hostName = std::move(hostname);
 }

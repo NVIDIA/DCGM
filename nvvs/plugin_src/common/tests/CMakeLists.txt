@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,17 +20,19 @@ add_executable(plugincommontests)
 target_sources(plugincommontests
     PRIVATE
         PluginCommonTests.cpp
+        PluginDeviceTests.cpp
 )
 
-target_include_directories(plugincommontests PRIVATE ${PROJECT_SOURCE_DIR}/common/tests)
-
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
 target_link_libraries(plugincommontests
     PRIVATE
         nvvs_without_main_objects
         Catch2::Catch2WithMain
-        ${YAML_STATIC_LIBS}
+        test-utils
+        mock_cuda_ops
+        mock_cublas_ops
+        mock_common
+        mock_dcgm_ops
+        yaml-cpp::yaml-cpp
         rt
 )
 target_link_libraries(plugincommontests

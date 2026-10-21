@@ -163,8 +163,7 @@ def should_ignore_error(diagException):
                 "MIG configuration is incompatible with the diagnostic because it prevents access to the entire GPU.") != -1:
             return True
 
-        if diagException.info.find(
-                "Cannot run diagnostic: CUDA does not support enumerating GPUs with MIG mode enabled") == 0:
+        if diagException.info.find("Cannot run diagnostic: CUDA before 12.8 does not support enumerating GPUs with MIG mode enabled") != -1:
             return True
 
     return False

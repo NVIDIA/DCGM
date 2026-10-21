@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -269,11 +269,18 @@ public:
      */
     virtual dcgmReturn_t GetBackend(dcgm_nvswitch_msg_get_backend_t *msg) = 0;
 
-#ifndef DCGM_NVSWITCH_TEST // Allow tests to peek in
+    /*************************************************************************/
+    /**
+     * Returns true when the Switch Manager is disconnected.
+     *
+     * @return true if CheckConnectionStatus() reports Disconnected; false otherwise.
+     */
+    [[nodiscard]] bool IsDisconnected() const
+    {
+        return CheckConnectionStatus() == ConnectionStatus::Disconnected;
+    }
+
 protected:
-    // Declare test class as friend
-    friend class TestDcgmNvSwitchManagerBase;
-#endif
     /*************************************************************************/
     /**
      * Adds one fake nv switch and returns the id, or returns DCGM_ENTITY_ID_BAD to signify failure

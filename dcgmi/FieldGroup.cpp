@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,19 @@
  */
 
 #include "FieldGroup.h"
+
 #include "CommandOutputController.h"
 #include "DcgmiOutput.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
+
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
+
 #include <ctype.h>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string.h>
+#include <utility>
 
 
 /***************************************************************************/
@@ -40,6 +44,11 @@ static const std::string FG_FIELD_IDS_TAG = "Field IDs";
 
 
 /*****************************************************************************/
+FieldGroup::FieldGroup(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+{}
+
+/*****************************************************************************/
 
 dcgmReturn_t FieldGroup::RunGroupListAll(dcgmHandle_t dcgmHandle, bool json)
 {
@@ -49,7 +58,7 @@ dcgmReturn_t FieldGroup::RunGroupListAll(dcgmHandle_t dcgmHandle, bool json)
 
     memset(&allGroupInfo, 0, sizeof(allGroupInfo));
     allGroupInfo.version = dcgmAllFieldGroup_version;
-    result               = dcgmFieldGroupGetAll(dcgmHandle, &allGroupInfo);
+    result               = m_dcgmOps->dcgmFieldGroupGetAll(dcgmHandle, &allGroupInfo);
 
     if (DCGM_ST_OK != result)
     {
@@ -99,8 +108,8 @@ dcgmReturn_t FieldGroup::RunGroupCreate(dcgmHandle_t dcgmHandle)
         return result;
     }
 
-    result = dcgmFieldGroupCreate(
-        dcgmHandle, fieldIds.size(), &fieldIds[0], (char *)m_fieldGroupName.c_str(), &newFieldGroupId);
+    result = m_dcgmOps->dcgmFieldGroupCreate(
+        dcgmHandle, fieldIds.size(), fieldIds.data(), m_fieldGroupName.c_str(), &newFieldGroupId);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Cannot create field group " << m_fieldGroupName << ". Return: " << errorString(result)
@@ -120,7 +129,7 @@ dcgmReturn_t FieldGroup::RunGroupDestroy(dcgmHandle_t dcgmHandle)
     dcgmReturn_t result           = DCGM_ST_OK;
     dcgmFieldGrp_t dcgmFieldGrpId = (dcgmFieldGrp_t)(intptr_t)m_fieldGroupId;
 
-    result = dcgmFieldGroupDestroy(dcgmHandle, dcgmFieldGrpId);
+    result = m_dcgmOps->dcgmFieldGroupDestroy(dcgmHandle, dcgmFieldGrpId);
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -149,7 +158,7 @@ dcgmReturn_t FieldGroup::RunGroupInfo(dcgmHandle_t dcgmHandle, bool json)
     fieldGroupInfo.version      = dcgmFieldGroupInfo_version;
     fieldGroupInfo.fieldGroupId = (dcgmFieldGrp_t)(intptr_t)m_fieldGroupId;
 
-    result = dcgmFieldGroupGetInfo(dcgmHandle, &fieldGroupInfo);
+    result = m_dcgmOps->dcgmFieldGroupGetInfo(dcgmHandle, &fieldGroupInfo);
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Field Group is not found" : errorString(result);
@@ -260,10 +269,11 @@ void FieldGroup::SetFieldIdsString(std::string fieldIdsString)
  *****************************************************************************/
 
 /*****************************************************************************/
-FieldGroupCreate::FieldGroupCreate(std::string hostname, FieldGroup &obj)
+FieldGroupCreate::FieldGroupCreate(std::string hostname, FieldGroup &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , fieldGroupObj(obj)
 {
-    m_hostName    = std::move(hostname);
-    fieldGroupObj = obj;
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -283,10 +293,11 @@ dcgmReturn_t FieldGroupCreate::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-FieldGroupDestroy::FieldGroupDestroy(std::string hostname, FieldGroup &obj)
+FieldGroupDestroy::FieldGroupDestroy(std::string hostname, FieldGroup &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , fieldGroupObj(obj)
 {
-    m_hostName    = std::move(hostname);
-    fieldGroupObj = obj;
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -305,7 +316,9 @@ dcgmReturn_t FieldGroupDestroy::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-FieldGroupListAll::FieldGroupListAll(std::string hostname, bool json)
+FieldGroupListAll::FieldGroupListAll(std::string hostname, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , fieldGroupObj(dcgmOps)
 {
     m_hostName = std::move(hostname);
     m_json     = json;
@@ -325,11 +338,12 @@ dcgmReturn_t FieldGroupListAll::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-FieldGroupInfo::FieldGroupInfo(std::string hostname, FieldGroup &obj, bool json)
+FieldGroupInfo::FieldGroupInfo(std::string hostname, FieldGroup &obj, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , fieldGroupObj(obj)
 {
-    m_hostName    = std::move(hostname);
-    fieldGroupObj = obj;
-    m_json        = json;
+    m_hostName = std::move(hostname);
+    m_json     = json;
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);

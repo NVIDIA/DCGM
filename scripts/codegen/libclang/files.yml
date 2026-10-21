@@ -27,6 +27,17 @@ files:
   #   class_name: FingerprintStore
   #   policies: {}
   - generator_type: any_ptr
+    filepath: common/DcgmOps/DcgmOps.h
+    destination_dir: common/DcgmOps
+    class_name: DcgmOps
+    policies: {}
+  - generator_type: any_unique_ptr
+    filepath: common/DcgmOps/DcgmOps.h
+    destination_dir: common/DcgmOps
+    class_name: DcgmOps
+    policies:
+      with_any_ptr_accessor: true
+  - generator_type: any_ptr
     filepath: dcgmlib/src/DcgmVgpuOps.cpp
     destination_dir: dcgmlib/src
     class_name: FbcSessionOps
@@ -35,4 +46,130 @@ files:
     filepath: dcgmlib/src/DcgmVgpuOps.cpp
     destination_dir: dcgmlib/src
     class_name: VgpuFieldValueOps
+    policies: {}
+  - generator_type: any_ptr
+    filepath: dcgmlib/src/TopologyNvmlTaskRunner.hpp
+    destination_dir: dcgmlib/src
+    class_name: TopologyNvmlTaskRunner
+    policies: {}
+  - generator_type: any_ptr
+    filepath: modules/sysmon/SysmonFileSystem.hpp
+    destination_dir: modules/sysmon
+    class_name: SysmonFileSystem
+    policies: {}
+  - generator_type: any_ptr
+    filepath: modules/sysmon/SysmonSystemMonitor.hpp
+    destination_dir: modules/sysmon
+    class_name: SysmonSystemMonitor
+    policies: {}
+  - generator_type: any_ptr
+    filepath: modules/sysmon/SysmonWatchTable.hpp
+    destination_dir: modules/sysmon
+    class_name: SysmonWatchTable
+    policies: {}
+  - generator_type: any_unique_ptr
+    filepath: dcgmlib/src/DcgmCacheManager.cpp
+    destination_dir: dcgmlib/src
+    class_name: DcgmCacheManager
+    policies:
+      with_any_ptr_accessor: true
+  - generator_type: any_ptr
+    filepath: dcgmlib/src/DcgmCacheManager.cpp
+    destination_dir: dcgmlib/src
+    class_name: DcgmCacheManager
+    policies: {}
+  - generator_type: any_value
+    filepath: common/UserCredentials/UserCredentials.hpp
+    destination_dir: common/UserCredentials
+    class_name: UserCredentialsOps
+    policies: {}
+  - generator_type: any_ptr
+    filepath: common/CudaOps/CudaOps.hpp
+    destination_dir: common/CudaOps
+    class_name: CudaOps
+    policies: {}
+  - generator_type: any_unique_ptr
+    filepath: common/CudaOps/CudaOps.hpp
+    destination_dir: common/CudaOps
+    class_name: CudaOps
+    policies:
+      with_any_ptr_accessor: true
+  - generator_type: any_ptr
+    filepath: common/CublasOps/CublasOps.hpp
+    destination_dir: common/CublasOps
+    class_name: CublasOps
+    policies: {}
+  - generator_type: any_unique_ptr
+    filepath: common/CublasOps/CublasOps.hpp
+    destination_dir: common/CublasOps
+    class_name: CublasOps
+    policies:
+      with_any_ptr_accessor: true
+  - generator_type: any_ptr
+    filepath: nvvs/plugin_src/cuda_common/CudaCommon.h
+    destination_dir: nvvs/plugin_src/cuda_common
+    class_name: CudaCommon
+    policies: {}
+  - generator_type: any_unique_ptr
+    filepath: nvvs/plugin_src/cuda_common/CudaCommon.h
+    destination_dir: nvvs/plugin_src/cuda_common
+    class_name: CudaCommon
+    policies:
+      with_any_ptr_accessor: true
+  - generator_type: any_unique_ptr
+    filepath: common/CudaWorker/CudaWorkerThread.hpp
+    destination_dir: common/CudaWorker
+    class_name: CudaWorkerThread
+    policies:
+      with_any_ptr_accessor: false
+      fn_name_patterns:
+        - "exclude:.*"
+        - "include:CudaWorkerThread::(GetCurrentAchievedLoad|Init|SetPeerByBusId|SetWorkerToIdle|SetWorkloadAndTarget|Shutdown)"
+  - generator_type: any_unique_ptr
+    filepath: common/CudaWorker/FieldWorkerFactory.hpp
+    destination_dir: common/CudaWorker
+    class_name: FieldWorkerFactory
+    policies: {}
+  - generator_type: any_ptr
+    filepath: common/CudaWorker/CudaWorkerThreadFactory.hpp
+    destination_dir: common/CudaWorker
+    class_name: CudaWorkerThreadFactory
+    policies: {}
+  - generator_type: any_unique_ptr
+    filepath: common/CudaWorker/CudaWorkerThreadFactory.hpp
+    destination_dir: common/CudaWorker
+    class_name: CudaWorkerThreadFactory
+    policies:
+      with_any_ptr_accessor: true
+  - generator_type: any_ptr
+    filepath: dcgmproftester/DcgmProfTester.h
+    destination_dir: dcgmproftester
+    class_name: DcgmProfTester
+    policies:
+      fn_name_patterns:
+        - "exclude:.*"
+        - "include:DcgmProfTester::(GetNextPart|IsFirstTick|ReportWorkerFailed|ReportWorkerStarted|SetFirstTick|SetNextPart)"
+  - generator_type: any_ptr
+    filepath: dcgmproftester/PhysicalGpu.h
+    destination_dir: dcgmproftester
+    class_name: PhysicalGpu
+    policies:
+      fn_name_patterns:
+        - "exclude:.*"
+        - "include:PhysicalGpu::(AllReported|AllStarted|GetDcgmValidation|GetFieldGroupId|GetGpuBusId|GetGpuId|GetHandle|IsMIG|IsSynchronous|ProcessResponse|RunTests|UseCublas|WorkerReported)"
+  - generator_type: any_ptr
+    filepath: dcgmproftester/DistributedCudaContextRuntime.hpp
+    destination_dir: dcgmproftester
+    class_name: DistributedCudaContextRuntime
+    policies: {}
+  - generator_type: any_unique_ptr
+    filepath: dcgmproftester/DistributedCudaContextRuntime.hpp
+    destination_dir: dcgmproftester
+    class_name: DistributedCudaContextRuntime
+    policies:
+      with_any_ptr_accessor: true
+  - generator_type: any_unique_ptr
+    filepath: dcgmproftester/DistributedCudaContextRuntimeFactory.h
+    destination_dir: dcgmproftester
+    class_name: DistributedCudaContextRuntimeFactory
     policies: {}

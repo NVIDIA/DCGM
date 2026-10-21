@@ -18,17 +18,16 @@
 
 #include <expected>
 #include <map>
+#include <memory>
 #include <pthread.h>
 #include <string>
 #include <vector>
 
-#include "CustomStatHolder.h"
 #include "DcgmError.h"
 #include "DcgmMutex.h"
-#include "DcgmRecorder.h"
-#include "NvvsCommon.h"
 #include "PluginTest.h"
 #include "TestParameters.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <NvvsStructs.h>
 
 // This is a base class for all test plugins
@@ -55,7 +54,7 @@ class Plugin
 {
     /***************************PUBLIC***********************************/
 public:
-    Plugin();
+    explicit Plugin(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~Plugin();
 
     /* Interface methods for running the plugin */
@@ -504,6 +503,7 @@ protected:
     /* Variables */
     infoStruct_t m_infoStruct;
     std::unordered_map<std::string, PluginTest> m_tests; /* Map test name to its PluginTest object */
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;                     /* DCGM API interface */
 
     /* Mutexes */
     mutable DcgmMutex m_dataMutex; /* Mutex for plugin data */

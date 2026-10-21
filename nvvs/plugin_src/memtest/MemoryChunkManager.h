@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include "misc.h"
+#include <CudaOpsAnyPtr.hpp>
 #include <DcgmUtilities.h>
 #include <cuda_runtime.h>
 #include <memory>
@@ -27,28 +28,31 @@ struct CudaMemoryDeleter
 {
     bool isMapped;
     void *hostPtr; // Only used for mapped memory
+    CudaOpsAnyPtr cudaOps;
 
-    CudaMemoryDeleter(bool mapped = false, void *host = nullptr)
+    CudaMemoryDeleter(bool mapped, void *host, CudaOpsAnyPtr cudaOpsPtr)
         : isMapped(mapped)
         , hostPtr(host)
+        , cudaOps(cudaOpsPtr)
     {}
 
     void operator()(char *ptr) const noexcept
     {
         if (ptr != nullptr)
         {
+            auto cudaOpsPtr = cudaOps;
             if (isMapped && hostPtr)
             {
-                if (auto st = cudaFreeHost(hostPtr); st != cudaSuccess)
+                if (auto st = cudaOpsPtr->cudaFreeHost(hostPtr); st != cudaSuccess)
                 {
-                    log_error("cudaFreeHost failed: {}", cudaGetErrorString(st));
+                    log_error("cudaFreeHost failed: {}", cudaOpsPtr->cudaGetErrorString(st));
                 }
             }
             else
             {
-                if (auto st = cudaFree(ptr); st != cudaSuccess)
+                if (auto st = cudaOpsPtr->cudaFree(ptr); st != cudaSuccess)
                 {
-                    log_error("cudaFree failed: {}", cudaGetErrorString(st));
+                    log_error("cudaFree failed: {}", cudaOpsPtr->cudaGetErrorString(st));
                 }
             }
         }
@@ -65,11 +69,12 @@ private:
     size_t m_blocksPerChunk { 1 };
     size_t m_totalBlocks { 1 };
     bool m_useMappedMemory { false };
+    CudaOpsAnyPtr m_cudaOps;
 
 public:
     static constexpr size_t DEFAULT_NUM_CHUNKS = 8; // Configurable
 
-    MemoryChunkManager() = default;
+    explicit MemoryChunkManager(CudaOpsAnyPtr cudaOps);
 
     // Initialize with the total number of blocks we want to allocate
     cudaError_t Initialize(size_t tot_num_blocks,

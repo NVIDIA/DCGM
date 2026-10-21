@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,14 @@
 #define COMMAND_H
 
 #include "dcgm_structs.h"
+#include <DcgmOpsAnyPtr.hpp>
 
 #include <string>
 
 class Command
 {
 public:
-    Command();
+    explicit Command(DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
     virtual ~Command();
 
@@ -58,6 +59,7 @@ protected:
 
     virtual dcgmReturn_t DoExecuteConnectionFailure(dcgmReturn_t connectionStatus);
 
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; /*!< DCGM API interface. */
     std::string m_hostName;
     dcgmHandle_t m_dcgmHandle {};
     unsigned int m_timeout {};

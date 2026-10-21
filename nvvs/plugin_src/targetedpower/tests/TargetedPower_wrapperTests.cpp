@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,21 +13,56 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <CudaStubControl.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <DcgmRecorder.h>
+#include <MockCublasOps.h>
+#include <MockCudaCommon.h>
+#include <MockCudaOps.h>
+#include <MockDcgmOps.h>
+#include <NvvsCommon.h>
 #include <Plugin.h>
 #include <PluginCommon.h>
 #include <PluginDevice.h>
 #include <PluginStrings.h>
 #include <TargetedPower_wrapper.h>
+#include <UniquePtrUtil.h>
 #include <array>
 #include <dcgm_structs.h>
 #include <memory>
 #include <string>
 #include <timelib.h>
+#include <utility>
 
 #include <catch2/catch_all.hpp>
 
+
+namespace
+{
+struct TargetedPowerTestFixture
+{
+    std::unique_ptr<DcgmNs::MockDcgmOps> mockDcgmOpsUnique;
+    DcgmNs::MockDcgmOps *mockDcgmOps;
+    std::unique_ptr<MockCudaOps> mockCudaOpsUnique;
+    MockCudaOps *mockCudaOps;
+    std::unique_ptr<MockCublasOps> mockCublasOpsUnique;
+    MockCublasOps *mockCublasOps;
+    std::unique_ptr<MockCudaCommon> mockCudaCommonUnique;
+    NvvsCommon nvvsCommon;
+
+    TargetedPowerTestFixture()
+        : mockDcgmOpsUnique(std::make_unique<DcgmNs::MockDcgmOps>())
+        , mockDcgmOps(mockDcgmOpsUnique.get())
+        , mockCudaOpsUnique(std::make_unique<MockCudaOps>())
+        , mockCudaOps(mockCudaOpsUnique.get())
+        , mockCublasOpsUnique(std::make_unique<MockCublasOps>())
+        , mockCublasOps(mockCublasOpsUnique.get())
+        , mockCudaCommonUnique(std::make_unique<MockCudaCommon>())
+    {}
+};
+} // namespace
+
+namespace
+{
 class DcgmRecorderMock : public DcgmRecorderBase
 {
 public:
@@ -54,11 +89,23 @@ public:
     }
 };
 
+} // namespace
+
 class ConstantPowerTest : public ConstantPower
 {
 public:
-    ConstantPowerTest(dcgmHandle_t h)
-        : ConstantPower(h)
+    ConstantPowerTest(dcgmHandle_t h,
+                      std::unique_ptr<DcgmNs::MockDcgmOps> dcgmOps,
+                      std::unique_ptr<MockCudaOps> cudaOps,
+                      std::unique_ptr<MockCublasOps> cublasOps,
+                      std::unique_ptr<MockCudaCommon> cudaCommon,
+                      NvvsCommon *nvvsCommon)
+        : ConstantPower(h,
+                        std::move(dcgmOps),
+                        std::move(cudaOps),
+                        std::move(cublasOps),
+                        std::move(cudaCommon),
+                        nvvsCommon)
     {}
 
     TestParameters &GetTestParams()
@@ -76,7 +123,7 @@ public:
     {
         for (unsigned int i = 0; auto const &gpuId : gpuIds)
         {
-            m_device.emplace_back(std::make_unique<CPDevice>());
+            m_device.emplace_back(std::make_unique<CPDevice>(m_dcgmOps, m_cudaOps.AsAnyPtr(), m_cublasOps.AsAnyPtr()));
             m_device[i]->gpuId          = gpuId;
             m_device[i]->maxPowerTarget = maxPowerTargets[i];
             i++;
@@ -205,40 +252,16 @@ dcgmDiagPluginTestParameter_t MakeTargetedPowerStringParameter(std::string_view 
     return param;
 }
 
-class CudaStubMemoryGuard
-{
-public:
-    CudaStubMemoryGuard()
-    {
-        cudaStubAllocateMemory = true;
-    }
-
-    ~CudaStubMemoryGuard()
-    {
-        cudaStubAllocateMemory = false;
-    }
-};
-
-class CudaStubResultGuard
-{
-public:
-    ~CudaStubResultGuard()
-    {
-        cudaStreamCreateResult        = cudaSuccess;
-        cudaEventCreateResult         = cudaSuccess;
-        cudaGetDeviceCountResult      = cudaSuccess;
-        cudaGetDevicePropertiesResult = cudaSuccess;
-        cudaMallocResult              = cudaSuccess;
-        cudaHostAllocResult           = cudaSuccess;
-        cudaStubDeviceCount           = 2;
-    }
-};
-
-TEST_CASE("TargetedPower_wrapper: Init skips missing and fake GPU inputs")
+TEST_CASE_METHOD(TargetedPowerTestFixture, "TargetedPower_wrapper: Init skips missing and fake GPU inputs")
 {
     GIVEN("a targeted power plugin")
     {
-        auto cpt = std::make_unique<ConstantPowerTest>((dcgmHandle_t)1);
+        auto cpt = std::make_unique<ConstantPowerTest>((dcgmHandle_t)1,
+                                                       std::move(mockDcgmOpsUnique),
+                                                       std::move(mockCudaOpsUnique),
+                                                       std::move(mockCublasOpsUnique),
+                                                       std::move(mockCudaCommonUnique),
+                                                       &nvvsCommon);
 
         SECTION("nullptr entity list is rejected")
         {
@@ -264,11 +287,16 @@ TEST_CASE("TargetedPower_wrapper: Init skips missing and fake GPU inputs")
     }
 }
 
-TEST_CASE("TargetedPower_wrapper: Go handles early exits")
+TEST_CASE_METHOD(TargetedPowerTestFixture, "TargetedPower_wrapper: Go handles early exits")
 {
     GIVEN("a targeted power plugin")
     {
-        auto cpt = std::make_unique<ConstantPower>((dcgmHandle_t)1);
+        auto cpt = std::make_unique<ConstantPower>((dcgmHandle_t)1,
+                                                   std::move(mockDcgmOpsUnique),
+                                                   std::move(mockCudaOpsUnique),
+                                                   std::move(mockCublasOpsUnique),
+                                                   std::move(mockCudaCommonUnique),
+                                                   &nvvsCommon);
 
         SECTION("unknown test names return before initialization")
         {
@@ -294,27 +322,40 @@ TEST_CASE("TargetedPower_wrapper: Go handles early exits")
 
             REQUIRE(cpt->GetGpuResults(cpt->GetTargetedPowerTestName()).at(0) == NVVS_RESULT_PASS);
         }
-
-        SECTION("generic mode keeps disabled calibration paths runnable")
-        {
-            auto entityList = MakeTargetedPowerEntityListPtr(1, DcgmEntityStatusOk, 0);
-            std::array<dcgmDiagPluginTestParameter_t, 3> params {
-                MakeTargetedPowerStringParameter(TP_STR_IS_ALLOWED, "False"),
-                MakeTargetedPowerStringParameter(PS_USE_GENERIC_MODE, "True"),
-                MakeTargetedPowerStringParameter(TP_STR_TEST_DURATION, "0"),
-            };
-
-            cpt->Go(cpt->GetTargetedPowerTestName(), entityList.get(), params.size(), params.data());
-
-            CHECK_NOTHROW(cpt->GetGpuResults(cpt->GetTargetedPowerTestName()));
-        }
     }
 }
 
-TEST_CASE("TargetedPower_wrapper: EnforcedPowerLimitTooLow(), negative test for DCGM_FR_ENFORCED_POWER_LIMIT")
+TEST_CASE_METHOD(TargetedPowerTestFixture,
+                 "TargetedPower_wrapper: Go generic mode keeps disabled calibration paths runnable")
+{
+    auto cpt        = std::make_unique<ConstantPower>((dcgmHandle_t)1,
+                                                      std::move(mockDcgmOpsUnique),
+                                                      std::move(mockCudaOpsUnique),
+                                                      std::move(mockCublasOpsUnique),
+                                                      std::move(mockCudaCommonUnique),
+                                                      &nvvsCommon);
+    auto entityList = MakeTargetedPowerEntityListPtr(1, DcgmEntityStatusOk, 0);
+    std::array<dcgmDiagPluginTestParameter_t, 3> params {
+        MakeTargetedPowerStringParameter(TP_STR_IS_ALLOWED, "False"),
+        MakeTargetedPowerStringParameter(PS_USE_GENERIC_MODE, "True"),
+        MakeTargetedPowerStringParameter(TP_STR_TEST_DURATION, "0"),
+    };
+
+    cpt->Go(cpt->GetTargetedPowerTestName(), entityList.get(), params.size(), params.data());
+
+    CHECK_NOTHROW(cpt->GetGpuResults(cpt->GetTargetedPowerTestName()));
+}
+
+TEST_CASE_METHOD(TargetedPowerTestFixture,
+                 "TargetedPower_wrapper: EnforcedPowerLimitTooLow(), negative test for DCGM_FR_ENFORCED_POWER_LIMIT")
 {
     dcgmHandle_t handle = 1;
-    ConstantPowerTest cpt(handle);
+    ConstantPowerTest cpt(handle,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
 
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfo = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
@@ -377,10 +418,16 @@ void *mallocMock(size_t /* size */)
     return nullptr;
 }
 
-TEST_CASE("TargetedPower_wrapper: CudaInit(), negative test for DCGM_FR_MEMORY_ALLOC_HOST")
+TEST_CASE_METHOD(TargetedPowerTestFixture,
+                 "TargetedPower_wrapper: CudaInit(), negative test for DCGM_FR_MEMORY_ALLOC_HOST")
 {
     dcgmHandle_t handle = 1;
-    ConstantPowerTest cpt(handle);
+    ConstantPowerTest cpt(handle,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
 
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfo = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
@@ -424,11 +471,16 @@ TEST_CASE("TargetedPower_wrapper: CudaInit(), negative test for DCGM_FR_MEMORY_A
     REQUIRE(count == 1);
 }
 
-TEST_CASE("TargetedPower_wrapper: CudaInit() initializes CUDA resources with stubs")
+TEST_CASE_METHOD(TargetedPowerTestFixture, "TargetedPower_wrapper: CudaInit() initializes CUDA resources with stubs")
 {
     GIVEN("a targeted power plugin with mock devices and tiny matrices")
     {
-        ConstantPowerTest cpt((dcgmHandle_t)1);
+        ConstantPowerTest cpt((dcgmHandle_t)1,
+                              std::move(mockDcgmOpsUnique),
+                              std::move(mockCudaOpsUnique),
+                              std::move(mockCublasOpsUnique),
+                              std::move(mockCudaCommonUnique),
+                              &nvvsCommon);
         dcgmDiagPluginEntityList_v1 entityInfo = MakeTargetedPowerEntityList(1, DcgmEntityStatusOk, 1);
         cpt.InitializeForEntityList(cpt.GetTargetedPowerTestName(), entityInfo);
         cpt.MockDevices({ 0 }, { 500.0 });
@@ -469,11 +521,15 @@ TEST_CASE("TargetedPower_wrapper: CudaInit() initializes CUDA resources with stu
     }
 }
 
-TEST_CASE("TargetedPower_wrapper: CudaInit handles CUDA setup failures")
+TEST_CASE_METHOD(TargetedPowerTestFixture, "TargetedPower_wrapper: CudaInit handles CUDA setup failures")
 {
-    CudaStubResultGuard resultGuard;
-    CudaStubMemoryGuard memoryGuard;
-    ConstantPowerTest cpt((dcgmHandle_t)1);
+    ConstantPowerTest cpt((dcgmHandle_t)1,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
     dcgmDiagPluginEntityList_v1 entityInfo = MakeTargetedPowerEntityList(1, DcgmEntityStatusOk, 1);
     cpt.InitializeForEntityList(cpt.GetTargetedPowerTestName(), entityInfo);
     cpt.MockDevices({ 0 }, { 500.0 });
@@ -483,37 +539,43 @@ TEST_CASE("TargetedPower_wrapper: CudaInit handles CUDA setup failures")
 
     SECTION("device count failure is reported")
     {
-        cudaGetDeviceCountResult = cudaErrorInvalidValue;
+        mockCudaOps->cudaGetDeviceCountResult = cudaErrorInvalidValue;
 
         CHECK(cpt.CudaInitWrapper(malloc) == -1);
     }
 
     SECTION("device property failure is reported")
     {
-        cudaGetDevicePropertiesResult = cudaErrorInvalidValue;
+        mockCudaOps->cudaGetDevicePropertiesResult = cudaErrorInvalidValue;
 
         CHECK(cpt.CudaInitWrapper(malloc) == -1);
     }
 
     SECTION("stream creation failure is reported")
     {
-        cudaStreamCreateResult = cudaErrorInvalidValue;
+        mockCudaOps->cudaStreamCreateResult = cudaErrorInvalidValue;
 
         CHECK(cpt.CudaInitWrapper(malloc) == -1);
     }
 
     SECTION("device allocation failure is reported")
     {
-        cudaMallocResult = cudaErrorMemoryAllocation;
+        mockCudaOps->cudaMallocResult = cudaErrorMemoryAllocation;
 
         CHECK(cpt.CudaInitWrapper(malloc) == -1);
     }
 }
 
-TEST_CASE("ConstantPower: CheckGpuPowerUsage(), negative test for DCGM_FR_TARGET_POWER")
+TEST_CASE_METHOD(TargetedPowerTestFixture,
+                 "ConstantPower: CheckGpuPowerUsage(), negative test for DCGM_FR_TARGET_POWER")
 {
     dcgmHandle_t handle = 1;
-    ConstantPowerTest cpt(handle);
+    ConstantPowerTest cpt(handle,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
 
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfo = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
@@ -538,7 +600,7 @@ TEST_CASE("ConstantPower: CheckGpuPowerUsage(), negative test for DCGM_FR_TARGET
     timelib64_t startTime        = timelib_usecSince1970();
     timelib64_t earliestStopTime = timelib_usecSince1970();
     std::vector<DcgmError> errorList;
-    CPDevice device;
+    CPDevice device(mockDcgmOps, mockCudaOps, mockCublasOps);
     device.gpuId          = gpuIds[0];
     device.maxPowerTarget = maxPowerTargets[0];
     bool ret              = cpt.CheckGpuPowerUsageWrapper(&device, errorList, startTime, earliestStopTime);
@@ -564,15 +626,21 @@ TEST_CASE("ConstantPower: CheckGpuPowerUsage(), negative test for DCGM_FR_TARGET
     REQUIRE(errorList[0].GetMessage() == expectedError.GetMessage());
 }
 
-TEST_CASE("ConstantPower: CheckGpuPowerUsage() handles stat failures and low enforced limits")
+TEST_CASE_METHOD(TargetedPowerTestFixture,
+                 "ConstantPower: CheckGpuPowerUsage() handles stat failures and low enforced limits")
 {
     dcgmHandle_t handle = 1;
-    ConstantPowerTest cpt(handle);
+    ConstantPowerTest cpt(handle,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
 
     dcgmDiagPluginEntityList_v1 entityInfo = MakeTargetedPowerEntityList(1, DcgmEntityStatusOk, 1);
     cpt.InitializeForEntityList(cpt.GetTargetedPowerTestName(), entityInfo);
 
-    CPDevice device;
+    CPDevice device(mockDcgmOps, mockCudaOps, mockCublasOps);
     device.gpuId          = 0;
     device.maxPowerTarget = 90.0;
 
@@ -626,9 +694,14 @@ TEST_CASE("ConstantPower: CheckGpuPowerUsage() handles stat failures and low enf
     }
 }
 
-TEST_CASE("ConstantPower: CheckPassFail sets GPU results and handles short duration")
+TEST_CASE_METHOD(TargetedPowerTestFixture, "ConstantPower: CheckPassFail sets GPU results and handles short duration")
 {
-    ConstantPowerTest cpt((dcgmHandle_t)1);
+    ConstantPowerTest cpt((dcgmHandle_t)1,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
     dcgmDiagPluginEntityList_v1 entityInfo = MakeTargetedPowerEntityList(2, DcgmEntityStatusOk, 1);
     cpt.InitializeForEntityList(cpt.GetTargetedPowerTestName(), entityInfo);
     cpt.MockDevices({ 0, 1 }, { 500.0, 500.0 });
@@ -646,9 +719,14 @@ TEST_CASE("ConstantPower: CheckPassFail sets GPU results and handles short durat
     CHECK(cpt.GetGpuResults(cpt.GetTargetedPowerTestName()).at(1) == NVVS_RESULT_PASS);
 }
 
-TEST_CASE("ConstantPower: RunTest skips when enforced power limits are too low")
+TEST_CASE_METHOD(TargetedPowerTestFixture, "ConstantPower: RunTest skips when enforced power limits are too low")
 {
-    ConstantPowerTest cpt((dcgmHandle_t)1);
+    ConstantPowerTest cpt((dcgmHandle_t)1,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
     dcgmDiagPluginEntityList_v1 entityInfo = MakeTargetedPowerEntityList(2, DcgmEntityStatusOk, 1);
     cpt.InitializeForEntityList(cpt.GetTargetedPowerTestName(), entityInfo);
     cpt.MockDevices({ 0, 1 }, { 10.0, 20.0 });
@@ -662,10 +740,16 @@ TEST_CASE("ConstantPower: RunTest skips when enforced power limits are too low")
     CHECK(cpt.GetErrors(cpt.GetTargetedPowerTestName()).size() == 2);
 }
 
-TEST_CASE("ConstantPower: RunTest handles zero-duration CUDA setup and pass/fail checks")
+TEST_CASE_METHOD(TargetedPowerTestFixture,
+                 "ConstantPower: RunTest handles zero-duration CUDA setup and pass/fail checks")
 {
-    CudaStubMemoryGuard guard;
-    ConstantPowerTest cpt((dcgmHandle_t)1);
+    ConstantPowerTest cpt((dcgmHandle_t)1,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
     dcgmDiagPluginEntityList_v1 entityInfo = MakeTargetedPowerEntityList(1, DcgmEntityStatusOk, 1);
     cpt.InitializeForEntityList(cpt.GetTargetedPowerTestName(), entityInfo);
     cpt.MockDevices({ 0 }, { 500.0 });
@@ -686,10 +770,15 @@ TEST_CASE("ConstantPower: RunTest handles zero-duration CUDA setup and pass/fail
     CHECK(cpt.GetGpuResults(cpt.GetTargetedPowerTestName()).at(0) == NVVS_RESULT_PASS);
 }
 
-TEST_CASE("ConstantPower: RunTest queues short CUDA worker workloads with stubs")
+TEST_CASE_METHOD(TargetedPowerTestFixture, "ConstantPower: RunTest queues short CUDA worker workloads with stubs")
 {
-    CudaStubMemoryGuard guard;
-    ConstantPowerTest cpt((dcgmHandle_t)1);
+    ConstantPowerTest cpt((dcgmHandle_t)1,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
     dcgmDiagPluginEntityList_v1 entityInfo = MakeTargetedPowerEntityList(1, DcgmEntityStatusOk, 1);
     cpt.InitializeForEntityList(cpt.GetTargetedPowerTestName(), entityInfo);
     cpt.MockDevices({ 0 }, { 500.0 });
@@ -713,10 +802,15 @@ TEST_CASE("ConstantPower: RunTest queues short CUDA worker workloads with stubs"
     CHECK(cpt.GetGpuResults(cpt.GetTargetedPowerTestName()).at(0) == NVVS_RESULT_PASS);
 }
 
-TEST_CASE("ConstantPower: RunTest queues SGEMM worker workloads with stubs")
+TEST_CASE_METHOD(TargetedPowerTestFixture, "ConstantPower: RunTest queues SGEMM worker workloads with stubs")
 {
-    CudaStubMemoryGuard guard;
-    ConstantPowerTest cpt((dcgmHandle_t)1);
+    ConstantPowerTest cpt((dcgmHandle_t)1,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
     dcgmDiagPluginEntityList_v1 entityInfo = MakeTargetedPowerEntityList(1, DcgmEntityStatusOk, 1);
     cpt.InitializeForEntityList(cpt.GetTargetedPowerTestName(), entityInfo);
     cpt.MockDevices({ 0 }, { 500.0 });
@@ -742,10 +836,15 @@ TEST_CASE("ConstantPower: RunTest queues SGEMM worker workloads with stubs")
     CHECK(cpt.GetGpuResults(cpt.GetTargetedPowerTestName()).at(0) == NVVS_RESULT_PASS);
 }
 
-TEST_CASE("ConstantPower: RunTest queues FP16 worker workloads with stubs")
+TEST_CASE_METHOD(TargetedPowerTestFixture, "ConstantPower: RunTest queues FP16 worker workloads with stubs")
 {
-    CudaStubMemoryGuard guard;
-    ConstantPowerTest cpt((dcgmHandle_t)1);
+    ConstantPowerTest cpt((dcgmHandle_t)1,
+                          std::move(mockDcgmOpsUnique),
+                          std::move(mockCudaOpsUnique),
+                          std::move(mockCublasOpsUnique),
+                          std::move(mockCudaCommonUnique),
+                          &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
     dcgmDiagPluginEntityList_v1 entityInfo = MakeTargetedPowerEntityList(1, DcgmEntityStatusOk, 1);
     cpt.InitializeForEntityList(cpt.GetTargetedPowerTestName(), entityInfo);
     cpt.MockDevices({ 0 }, { 500.0 });
@@ -770,4 +869,26 @@ TEST_CASE("ConstantPower: RunTest queues FP16 worker workloads with stubs")
 
     CHECK(cpt.RunTestWrapper(&entityInfo));
     CHECK(cpt.GetGpuResults(cpt.GetTargetedPowerTestName()).at(0) == NVVS_RESULT_PASS);
+}
+
+TEST_CASE_METHOD(TargetedPowerTestFixture, "TargetedPower_wrapper: negative test for DCGM_FR_TEST_DISABLED")
+{
+    auto cpt                = std::make_unique<ConstantPower>((dcgmHandle_t)1,
+                                                              std::move(mockDcgmOpsUnique),
+                                                              std::move(mockCudaOpsUnique),
+                                                              std::move(mockCublasOpsUnique),
+                                                              std::move(mockCudaCommonUnique),
+                                                              &nvvsCommon);
+    auto entityList         = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    entityList->numEntities = 0;
+
+    dcgmDiagPluginTestParameter_t param = MakeTargetedPowerStringParameter(TP_STR_IS_ALLOWED, "False");
+
+    cpt->Go(cpt->GetTargetedPowerTestName(), entityList.get(), 1, &param);
+
+    CHECK(cpt->GetResult(cpt->GetTargetedPowerTestName()) == NVVS_RESULT_SKIP);
+
+    auto entityResults = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    REQUIRE(cpt->GetResults(cpt->GetTargetedPowerTestName(), entityResults.get()) == DCGM_ST_OK);
+    CHECK(entityResults->numErrors == 0);
 }

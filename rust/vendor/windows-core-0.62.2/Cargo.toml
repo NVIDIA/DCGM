@@ -1,0 +1,54 @@
+[dependencies.windows-implement]
+default-features = false
+version = "0.60.2"
+
+[dependencies.windows-interface]
+default-features = false
+version = "0.59.3"
+
+[dependencies.windows-link]
+default-features = false
+version = "0.2.1"
+
+[dependencies.windows-result]
+default-features = false
+version = "0.4.1"
+
+[dependencies.windows-strings]
+default-features = false
+version = "0.5.1"
+
+[features]
+default = ["std"]
+std = ["windows-result/std", "windows-strings/std"]
+
+[lib]
+path = "src/lib.rs"
+
+[lints.rust]
+missing_unsafe_on_extern = "warn"
+
+[lints.rust.unexpected_cfgs]
+check-cfg = ["cfg(windows_raw_dylib, windows_slim_errors)"]
+level = "warn"
+priority = 0
+
+[package]
+autobenches = false
+autobins = false
+autoexamples = false
+autolib = false
+autotests = false
+categories = ["os::windows-apis"]
+description = "Core type support for COM and Windows"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+name = "windows-core"
+readme = "readme.md"
+repository = "https://github.com/microsoft/windows-rs"
+rust-version = "1.82"
+version = "0.62.2"
+
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = []

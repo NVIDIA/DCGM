@@ -1,0 +1,15 @@
+./usr/
+./usr/libexec/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libcublas.so
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libcublas.so.13
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libcublas.so.13.4.0.1
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libcublasLt.so
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libcublasLt.so.13
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libcublasLt.so.13.4.0.1
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-cuda13-cublas/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-cuda13-cublas/copyright

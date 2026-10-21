@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,8 +22,9 @@ target_link_libraries(transport_objects PUBLIC
     sdk_nvml_interface
     )
 
-target_include_directories(transport_objects SYSTEM PUBLIC ${LIBEVENT_INCLUDE_DIR})
-target_link_libraries(transport_objects PUBLIC ${LIBEVENT_STATIC_LIBS})
+target_link_libraries(transport_objects PUBLIC
+    libevent::extra
+    libevent::pthreads)
 target_link_libraries(transport_objects PRIVATE dcgm_thread)
 
 target_sources(transport_objects PRIVATE

@@ -1,0 +1,3 @@
+/usr/bin/dcgmi
+/usr/share/licenses/dcgmi-<BASEPACKAGEVERSION>
+/usr/share/licenses/dcgmi-<BASEPACKAGEVERSION>/LICENSE

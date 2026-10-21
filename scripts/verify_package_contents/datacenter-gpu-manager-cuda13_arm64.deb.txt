@@ -1,10 +1,6 @@
 ./usr/
 ./usr/bin/
 ./usr/bin/dcgmproftester13
-./usr/lib/
-./usr/lib/aarch64-linux-gnu/
-./usr/lib/aarch64-linux-gnu/libdcgm_cublas_proxy13.so.<MAJORVERSION>
-./usr/lib/aarch64-linux-gnu/libdcgm_cublas_proxy13.so.<SOFTWAREVERSION>
 ./usr/libexec/
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/
@@ -28,12 +24,7 @@
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libTargetedPower.so.<SOFTWAREVERSION>
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libTargetedStress.so.<MAJORVERSION>
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libTargetedStress.so.<SOFTWAREVERSION>
-./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libcurand.so
-./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libcurand.so.10
-./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libcurand.so.10.4.0.35
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/nvbandwidth
-./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/updated/
-./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/updated/libcurand.so.10
 ./usr/share/
 ./usr/share/doc/
 ./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-cuda13/

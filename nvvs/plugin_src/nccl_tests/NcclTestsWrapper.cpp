@@ -17,11 +17,14 @@
 #include "NcclTestsPlugin.h"
 
 #include <DcgmLogging.h>
+#include <DcgmOps.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <PluginInterface.h>
 #include <PluginStrings.h>
 #include <dcgm_structs.h>
 
 #include <boost/process.hpp>
+#include <memory>
 #include <ranges>
 
 using namespace DcgmNs::Nvvs::Plugins::NcclTests;
@@ -87,6 +90,7 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
                               dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              NvvsCommonPtr nvvsCommon,
                               HangDetectMonitor *monitor)
 {
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, NCCL_TESTS_PLUGIN_NAME);
@@ -99,7 +103,8 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
 
     try
     {
-        auto tmpNcclTestsPlugin = std::make_unique<NcclTestsPlugin>(handle);
+        auto tmpNcclTestsPlugin
+            = std::make_unique<NcclTestsPlugin>(handle, std::make_unique<DcgmNs::DcgmOps>(), nvvsCommon);
         tmpNcclTestsPlugin->SetPluginAttr(pluginAttr);
         tmpNcclTestsPlugin->SetHangDetectMonitor(monitor);
         *userData = tmpNcclTestsPlugin.release();
@@ -167,6 +172,7 @@ dcgmReturn_t ShutdownPlugin(void *userData)
     }
     auto *ncclTestsPlugin = std::launder(reinterpret_cast<NcclTestsPlugin *>(userData));
     ncclTestsPlugin->Shutdown();
+    delete ncclTestsPlugin;
 
     return DCGM_ST_OK;
 }

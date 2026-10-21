@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <functional>
 #include <optional>
 #include <tuple>
+#include <utility>
 
 const unsigned int DcgmModuleIntrospect::DEFAULT_RUN_INTERVAL_MS
     = 100000; /* We have nothing to do in our loop so far */
@@ -35,7 +36,20 @@ DcgmModuleIntrospect::DcgmModuleIntrospect(dcgmCoreCallbacks_t &dcc)
     , DcgmTaskRunner()
 {
     mpMetadataManager = std::make_unique<DcgmMetadataManager>(dcc);
+    Init();
+}
 
+DcgmModuleIntrospect::DcgmModuleIntrospect(dcgmCoreCallbacks_t &dcc,
+                                           std::unique_ptr<DcgmMetadataManager> metadataManager)
+    : DcgmModuleWithCoreProxy(dcc)
+    , DcgmTaskRunner()
+{
+    mpMetadataManager = metadataManager ? std::move(metadataManager) : std::make_unique<DcgmMetadataManager>(dcc);
+    Init();
+}
+
+void DcgmModuleIntrospect::Init()
+{
     SetRunInterval(std::chrono::milliseconds(DEFAULT_RUN_INTERVAL_MS));
 
     IF_PLOG_(BASE_LOGGER, plog::debug)
@@ -288,6 +302,15 @@ extern "C" {
 /*****************************************************************************/
 DCGM_PUBLIC_API DcgmModule *dcgm_alloc_module_instance(dcgmCoreCallbacks_t *dcc)
 {
+    /*
+     * Module loader should never pass null callbacks, but exported module entry points
+     * guard invalid input to match other module allocation behavior.
+     */
+    if (dcc == nullptr)
+    {
+        return nullptr;
+    }
+
     return SafeWrapper([=] { return new DcgmModuleIntrospect(*dcc); });
 }
 

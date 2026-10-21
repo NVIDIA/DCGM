@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,10 @@
 
 #include "dcgm_fields.h"
 #include <CudaCommon.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <catch2/catch_all.hpp>
-#include <cu_stubs_control.h>
 
+#include <MockCudaOps.h>
 #include <Plugin.h>
 #include <PluginCommon.h>
 #include <PluginInterface.h>
@@ -27,6 +28,11 @@
 class TestPlugin : public Plugin
 {
 public:
+    explicit TestPlugin(DcgmNs::DcgmOpsAnyUniquePtr dcgmOps)
+        : Plugin(dcgmOps.AsAnyPtr())
+        , m_dcgmOpsUnique(std::move(dcgmOps))
+    {}
+
     void Go(std::string const & /* testName */,
             dcgmDiagPluginEntityList_v1 const * /* entityInfo */,
             unsigned int /* numParameters */,
@@ -35,15 +41,38 @@ public:
 
     ~TestPlugin()
     {}
+
+private:
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique;
+};
+
+struct CudaCommonTestFixture
+{
+    CudaCommonTestFixture()
+        : dcgmOpsUnique(std::make_unique<DcgmNs::DcgmOps>())
+        , dcgmOps(dcgmOpsUnique.get())
+        , cudaOpsUnique(std::make_unique<MockCudaOps>())
+        , cudaOps(cudaOpsUnique.get())
+        , cudaCommon(cudaOps)
+        , plugin(std::move(dcgmOpsUnique))
+    {}
+
+    std::unique_ptr<DcgmNs::DcgmOps> dcgmOpsUnique;
+    DcgmNs::DcgmOps *dcgmOps;
+    std::unique_ptr<MockCudaOps> cudaOpsUnique;
+    MockCudaOps *cudaOps;
+    CudaCommon cudaCommon;
+    TestPlugin plugin;
 };
 
 class CuGetErrorStringGuard
 {
 public:
-    explicit CuGetErrorStringGuard(char const *value)
-        : m_previousValue(cuGetErrorStringValue)
+    explicit CuGetErrorStringGuard(MockCudaOps &cudaOps, char const *value)
+        : m_cudaOps(cudaOps)
+        , m_previousValue(cudaOps.cuGetErrorStringValue)
     {
-        cuGetErrorStringValue = value;
+        m_cudaOps.cuGetErrorStringValue = value;
     }
 
     CuGetErrorStringGuard(CuGetErrorStringGuard const &)            = delete;
@@ -53,10 +82,11 @@ public:
 
     ~CuGetErrorStringGuard()
     {
-        cuGetErrorStringValue = m_previousValue;
+        m_cudaOps.cuGetErrorStringValue = m_previousValue;
     }
 
 private:
+    MockCudaOps &m_cudaOps;
     char const *m_previousValue;
 };
 
@@ -75,20 +105,19 @@ void initializePluginWithGpus(Plugin &p, std::string const &testName, unsigned i
     p.InitializeForEntityList(testName, *entityInfo);
 }
 
-TEST_CASE("Logging GPU Specific Errors")
+TEST_CASE_METHOD(CudaCommonTestFixture, "Logging GPU Specific Errors")
 {
-    TestPlugin p;
     std::string const testName = "capoo";
-    initializePluginWithGpus(p, testName, 3);
+    initializePluginWithGpus(plugin, testName, 3);
 
-    AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 0);
-    AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 1, 123400);
-    AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, true);
+    cudaCommon.LogCudaErrorForPlugin(&plugin, testName, "cudaMalloc", cudaErrorMemoryAllocation, 0);
+    cudaCommon.LogCudaErrorForPlugin(&plugin, testName, "cudaMalloc", cudaErrorMemoryAllocation, 1, 123400);
+    cudaCommon.LogCudaErrorForPlugin(&plugin, testName, "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, true);
 
     auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
-    dcgmReturn_t ret = p.GetResults(testName, &entityResults);
+    dcgmReturn_t ret = plugin.GetResults(testName, &entityResults);
     CHECK(ret == DCGM_ST_OK);
     REQUIRE(entityResults.numErrors == 3);
     for (unsigned int i = 0; i < entityResults.numErrors; i++)
@@ -97,11 +126,11 @@ TEST_CASE("Logging GPU Specific Errors")
         CHECK(entityResults.errors[i].entity.entityGroupId == DCGM_FE_GPU);
     }
 
-    LOG_CUDA_ERROR_FOR_PLUGIN(&p, testName, "cudaFake", cudaErrorMemoryAllocation, 1);
+    LOG_CUDA_ERROR_FOR_PLUGIN(&cudaCommon, &plugin, testName, "cudaFake", cudaErrorMemoryAllocation, 1);
     cublasStatus_t cubSt = (cublasStatus_t)1;
-    LOG_CUBLAS_ERROR_FOR_PLUGIN(&p, testName, "cublasFake", cubSt, 0);
+    cudaCommon.LogCublasErrorForPlugin(&plugin, testName, "cublasFake", cubSt, 0);
     memset(&entityResults, 0, sizeof(entityResults));
-    ret = p.GetResults(testName, &entityResults);
+    ret = plugin.GetResults(testName, &entityResults);
     CHECK(ret == DCGM_ST_OK);
     REQUIRE(entityResults.numErrors == 5);
     for (unsigned int i = 0; i < entityResults.numErrors; i++)
@@ -112,22 +141,21 @@ TEST_CASE("Logging GPU Specific Errors")
     }
 }
 
-TEST_CASE("Verify entityResults when logging generic errors")
+TEST_CASE_METHOD(CudaCommonTestFixture, "Verify entityResults when logging generic errors")
 {
-    TestPlugin p;
     std::string const testName = "capoo";
     cublasStatus_t cubSt       = (cublasStatus_t)1;
 
-    initializePluginWithGpus(p, testName, 3);
+    initializePluginWithGpus(plugin, testName, 3);
 
-    AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, false);
-    LOG_CUDA_ERROR_FOR_PLUGIN(&p, testName, "cudaFake", cudaErrorMemoryAllocation, 1, 0, false);
-    LOG_CUBLAS_ERROR_FOR_PLUGIN(&p, testName, "cublasFake", cubSt, 0, 0, false);
+    cudaCommon.LogCudaErrorForPlugin(&plugin, testName, "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, false);
+    LOG_CUDA_ERROR_FOR_PLUGIN(&cudaCommon, &plugin, testName, "cudaFake", cudaErrorMemoryAllocation, 1, 0, false);
+    LOG_CUBLAS_ERROR_FOR_PLUGIN(&cudaCommon, &plugin, testName, "cublasFake", cubSt, 0, 0, false);
 
     auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
-    dcgmReturn_t ret = p.GetResults(testName, &entityResults);
+    dcgmReturn_t ret = plugin.GetResults(testName, &entityResults);
     CHECK(ret == DCGM_ST_OK);
     REQUIRE(entityResults.numErrors == 3);
     for (unsigned int i = 0; i < entityResults.numErrors; i++)
@@ -137,99 +165,109 @@ TEST_CASE("Verify entityResults when logging generic errors")
     }
 }
 
-TEST_CASE("AddAPIError Details")
+TEST_CASE_METHOD(CudaCommonTestFixture, "AddAPIError Details")
 {
-    TestPlugin p;
     std::string const testName = "capoo";
-    initializePluginWithGpus(p, testName, 2);
+    initializePluginWithGpus(plugin, testName, 2);
 
     // Should append the GPU index since it's a GPU specific failure
-    std::string errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", 0, 0, true);
+    std::string errText = cudaCommon.AddAPIError(&plugin, testName, "bridgeFour", "rock not found", 0, 0, true);
     std::string gpuSpecficErrorPiece("failed for GPU 0");
     CHECK(errText.find(gpuSpecficErrorPiece) != std::string::npos);
 
     // Shouldn't append the GPU index since it isn't a GPU specific failure
-    errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", 0, 0, false);
+    errText = cudaCommon.AddAPIError(&plugin, testName, "bridgeFour", "rock not found", 0, 0, false);
     CHECK(errText.find(gpuSpecficErrorPiece) == std::string::npos);
 }
 
-TEST_CASE("CUDA common error string helpers")
+TEST_CASE_METHOD(CudaCommonTestFixture, "CUDA common error string helpers")
 {
     SECTION("AppendCudaDriverError leaves the message unchanged when CUDA has no string")
     {
-        CHECK(AppendCudaDriverError("base error", CUDA_ERROR_INVALID_VALUE) == "base error");
+        CHECK(cudaCommon.AppendCudaDriverError("base error", CUDA_ERROR_INVALID_VALUE) == "base error");
     }
 
     SECTION("AppendCudaDriverError appends CUDA driver strings when available")
     {
-        CuGetErrorStringGuard errorStringGuard("driver exploded");
-        CHECK(AppendCudaDriverError("base error", CUDA_ERROR_INVALID_VALUE) == "base error: 'driver exploded'.");
+        CuGetErrorStringGuard errorStringGuard(*cudaOps, "driver exploded");
+        CHECK(cudaCommon.AppendCudaDriverError("base error", CUDA_ERROR_INVALID_VALUE)
+              == "base error: 'driver exploded'.");
     }
 
     SECTION("cublasGetErrorString maps known statuses")
     {
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_SUCCESS)) == "CUBLAS_STATUS_SUCCESS");
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_NOT_INITIALIZED)) == "CUBLAS_STATUS_NOT_INITIALIZED");
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_ALLOC_FAILED)) == "CUBLAS_STATUS_ALLOC_FAILED");
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_INVALID_VALUE)) == "CUBLAS_STATUS_INVALID_VALUE");
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_ARCH_MISMATCH)) == "CUBLAS_STATUS_ARCH_MISMATCH");
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_MAPPING_ERROR)) == "CUBLAS_STATUS_MAPPING_ERROR");
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_EXECUTION_FAILED)) == "CUBLAS_STATUS_EXECUTION_FAILED");
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_INTERNAL_ERROR)) == "CUBLAS_STATUS_INTERNAL_ERROR");
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_NOT_SUPPORTED)) == "CUBLAS_STATUS_NOT_SUPPORTED");
-        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_LICENSE_ERROR)) == "CUBLAS_STATUS_LICENSE_ERROR");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_SUCCESS)) == "CUBLAS_STATUS_SUCCESS");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_NOT_INITIALIZED))
+              == "CUBLAS_STATUS_NOT_INITIALIZED");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_ALLOC_FAILED)) == "CUBLAS_STATUS_ALLOC_FAILED");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_INVALID_VALUE))
+              == "CUBLAS_STATUS_INVALID_VALUE");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_ARCH_MISMATCH))
+              == "CUBLAS_STATUS_ARCH_MISMATCH");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_MAPPING_ERROR))
+              == "CUBLAS_STATUS_MAPPING_ERROR");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_EXECUTION_FAILED))
+              == "CUBLAS_STATUS_EXECUTION_FAILED");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_INTERNAL_ERROR))
+              == "CUBLAS_STATUS_INTERNAL_ERROR");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_NOT_SUPPORTED))
+              == "CUBLAS_STATUS_NOT_SUPPORTED");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(CUBLAS_STATUS_LICENSE_ERROR))
+              == "CUBLAS_STATUS_LICENSE_ERROR");
     }
 
     SECTION("cublasGetErrorString labels unknown statuses")
     {
-        CHECK(std::string(cublasGetErrorString(static_cast<cublasStatus_t>(999))) == "Unknown error");
+        CHECK(std::string(cudaCommon.CublasGetErrorString(static_cast<cublasStatus_t>(999))) == "Unknown error");
     }
 
     SECTION("GetAdditionalCuInitDetail identifies fabric-manager guidance")
     {
-        CHECK(std::string(GetAdditionalCuInitDetail(CUDA_ERROR_NOT_INITIALIZED)) == CHECK_FABRIC_MANAGER_MSG);
-        CHECK(std::string(GetAdditionalCuInitDetail(CUDA_ERROR_INVALID_VALUE)).empty());
+        CHECK(std::string(cudaCommon.GetAdditionalCuInitDetail(CUDA_ERROR_NOT_INITIALIZED))
+              == CHECK_FABRIC_MANAGER_MSG);
+        CHECK(std::string(cudaCommon.GetAdditionalCuInitDetail(CUDA_ERROR_INVALID_VALUE)).empty());
     }
 }
 
-TEST_CASE("CUDA common CUresult logging handles known and unknown driver strings")
+TEST_CASE_METHOD(CudaCommonTestFixture, "CUDA common CUresult logging handles known and unknown driver strings")
 {
-    TestPlugin p;
     std::string const testName = "capoo";
-    initializePluginWithGpus(p, testName, 1);
+    initializePluginWithGpus(plugin, testName, 1);
 
     SECTION("unknown CUresult strings use a fallback")
     {
-        CuGetErrorStringGuard errorStringGuard(nullptr);
-        std::string errText = AddCudaError(&p, testName, "cuMemAlloc", CUDA_ERROR_INVALID_VALUE, 0, 0, true);
+        CuGetErrorStringGuard errorStringGuard(*cudaOps, nullptr);
+        std::string errText
+            = cudaCommon.LogCudaErrorForPlugin(&plugin, testName, "cuMemAlloc", CUDA_ERROR_INVALID_VALUE, 0, 0, true);
         CHECK(errText.find("Unknown error") != std::string::npos);
     }
 
     SECTION("cuInit includes extra guidance")
     {
-        CuGetErrorStringGuard errorStringGuard("not initialized");
-        std::string errText = AddCudaError(&p, testName, "cuInit", CUDA_ERROR_NOT_INITIALIZED, 0, 0, true);
+        CuGetErrorStringGuard errorStringGuard(*cudaOps, "not initialized");
+        std::string errText
+            = cudaCommon.LogCudaErrorForPlugin(&plugin, testName, "cuInit", CUDA_ERROR_NOT_INITIALIZED, 0, 0, true);
         CHECK(errText.find("not initialized") != std::string::npos);
         CHECK(errText.find(RUN_CUDA_KERNEL_REC) != std::string::npos);
     }
 }
 
-TEST_CASE("Negative test for DCGM_FR_API_FAIL")
+TEST_CASE_METHOD(CudaCommonTestFixture, "Negative test for DCGM_FR_API_FAIL")
 {
-    TestPlugin p;
     std::string const testName = "capoo";
-    initializePluginWithGpus(p, testName, 2);
+    initializePluginWithGpus(plugin, testName, 2);
 
     // Shouldn't append the GPU index since it isn't a GPU specific failure
     unsigned int constexpr erraticGpuId { 0 };
-    std::string errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", erraticGpuId, 0, false);
+    std::string errText
+        = cudaCommon.AddAPIError(&plugin, testName, "bridgeFour", "rock not found", erraticGpuId, 0, false);
 
     DcgmError expectedError { 0 };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_API_FAIL, expectedError, "bridgeFour", "rock not found");
 
     REQUIRE(expectedError.GetMessage() == errText);
 
-    nvvsPluginEntityErrors_t errorsPerEntity = p.GetEntityErrors(testName);
+    nvvsPluginEntityErrors_t errorsPerEntity = plugin.GetEntityErrors(testName);
     unsigned int count { 0 };
     for (auto const &[entityPair, diagErrors] : errorsPerEntity)
     {
@@ -250,22 +288,22 @@ TEST_CASE("Negative test for DCGM_FR_API_FAIL")
     REQUIRE(count == 1);
 }
 
-TEST_CASE("Negative test for DCGM_FR_API_FAIL_GPU")
+TEST_CASE_METHOD(CudaCommonTestFixture, "Negative test for DCGM_FR_API_FAIL_GPU")
 {
-    TestPlugin p;
     std::string const testName = "capoo";
-    initializePluginWithGpus(p, testName, 2);
+    initializePluginWithGpus(plugin, testName, 2);
 
     // Should append the GPU index since it's a GPU specific failure
     unsigned int constexpr erraticGpuId { 0 };
-    std::string errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", erraticGpuId, 0, true);
+    std::string errText
+        = cudaCommon.AddAPIError(&plugin, testName, "bridgeFour", "rock not found", erraticGpuId, 0, true);
 
     DcgmError expectedError { 0 };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_API_FAIL_GPU, expectedError, "bridgeFour", 0, "rock not found");
 
     REQUIRE(expectedError.GetMessage() == errText);
 
-    nvvsPluginEntityErrors_t errorsPerEntity = p.GetEntityErrors(testName);
+    nvvsPluginEntityErrors_t errorsPerEntity = plugin.GetEntityErrors(testName);
 
     unsigned int count { 0 };
     for (auto const &[entityPair, diagErrors] : errorsPerEntity)

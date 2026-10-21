@@ -24,11 +24,14 @@
 #include "dcgm_structs.h"
 #include "dcgm_test_apis.h"
 #include <DcgmStringHelpers.h>
+#include <charconv>
 #include <ctime>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 
 /***************************************************************************************/
@@ -38,6 +41,27 @@ static char const TEST_DATA[] = " <DATA_NAME              > : <DATA_INFO        
 #define DATA_NAME_TAG "<DATA_NAME"
 #define DATA_INFO_TAG "<DATA_INFO"
 
+namespace
+{
+template <typename T>
+bool ParseUnsigned(std::string_view input, T &value)
+{
+    if (input.empty())
+    {
+        return false;
+    }
+
+    T parsed {};
+    auto const [end, error] = std::from_chars(input.data(), input.data() + input.size(), parsed);
+    if (error != std::errc {} || end != input.data() + input.size())
+    {
+        return false;
+    }
+
+    value = parsed;
+    return true;
+}
+} // namespace
 
 dcgmReturn_t DcgmiTest::IntrospectCache(dcgmHandle_t mDcgmHandle,
                                         unsigned int gpuId,
@@ -54,7 +78,7 @@ dcgmReturn_t DcgmiTest::IntrospectCache(dcgmHandle_t mDcgmHandle,
     if (isGroup)
     {
         stNvcmGroupInfo->version = dcgmGroupInfo_version;
-        result                   = dcgmGroupGetInfo(mDcgmHandle, (dcgmGpuGrp_t)(long long)gpuId, stNvcmGroupInfo.get());
+        result = m_dcgmOps->dcgmGroupGetInfo(mDcgmHandle, (dcgmGpuGrp_t)(long long)gpuId, stNvcmGroupInfo.get());
         if (DCGM_ST_OK != result)
         {
             std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -95,7 +119,7 @@ dcgmReturn_t DcgmiTest::IntrospectCache(dcgmHandle_t mDcgmHandle,
         fieldInfo.entityId      = (unsigned int)(uintptr_t)gpuIds[i];
         fieldInfo.entityGroupId = DCGM_FE_GPU;
 
-        result = dcgmGetCacheManagerFieldInfo(mDcgmHandle, &fieldInfo);
+        result = m_dcgmOps->dcgmGetCacheManagerFieldInfo(mDcgmHandle, &fieldInfo);
 
         if (DCGM_ST_OK != result)
         {
@@ -145,7 +169,7 @@ dcgmReturn_t DcgmiTest::InjectCache(dcgmHandle_t mDcgmHandle,
     }
 
     // inject field value
-    result = dcgmInjectFieldValue(mDcgmHandle, gpuId, &injectFieldValue);
+    result = m_dcgmOps->dcgmInjectFieldValue(mDcgmHandle, gpuId, &injectFieldValue);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to inject info. Return: " << errorString(result) << std::endl;
@@ -263,32 +287,34 @@ dcgmReturn_t DcgmiTest::HelperInitFieldValue(dcgmInjectFieldValue_t &injectField
 
 dcgmReturn_t DcgmiTest::HelperParseForFieldId(std::string const &str, unsigned short &fieldId, dcgmHandle_t dcgmHandle)
 {
-    // find , or :
-
-    dcgmFieldGrp_t fieldGroupId;
-    dcgmReturn_t dcgmReturn;
-    int index;
-    dcgmFieldGroupInfo_t fieldGroupInfo;
-
-    if (str.find(',') != std::string::npos)
+    auto const separator = str.find(',');
+    if (separator == std::string::npos)
     {
-        index = str.find(',');
-    }
-    else
-    {
-        fieldId = atoi(str.c_str());
+        unsigned int parsedFieldId = 0;
+        if (!ParseUnsigned(str, parsedFieldId) || parsedFieldId > std::numeric_limits<unsigned short>::max())
+        {
+            return DCGM_ST_BADPARAM;
+        }
+
+        fieldId = static_cast<unsigned short>(parsedFieldId);
         return DCGM_ST_OK;
     }
 
-    fieldGroupId = (dcgmFieldGrp_t)(intptr_t)atoi(str.substr(0, 1).c_str());
+    unsigned long long parsedFieldGroupId = 0;
+    unsigned int index                    = 0;
+    if (!ParseUnsigned(std::string_view(str).substr(0, separator), parsedFieldGroupId)
+        || !ParseUnsigned(std::string_view(str).substr(separator + 1), index))
+    {
+        return DCGM_ST_BADPARAM;
+    }
 
-    index = atoi(str.substr(index + 1).c_str());
+    dcgmFieldGrp_t const fieldGroupId = static_cast<dcgmFieldGrp_t>(parsedFieldGroupId);
 
-    memset(&fieldGroupInfo, 0, sizeof(fieldGroupInfo));
+    dcgmFieldGroupInfo_t fieldGroupInfo {};
     fieldGroupInfo.version      = dcgmFieldGroupInfo_version;
     fieldGroupInfo.fieldGroupId = fieldGroupId;
 
-    dcgmReturn = dcgmFieldGroupGetInfo(dcgmHandle, &fieldGroupInfo);
+    dcgmReturn_t const dcgmReturn = m_dcgmOps->dcgmFieldGroupGetInfo(dcgmHandle, &fieldGroupInfo);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error(
@@ -296,7 +322,7 @@ dcgmReturn_t DcgmiTest::HelperParseForFieldId(std::string const &str, unsigned s
         return dcgmReturn;
     }
 
-    if (index >= (int)fieldGroupInfo.numFieldIds)
+    if (index >= fieldGroupInfo.numFieldIds)
     {
         return DCGM_ST_BADPARAM;
     }
@@ -331,8 +357,13 @@ dcgmReturn_t DcgmiTest::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-IntrospectCache::IntrospectCache(std::string hostname, unsigned int groupId, std::string fieldId, bool isGroup)
-    : Command()
+IntrospectCache::IntrospectCache(std::string hostname,
+                                 unsigned int groupId,
+                                 std::string fieldId,
+                                 bool isGroup,
+                                 DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , adminObj(dcgmOps)
     , mGpuId(groupId)
     , mFieldId(std::move(fieldId))
     , mIDisGroup(isGroup)
@@ -358,8 +389,10 @@ InjectCache::InjectCache(std::string hostname,
                          unsigned int gpuId,
                          std::string fieldId,
                          unsigned int secondsInFuture,
-                         std::string injectValue)
-    : Command()
+                         std::string injectValue,
+                         DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , adminObj(dcgmOps)
     , mGId(gpuId)
     , mFieldId(std::move(fieldId))
     , mSecondsInFuture(secondsInFuture)
@@ -379,7 +412,8 @@ dcgmReturn_t ModulesPauseResume::DoExecuteConnected()
 {
     auto const *action = m_pause ? "pause" : "resume";
     log_debug("Executing {} command", action);
-    if (auto const ret = m_pause ? dcgmPauseTelemetryForDiag(m_dcgmHandle) : dcgmResumeTelemetryForDiag(m_dcgmHandle);
+    if (auto const ret = m_pause ? m_dcgmOps->dcgmPauseTelemetryForDiag(m_dcgmHandle)
+                                 : m_dcgmOps->dcgmResumeTelemetryForDiag(m_dcgmHandle);
         ret != DCGM_ST_OK)
     {
         log_error("Error: unable to execute {} command: ({}){}", action, ret, errorString(ret));
@@ -393,8 +427,9 @@ dcgmReturn_t ModulesPauseResume::DoExecuteConnected()
     return DCGM_ST_OK;
 }
 
-ModulesPauseResume::ModulesPauseResume(std::string hostname, bool pause)
-    : m_pause(pause)
+ModulesPauseResume::ModulesPauseResume(std::string hostname, bool pause, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , m_pause(pause)
 {
     m_hostName = std::move(hostname);
 }

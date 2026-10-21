@@ -2,5 +2,4 @@
 [pep8]
 aggressive = 0
 # Exclude: build artifacts, external code, SDK, third-party libraries
-exclude = _out,sdk,__pycache__,*/testing/python3/libs_3rdparty/*
-
+exclude = _out,*/rust/vendor,sdk,__pycache__,*/testing/python3/libs_3rdparty/*

@@ -14,9 +14,11 @@
 
 add_subdirectory(tests)
 
-set(SRCS 
+set(SRCS
+    DcgmAccountingManager.cpp
     DcgmCMUtils.cpp
     DcgmCacheManager.cpp
+    DcgmNvLinkCachedWatch.cpp
     DcgmFieldGroup.cpp
     DcgmVersion.cpp
     DcgmApi.cpp
@@ -50,7 +52,7 @@ set(SRCS
 
 set(INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}")
 
-set(DEPS 
+set(DEPS
     dcgm_interface
     common_interface
     dcgm_thread_interface
@@ -80,7 +82,7 @@ target_link_libraries(dcgm_entity_types PRIVATE ${DEPS})
 target_sources(dcgm_static_private PRIVATE ${SRCS})
 target_include_directories(dcgm_static_private PRIVATE "${INCLUDES}")
 target_link_libraries(dcgm_static_private PRIVATE ${DEPS})
-target_link_libraries(dcgm_static_private PRIVATE dcgm_entity_types)
+target_link_libraries(dcgm_static_private PRIVATE dcgm_entity_types dcgm_mutex)
 
 target_sources(dcgm PRIVATE ${SRCS})
 target_include_directories(dcgm PRIVATE "${INCLUDES}")

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
 #pragma once
 
 #include <DcgmSystem.h>
-#include <MockDcgmLib.h> // For MockDcgmEntity
+#include <MockDcgmOps.h> // For MockDcgmEntity
+
 #include <unordered_map>
 #include <vector>
 
@@ -26,15 +27,13 @@ public:
     virtual ~MockDcgmSystem() = default;
 
     // Overrides
-    void Init(dcgmHandle_t handle) override;
     dcgmReturn_t GetAllDevices(std::vector<unsigned int> &gpuIdList) override;
 
     // Mocked methods
     void AddMockedEntity(DcgmNs::MockDcgmEntity const &mockedEntity);
-
-    friend class TestMockDcgmSystem;
+    void SetGetAllDevicesReturn(dcgmReturn_t ret);
 
 private:
-    dcgmHandle_t m_handle;
     std::unordered_map<dcgmGroupEntityPair_t, DcgmNs::MockDcgmEntity> m_entities;
+    dcgmReturn_t m_getAllDevicesReturn { DCGM_ST_OK };
 };

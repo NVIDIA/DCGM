@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,26 @@
 #include "MnDiagCommon.h"
 #include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
+#include <Defer.hpp>
 #include <algorithm>
+#include <arpa/inet.h>
+#include <cerrno>
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
 #include <dcgm_nvml.h>
 #include <expected>
 #include <filesystem>
+#include <fmt/format.h>
+#include <netdb.h>
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <sys/socket.h>
 #include <system_error>
 #include <tclap/ArgException.h>
+#include <unistd.h>
+#include <utility>
 #include <vector>
 
 // Default system dir and path
@@ -46,12 +56,8 @@
 #define DCGM_TEST_PLUGINS_DIR "nvvs/plugins"
 #endif
 
-#ifndef DEFAULT_MNUBERGEMM_BIN
-#define DEFAULT_MNUBERGEMM_BIN "mnubergemm"
-#endif
-
 // Helpers --------------------------------------------
-void validate_parameters(std::vector<std::string> const &hostListVec, std::string_view runValue)
+void ValidateParameters(std::vector<std::string> const &hostListVec, std::string_view runValue)
 {
     if (hostListVec.empty())
     {
@@ -64,7 +70,7 @@ void validate_parameters(std::vector<std::string> const &hostListVec, std::strin
     }
 }
 
-std::expected<std::filesystem::path, std::system_error> get_executable_path()
+std::expected<std::filesystem::path, std::system_error> GetExecutablePath()
 {
     std::string exePath(PATH_MAX, '\0');
 
@@ -98,11 +104,9 @@ std::expected<std::filesystem::path, std::system_error> get_executable_path()
     return std::unexpected(std::system_error(errno, std::system_category(), "readlink"));
 }
 
-std::expected<std::string, std::system_error> get_mnubergemm_binary_path(int cudaVersion,
-                                                                         auto const &supportedCudaVersions)
+std::expected<std::string, std::system_error> GetTestBinaryPath(std::string_view binaryName, int cudaVersion)
 {
-    // Get the path to the executable
-    auto exePathOpt = get_executable_path();
+    auto exePathOpt = GetExecutablePath();
     if (!exePathOpt)
     {
         return std::unexpected(exePathOpt.error());
@@ -110,7 +114,6 @@ std::expected<std::string, std::system_error> get_mnubergemm_binary_path(int cud
 
     auto execPath = exePathOpt->parent_path();
 
-    // Construct the plugins path
     const bool productionInstallation = execPath.filename() == DCGM_INSTALL_BINDIR;
     const auto &pluginsPath = productionInstallation
                                   ? std::filesystem::path(DCGM_INSTALL_LIBEXECDIR "/" DCGM_PACKAGE_NAME "/plugins")
@@ -118,18 +121,9 @@ std::expected<std::string, std::system_error> get_mnubergemm_binary_path(int cud
 
     execPath.replace_filename(pluginsPath);
 
-    // Get installed CUDA version
-    auto systemCudaVersion = NVML_CUDA_DRIVER_VERSION_MAJOR(cudaVersion);
+    auto systemCudaVersion            = NVML_CUDA_DRIVER_VERSION_MAJOR(cudaVersion);
+    auto const &supportedCudaVersions = MnDiagConstants::CUDA_VERSIONS_SUPPORTED;
 
-    // Check if supportedCudaVersions is sorted in descending order
-    if (!std::ranges::is_sorted(supportedCudaVersions, std::ranges::greater {}))
-    {
-        log_error("supportedCudaVersions is not sorted in descending order");
-        return std::unexpected(std::system_error(
-            EINVAL, std::system_category(), "supportedCudaVersions must be sorted in descending order"));
-    }
-
-    // Check if system version is less than minimum supported
     if (systemCudaVersion < supportedCudaVersions.back())
     {
         log_error("System CUDA version {} is less than minimum supported version {}. Cannot proceed.",
@@ -139,24 +133,29 @@ std::expected<std::string, std::system_error> get_mnubergemm_binary_path(int cud
             ENOENT, std::system_category(), "System CUDA version is less than minimum supported version"));
     }
 
-    // Find the highest supported version that is <= system version
-    auto const it = std::ranges::upper_bound(supportedCudaVersions, systemCudaVersion, std::ranges::greater_equal {});
-
-    int selectedVersion = *it;
+    auto const it = std::ranges::find_if(supportedCudaVersions, [systemCudaVersion](int supportedVersion) {
+        return supportedVersion <= systemCudaVersion;
+    });
+    if (it == supportedCudaVersions.end())
+    {
+        log_error("No supported CUDA version is compatible with system CUDA version {}", systemCudaVersion);
+        return std::unexpected(
+            std::system_error(ENOENT, std::system_category(), "No compatible supported CUDA version found"));
+    }
 
     // Generate the selected path
-    execPath /= std::format("cuda{}/" DEFAULT_MNUBERGEMM_BIN, selectedVersion);
-    log_debug("Selected mnubergemm path: {}", execPath.string());
+    execPath /= fmt::format("cuda{}/{}", *it, binaryName);
+    log_debug("Selected {} path: {}", binaryName, execPath.string());
     return execPath.string();
 }
 
 // ------------------------------------------------------------
-dcgmReturn_t dcgm_mn_diag_common_populate_run_mndiag(dcgmRunMnDiag_v1 &mndrd,
-                                                     std::vector<std::string> const &hostListVec,
-                                                     std::string_view parameters,
-                                                     std::string_view runValue)
+dcgmReturn_t PopulateRunMnDiag(dcgmRunMnDiag_v2 &mndrd,
+                               std::vector<std::string> const &hostListVec,
+                               std::string_view parameters,
+                               std::string_view runValue)
 {
-    validate_parameters(hostListVec, runValue);
+    ValidateParameters(hostListVec, runValue);
 
     for (size_t hostListIndex = 0; hostListIndex < std::min(hostListVec.size(), std::size(mndrd.hostList));
          hostListIndex++)
@@ -177,19 +176,91 @@ dcgmReturn_t dcgm_mn_diag_common_populate_run_mndiag(dcgmRunMnDiag_v1 &mndrd,
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t infer_mnubergemm_default_path(std::string &mnubergemm_path, int cudaVersion)
+DcgmResult<std::string> InferTestDefaultPath(std::string_view testName, std::string_view binaryName, int cudaVersion)
 {
-    log_debug("Searching for mnubergemm binary");
-    auto candidatePath = get_mnubergemm_binary_path(cudaVersion, MnDiagConstants::CUDA_VERSIONS_SUPPORTED);
+    log_debug("Searching for {} binary", testName);
+    auto candidatePath = GetTestBinaryPath(binaryName, cudaVersion);
 
     if (!candidatePath)
     {
-        log_error("Failed to get mnubergemm binary path: {}", candidatePath.error().what());
-        return DCGM_ST_NO_DATA;
+        log_error("Failed to get {} binary path: {}", testName, candidatePath.error().what());
+        return std::unexpected(DCGM_ST_NO_DATA);
     }
 
-    mnubergemm_path = candidatePath.value();
-    return DCGM_ST_OK;
+    return candidatePath.value();
+}
+
+DcgmResult<std::string> ResolveTestBinaryPath(std::string_view testName,
+                                              std::string_view envVarName,
+                                              std::string_view binaryName,
+                                              int cudaVersion)
+{
+    std::string const envVarNameStr(envVarName);
+    log_debug("Checking for custom {} path in environment variable {}", binaryName, envVarName);
+    char const *customBinPath = std::getenv(envVarNameStr.c_str());
+    if (customBinPath && *customBinPath != '\0')
+    {
+        if (strlen(customBinPath) >= DCGM_MAX_STR_LENGTH)
+        {
+            log_error("Test binary path length {} in environment variable '{}' exceeds destination buffer size {}. "
+                      "Truncation would occur.",
+                      strlen(customBinPath),
+                      envVarName,
+                      DCGM_MAX_STR_LENGTH);
+            return std::unexpected(DCGM_ST_BADPARAM);
+        }
+
+        std::error_code fsError;
+        auto const customBinStatus = std::filesystem::status(customBinPath, fsError);
+        if (fsError)
+        {
+            log_error("Custom binary path '{}' cannot be inspected ({}: {})",
+                      customBinPath,
+                      fsError.value(),
+                      fsError.message());
+        }
+        else if (!std::filesystem::exists(customBinStatus) || !std::filesystem::is_regular_file(customBinStatus))
+        {
+            log_error("Custom binary path '{}' is invalid (not a regular file)", customBinPath);
+        }
+        else if (access(customBinPath, R_OK | X_OK) != 0)
+        {
+            log_error(
+                "Custom binary path '{}' is not accessible (errno {}: {}).", customBinPath, errno, strerror(errno));
+        }
+        else
+        {
+            log_debug("Inferred custom {} path: {}", testName, customBinPath);
+            return std::string(customBinPath);
+        }
+    }
+
+    log_debug("No custom binary path found, falling back to default");
+    auto defaultBinPath = InferTestDefaultPath(testName, binaryName, cudaVersion);
+    if (!defaultBinPath)
+    {
+        log_error("Failed to infer {} default path: {}", testName, defaultBinPath.error());
+        return std::unexpected(defaultBinPath.error());
+    }
+
+    log_debug("Inferred default {} path: {}", testName, *defaultBinPath);
+
+    if (defaultBinPath->length() >= DCGM_MAX_STR_LENGTH)
+    {
+        log_error(
+            "Test binary path length from introspection {} exceeds destination buffer size {}. Truncation would occur.",
+            defaultBinPath->length(),
+            DCGM_MAX_STR_LENGTH);
+        return std::unexpected(DCGM_ST_BADPARAM);
+    }
+    return std::move(*defaultBinPath);
+}
+
+bool IsGpuPairMode(dcgmRunMnDiag_t const &params)
+{
+    return std::ranges::any_of(params.testParms, [](char const *parameter) {
+        return std::string_view(parameter) == "mnnvbandwidth.gpuPairs=all";
+    });
 }
 
 std::expected<int, dcgmReturn_t> ParseTimeToRunSeconds(dcgmRunMnDiag_t const &params, std::string_view key)
@@ -241,4 +312,42 @@ std::expected<int, dcgmReturn_t> ParseTimeToRunSeconds(dcgmRunMnDiag_t const &pa
     }
 
     return 0;
+}
+
+std::string ResolveHostnameToIp(std::string const &host)
+{
+    struct addrinfo hints = {};
+    hints.ai_family       = AF_INET;
+    hints.ai_socktype     = SOCK_STREAM;
+    hints.ai_flags        = AI_NUMERICHOST;
+
+    struct addrinfo *res = nullptr;
+
+    // Fast path: if the host is already a valid IP address, return it unchanged
+    if (getaddrinfo(host.c_str(), nullptr, &hints, &res) == 0)
+    {
+        freeaddrinfo(res);
+        log_debug("Host '{}' is already a numeric IP", host);
+        return host;
+    }
+
+    hints.ai_flags = 0;
+    if (getaddrinfo(host.c_str(), nullptr, &hints, &res) != 0 || res == nullptr)
+    {
+        log_warning("Could not resolve hostname '{}' to an IP address", host);
+        return host;
+    }
+
+    char ipStr[INET_ADDRSTRLEN] = {};
+    auto *addr                  = reinterpret_cast<struct sockaddr_in *>(res->ai_addr);
+    DcgmNs::Defer freeRes([res] { freeaddrinfo(res); });
+
+    if (inet_ntop(AF_INET, &addr->sin_addr, ipStr, sizeof(ipStr)) == nullptr)
+    {
+        log_warning("inet_ntop failed for host '{}'; using original hostname", host);
+        return host;
+    }
+
+    log_debug("Resolved hostname '{}' to IP '{}'", host, ipStr);
+    return std::string(ipStr);
 }

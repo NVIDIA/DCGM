@@ -15,13 +15,181 @@
  */
 #include "DcgmPolicyManager.h"
 #include "DcgmLogging.h"
+#include "DcgmPolicyUtils.h"
+#include "DcgmStringHelpers.h"
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstring>
+#include <expected>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+#include <iterator>
+#include <map>
+#include <optional>
 #include <ranges>
+#include <set>
+#include <tuple>
+#include <utility>
+
+namespace detail
+{
+inline void CopyPolicyToInfo(DcgmPolicy const &policy, dcgmPolicyInfo_t &info)
+{
+    std::memset(&info, 0, sizeof(info));
+    info.version                = dcgmPolicyInfo_version;
+    info.policyId               = policy.GetPolicyId();
+    info.fieldId                = policy.GetFieldId();
+    info.currentValue           = policy.GetValue();
+    info.threshold              = policy.GetThreshold();
+    info.policyOperator         = policy.GetPolicyOperator();
+    info.channelMask            = policy.GetChannelMask();
+    info.state                  = policy.GetState();
+    info.rateLimitSec           = static_cast<unsigned int>(policy.GetRateLimit().count());
+    info.createdAt              = policy.GetCreatedAt();
+    info.violationCount         = policy.GetViolationCount();
+    info.lastTriggeredTimestamp = policy.GetLastTriggeredTimestamp();
+    SafeCopyTo(info.name, policy.GetName().c_str());
+
+    auto const &entities = policy.GetEntities();
+    info.entityCount     = std::min<unsigned int>(entities.size(), DCGM_MAX_NUM_DEVICES);
+    for (unsigned int i = 0; i < info.entityCount; ++i)
+    {
+        info.entities[i] = entities[i];
+    }
+}
+
+inline std::vector<dcgmGroupEntityPair_t> CopyEntities(dcgmPolicySpec_t const &spec)
+{
+    std::vector<dcgmGroupEntityPair_t> entities;
+    auto const count = std::min<unsigned int>(spec.entityCount, DCGM_MAX_NUM_DEVICES);
+    entities.reserve(count);
+    for (unsigned int i = 0; i < count; ++i)
+    {
+        entities.push_back(spec.entities[i]);
+    }
+    return entities;
+}
+
+inline DcgmPolicy BuildPolicy(dcgmPolicySpec_t const &spec)
+{
+    return DcgmPolicy(spec.fieldId,
+                      spec.name,
+                      0.0,
+                      spec.threshold,
+                      spec.policyOperator,
+                      CopyEntities(spec),
+                      spec.channelMask,
+                      spec.state,
+                      spec.rateLimitSec);
+}
+
+inline std::expected<std::vector<dcgmGroupEntityPair_t>, dcgmReturn_t> GetActiveGpuEntities(DcgmCoreProxy &coreProxy)
+{
+    std::vector<unsigned int> gpuIds;
+    auto ret = coreProxy.GetGpuIds(1, gpuIds);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("Unable to get active GPU IDs for all-GPU policy watches: {}", ret);
+        return std::unexpected(ret);
+    }
+    std::vector<dcgmGroupEntityPair_t> entities;
+    entities.reserve(gpuIds.size());
+    for (auto gpuId : gpuIds)
+    {
+        entities.push_back({ .entityGroupId = DCGM_FE_GPU, .entityId = gpuId });
+    }
+    return entities;
+}
+
+} // namespace detail
+
+std::expected<std::set<DcgmPolicyManager::PolicyWatch>, dcgmReturn_t> DcgmPolicyManager::BuildDesiredPolicyWatches(
+    DcgmPolicyRegistry &registry,
+    DcgmCoreProxy &coreProxy)
+{
+    std::vector<DcgmPolicy> policies;
+    (void)registry.GetAllPolicies(std::back_inserter(policies));
+
+    std::set<PolicyWatch> desired;
+
+    // Watch reconciliation needs the active GPU list only when at least one field policy is enabled.
+    auto const hasEnabledPolicy = std::ranges::any_of(policies, &DcgmPolicy::IsEnabled);
+    if (!hasEnabledPolicy)
+    {
+        return desired;
+    }
+
+    auto activeEntitiesResult = detail::GetActiveGpuEntities(coreProxy);
+    if (!activeEntitiesResult.has_value())
+    {
+        return std::unexpected(activeEntitiesResult.error());
+    }
+
+    auto activeEntities = std::move(*activeEntitiesResult);
+
+    // Build the desired watch set for each enabled policy.
+    for (auto const &policy : policies)
+    {
+        if (!policy.IsEnabled())
+        {
+            continue;
+        }
+
+        std::vector<dcgmGroupEntityPair_t> entities = policy.GetEntities();
+        if (entities.empty())
+        {
+            entities = activeEntities;
+        }
+
+        // Add each entity to the desired watch set.
+        for (auto entity : entities)
+        {
+            if (entity.entityGroupId != DCGM_FE_GPU)
+            {
+                log_warning(
+                    "Ignoring unsupported entity group {} for policyId {}", entity.entityGroupId, policy.GetPolicyId());
+                continue;
+            }
+
+            auto activeIt = std::ranges::find_if(activeEntities, [entity](dcgmGroupEntityPair_t const &activeEntity) {
+                return activeEntity.entityGroupId == entity.entityGroupId && activeEntity.entityId == entity.entityId;
+            });
+
+            if (activeIt == activeEntities.end())
+            {
+                continue;
+            }
+            desired.emplace(entity.entityGroupId, entity.entityId, policy.GetFieldId());
+        }
+    }
+
+    // Return the desired watch set.
+    return desired;
+}
+
+namespace
+{
+bool IsBlankFieldValue(dcgmBufferedFv_t const &fv)
+{
+    if (fv.fieldType == DCGM_FT_DOUBLE)
+    {
+        return DCGM_FP64_IS_BLANK(fv.value.dbl);
+    }
+
+    if (fv.fieldType == DCGM_FT_INT64 || fv.fieldType == DCGM_FT_TIMESTAMP)
+    {
+        return DCGM_INT64_IS_BLANK(fv.value.i64);
+    }
+
+    log_warning("Received unsupported field type {} while evaluating a policy value; treating it as blank",
+                fv.fieldType);
+    return true;
+}
+} // namespace
 
 
 /*****************************************************************************
@@ -29,6 +197,10 @@
  *****************************************************************************/
 DcgmPolicyManager::DcgmPolicyManager(dcgmCoreCallbacks_t &dcc)
     : mpCoreProxy(dcc)
+    , m_registry()
+    , m_evaluator(m_registry)
+    , m_router(dcc)
+    , m_persistence(m_registry)
 {
     m_mutex = new DcgmMutex(0);
 
@@ -42,6 +214,656 @@ DcgmPolicyManager::~DcgmPolicyManager()
 {
     delete (m_mutex);
     m_mutex = 0;
+}
+
+dcgmReturn_t DcgmPolicyManager::CreatePolicy(dcgm_policy_msg_create_t *msg)
+{
+    // Build and add the new policy before refreshing watches/persistence.
+    auto policy = detail::BuildPolicy(msg->policy);
+    auto ret    = m_registry.AddPolicy(policy);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    // Roll back only the newly-created policy if watch refresh or persistence fails.
+    if ((ret = RefreshFieldPolicyWatchesAndSave()) != DCGM_ST_OK)
+    {
+        log_warning(
+            "Rolling back created field policy {} after watch/persistence failure: {}", policy.GetPolicyId(), ret);
+        RemovePolicyAndRefreshWatches(policy.GetFieldId(), policy.GetPolicyId());
+        return ret;
+    }
+
+    // Return the policy as stored in the registry.
+    auto storedPolicy = m_registry.GetPolicyById(policy.GetPolicyId());
+    if (!storedPolicy)
+    {
+        log_error("Created field policy {} was not found in registry", policy.GetPolicyId());
+        RemovePolicyAndRefreshWatches(policy.GetFieldId(), policy.GetPolicyId());
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    detail::CopyPolicyToInfo(*storedPolicy, msg->created);
+    log_debug("Created field policy {} for fieldId {}", storedPolicy->GetPolicyId(), storedPolicy->GetFieldId());
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmPolicyManager::ModifyPolicy(dcgm_policy_msg_modify_t *msg)
+{
+    // Keep only the current policy for targeted rollback.
+    auto currentPolicy = m_registry.GetPolicyById(msg->policyId);
+    if (!currentPolicy || currentPolicy->GetFieldId() != msg->policy.fieldId)
+    {
+        return DCGM_ST_NO_DATA;
+    }
+
+    // Build the replacement while preserving module-owned runtime metadata.
+    DcgmPolicy replacement(msg->policy.fieldId,
+                           msg->policy.name,
+                           currentPolicy->GetValue(),
+                           msg->policy.threshold,
+                           msg->policy.policyOperator,
+                           detail::CopyEntities(msg->policy),
+                           msg->policy.channelMask,
+                           msg->policy.state,
+                           msg->policy.rateLimitSec,
+                           currentPolicy->GetPolicyId(),
+                           currentPolicy->GetCreatedAt(),
+                           currentPolicy->GetViolationCount(),
+                           currentPolicy->GetLastTriggeredTimestamp());
+
+    auto ret = m_registry.ReplacePoliciesForField(msg->policy.fieldId, { replacement });
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    // Restore the previous policy if watch refresh or persistence fails.
+    if ((ret = RefreshFieldPolicyWatchesAndSave()) != DCGM_ST_OK)
+    {
+        log_warning("Rolling back modified field policy {} after watch/persistence failure: {}",
+                    currentPolicy->GetPolicyId(),
+                    ret);
+        RestorePolicyAndWatches(*currentPolicy);
+        return ret;
+    }
+
+    detail::CopyPolicyToInfo(replacement, msg->modified);
+    log_debug("Modified field policy {} for fieldId {}", replacement.GetPolicyId(), replacement.GetFieldId());
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmPolicyManager::DeletePolicy(dcgm_policy_msg_delete_t *msg)
+{
+    dcgmReturn_t ret = DCGM_ST_OK;
+    std::vector<DcgmPolicy> previousPolicies;
+    std::optional<DcgmPolicy> previousPolicy;
+
+    // Use a full snapshot only when deleting the whole registry.
+    if (msg->deleteAll)
+    {
+        previousPolicies = SnapshotPolicies();
+        ret              = m_registry.RemoveAllPolicies();
+    }
+    else
+    {
+        // Keep only the deleted policy for targeted rollback.
+        previousPolicy = m_registry.GetPolicyById(msg->policyId);
+        if (!previousPolicy || previousPolicy->GetFieldId() != msg->fieldId)
+        {
+            log_warning(
+                "Cannot delete field policy {} for fieldId {}: policy was not found", msg->policyId, msg->fieldId);
+            return DCGM_ST_NO_DATA;
+        }
+        ret = m_registry.RemovePolicy(msg->fieldId, msg->policyId);
+    }
+
+    if (ret != DCGM_ST_OK)
+    {
+        log_warning("Cannot delete field policy {} for fieldId {}: registry removal returned {}",
+                    msg->policyId,
+                    msg->fieldId,
+                    ret);
+        return ret;
+    }
+
+    // Restore either the full registry or just the deleted policy on refresh failure.
+    if ((ret = RefreshFieldPolicyWatchesAndSave()) != DCGM_ST_OK)
+    {
+        log_warning("Rolling back field policy delete after watch/persistence failure: {}", ret);
+        if (msg->deleteAll)
+        {
+            RestorePoliciesAndWatches(std::move(previousPolicies));
+        }
+        else
+        {
+            RestorePolicyAndWatches(*previousPolicy);
+        }
+        return ret;
+    }
+
+    if (msg->deleteAll)
+    {
+        log_debug("Deleted all field policies");
+        for (auto const &policy : previousPolicies)
+        {
+            m_evaluator.ClearFieldState(policy.GetFieldId());
+        }
+    }
+    else
+    {
+        log_debug("Deleted field policy {} for fieldId {}", msg->policyId, msg->fieldId);
+        m_evaluator.ClearFieldState(msg->fieldId);
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmPolicyManager::EnablePolicy(dcgm_policy_msg_set_state_t *msg)
+{
+    // Keep the previous policy state for targeted rollback.
+    auto previousPolicy = m_registry.GetPolicyById(msg->policyId);
+    if (!previousPolicy || previousPolicy->GetFieldId() != msg->fieldId)
+    {
+        return DCGM_ST_NO_DATA;
+    }
+
+    // Enable the policy, then refresh watches/persistence.
+    auto ret = m_registry.SetPolicyState(msg->fieldId, msg->policyId, DCGM_POLICY_STATE_ENABLED);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+    // Restore the previous policy state if refresh fails.
+    if ((ret = RefreshFieldPolicyWatchesAndSave()) != DCGM_ST_OK)
+    {
+        log_warning("Rolling back enabled field policy {} after watch/persistence failure: {}", msg->policyId, ret);
+        RestorePolicyAndWatches(*previousPolicy);
+    }
+    else
+    {
+        log_debug("Enabled field policy {} for fieldId {}", msg->policyId, msg->fieldId);
+    }
+    return ret;
+}
+
+dcgmReturn_t DcgmPolicyManager::DisablePolicy(dcgm_policy_msg_set_state_t *msg)
+{
+    // Keep the previous policy state for targeted rollback.
+    auto previousPolicy = m_registry.GetPolicyById(msg->policyId);
+    if (!previousPolicy || previousPolicy->GetFieldId() != msg->fieldId)
+    {
+        return DCGM_ST_NO_DATA;
+    }
+
+    // Disable the policy, then refresh watches/persistence.
+    auto ret = m_registry.SetPolicyState(msg->fieldId, msg->policyId, DCGM_POLICY_STATE_DISABLED);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+    // Restore the previous policy state if refresh fails.
+    if ((ret = RefreshFieldPolicyWatchesAndSave()) != DCGM_ST_OK)
+    {
+        log_warning("Rolling back disabled field policy {} after watch/persistence failure: {}", msg->policyId, ret);
+        RestorePolicyAndWatches(*previousPolicy);
+    }
+    else
+    {
+        log_debug("Disabled field policy {} for fieldId {}", msg->policyId, msg->fieldId);
+    }
+    return ret;
+}
+
+dcgmReturn_t DcgmPolicyManager::GetOnePolicy(dcgm_policy_msg_get_one_t *msg)
+{
+    auto policy = m_registry.GetPolicyById(msg->policyId);
+    if (!policy || policy->GetFieldId() != msg->fieldId)
+    {
+        return DCGM_ST_NO_DATA;
+    }
+    detail::CopyPolicyToInfo(*policy, msg->policy);
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmPolicyManager::GetAllPolicies(dcgm_policy_msg_get_all_t *msg)
+{
+    std::vector<DcgmPolicy> policies;
+    auto outIt = m_registry.GetAllPolicies(std::back_inserter(policies));
+    (void)outIt;
+
+    std::ranges::sort(policies, {}, &DcgmPolicy::GetPolicyId);
+
+    auto const totalAvailable = static_cast<unsigned int>(policies.size());
+    auto const capacity       = std::min<unsigned int>(msg->capacity, DCGM_POLICY_GET_ALL_PAGE);
+    unsigned int written      = 0;
+    bool hasMore              = false;
+
+    for (auto const &policy : policies)
+    {
+        if (policy.GetPolicyId() <= msg->startAfterPolicyId)
+        {
+            continue;
+        }
+        if (written == capacity)
+        {
+            hasMore = true;
+            break;
+        }
+
+        detail::CopyPolicyToInfo(policy, msg->policies[written]);
+        ++written;
+    }
+
+    msg->returnedCount = written;
+    msg->totalCount    = totalAvailable;
+    return hasMore ? DCGM_ST_INSUFFICIENT_SIZE : DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmPolicyManager::ImportPolicies(std::string const &path)
+{
+    // Import replaces the registry, so keep a full snapshot for rollback.
+    auto previousPolicies = SnapshotPolicies();
+    DcgmPolicyPersistence importPersistence(m_registry, path);
+    auto ret = importPersistence.LoadPolicies();
+    if (ret != DCGM_ST_OK)
+    {
+        log_warning("Field policy import from '{}' failed: {}", path, ret);
+        RestorePoliciesAndWatches(std::move(previousPolicies));
+        return ret;
+    }
+    // Restore the previous registry if imported policies cannot be watched or saved.
+    if ((ret = RefreshFieldPolicyWatchesAndSave()) != DCGM_ST_OK)
+    {
+        log_warning("Rolling back field policy import from '{}' after watch/persistence failure: {}", path, ret);
+        RestorePoliciesAndWatches(std::move(previousPolicies));
+    }
+    else
+    {
+        log_debug("Imported field policies from '{}'", path);
+    }
+    return ret;
+}
+
+DcgmPolicyManager::CallbackRegistration::CallbackRegistration(dcgm_connection_id_t connectionIdIn,
+                                                              dcgm_request_id_t requestIdIn,
+                                                              unsigned short fieldIdIn,
+                                                              uint64_t policyIdIn,
+                                                              DcgmPolicyCallbackRAII guardIn)
+    : connectionId(connectionIdIn)
+    , requestId(requestIdIn)
+    , fieldId(fieldIdIn)
+    , policyId(policyIdIn)
+    , guard(std::move(guardIn))
+{}
+
+dcgmReturn_t DcgmPolicyManager::GetPolicyViolations(dcgm_policy_msg_get_violations_t *msg)
+{
+    auto allViolations = m_router.GetRecentViolations(std::chrono::steady_clock::time_point::min());
+    std::vector<dcgm_policy_violation_t> violations;
+    violations.reserve(allViolations.size());
+    std::copy_if(
+        allViolations.begin(), allViolations.end(), std::back_inserter(violations), [msg](auto const &violation) {
+            return msg->sinceTimestamp == 0 || violation.timestamp >= msg->sinceTimestamp;
+        });
+
+    auto const requested = std::min<unsigned int>(msg->count, DCGM_POLICY_MAX_VIOLATIONS);
+    auto const copied    = std::min<unsigned int>(violations.size(), requested);
+    msg->count           = violations.size();
+    for (unsigned int i = 0; i < copied; ++i)
+    {
+        msg->violations[i] = violations[i];
+    }
+    return violations.size() > requested ? DCGM_ST_INSUFFICIENT_SIZE : DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmPolicyManager::RegisterPolicyCallback(dcgm_policy_msg_register_callback_t *msg)
+{
+    if (msg->policyId != 0 && !m_registry.GetPolicyById(msg->policyId))
+    {
+        return DCGM_ST_NO_DATA;
+    }
+
+    auto const duplicate = std::find_if(m_callbackRegistrations.begin(),
+                                        m_callbackRegistrations.end(),
+                                        [msg](CallbackRegistration const &registration) {
+                                            return registration.connectionId == msg->header.connectionId
+                                                   && registration.fieldId == msg->fieldId
+                                                   && registration.policyId == msg->policyId;
+                                        });
+    if (duplicate != m_callbackRegistrations.end())
+    {
+        log_warning("Field policy callback already registered for connection {} field {} policy {}",
+                    msg->header.connectionId,
+                    msg->fieldId,
+                    msg->policyId);
+        return DCGM_ST_DUPLICATE_KEY;
+    }
+
+    auto registration = m_router.RegisterViolationCallback(
+        msg->header.connectionId, msg->header.requestId, msg->fieldId, msg->policyId);
+    if (!registration)
+    {
+        log_error("Failed to register field policy callback for connection {} request {} field {} policy {}: {}",
+                  msg->header.connectionId,
+                  msg->header.requestId,
+                  msg->fieldId,
+                  msg->policyId,
+                  registration.error());
+        return registration.error();
+    }
+
+    m_callbackRegistrations.emplace_back(
+        msg->header.connectionId, msg->header.requestId, msg->fieldId, msg->policyId, std::move(*registration));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmPolicyManager::UnregisterPolicyCallback(dcgm_policy_msg_unregister_callback_t *msg)
+{
+    std::vector<dcgm_request_id_t> requestIds;
+    for (auto const &registration : m_callbackRegistrations)
+    {
+        if (registration.connectionId == msg->header.connectionId && registration.fieldId == msg->fieldId
+            && registration.policyId == msg->policyId)
+        {
+            requestIds.push_back(registration.requestId);
+        }
+    }
+
+    auto const removed
+        = RemovePolicyCallbackRegistrations(msg->header.connectionId, msg->fieldId, msg->policyId, false);
+    if (removed == 0)
+    {
+        return DCGM_ST_NO_DATA;
+    }
+
+    for (auto const requestId : requestIds)
+    {
+        log_debug("Notifying connection {} that field policy callback request {} completed",
+                  msg->header.connectionId,
+                  requestId);
+        mpCoreProxy.NotifyRequestOfCompletion(msg->header.connectionId, requestId);
+    }
+
+    return DCGM_ST_OK;
+}
+
+size_t DcgmPolicyManager::RemovePolicyCallbackRegistrations(dcgm_connection_id_t connectionId,
+                                                            unsigned short fieldId,
+                                                            uint64_t policyId,
+                                                            bool allForConnection)
+{
+    size_t removed = 0;
+    auto it        = m_callbackRegistrations.begin();
+    while (it != m_callbackRegistrations.end())
+    {
+        bool const matchesConnection = it->connectionId == connectionId;
+        bool const matchesFilter     = allForConnection || (it->fieldId == fieldId && it->policyId == policyId);
+        if (matchesConnection && matchesFilter)
+        {
+            it->guard.Reset();
+            it = m_callbackRegistrations.erase(it);
+            ++removed;
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    return removed;
+}
+
+dcgmReturn_t DcgmPolicyManager::OnPolicyFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
+{
+    std::map<PolicyWatch, double> latestValues;
+    dcgmBufferedFvCursor_t cursor = 0;
+    for (dcgmBufferedFv_t *fv = fvBuffer->GetNextFv(&cursor); fv; fv = fvBuffer->GetNextFv(&cursor))
+    {
+        if (fv->entityGroupId != DCGM_FE_GPU || fv->status != DCGM_ST_OK)
+        {
+            continue;
+        }
+
+        if (fv->fieldType != DCGM_FT_DOUBLE && fv->fieldType != DCGM_FT_INT64 && fv->fieldType != DCGM_FT_TIMESTAMP)
+        {
+            continue;
+        }
+
+        if (IsBlankFieldValue(*fv))
+        {
+            continue;
+        }
+
+        auto const value = DcgmPolicyUtils::TryFieldValueToDouble(*fv);
+        if (!value.has_value())
+        {
+            continue;
+        }
+
+        latestValues[std::make_tuple(static_cast<dcgm_field_entity_group_t>(fv->entityGroupId),
+                                     static_cast<dcgm_field_eid_t>(fv->entityId),
+                                     fv->fieldId)] = *value;
+    }
+
+    std::vector<dcgm_policy_violation_t> violations;
+    for (auto const &[key, value] : latestValues)
+    {
+        auto const &[entityGroupId, entityId, fieldId] = key;
+        dcgmGroupEntityPair_t entity { .entityGroupId = entityGroupId, .entityId = entityId };
+        auto evalRet = m_evaluator.EvaluatePolicyForEntity(fieldId, entity, value, violations);
+        if (evalRet != DCGM_ST_OK && evalRet != DCGM_ST_NO_DATA && evalRet != DCGM_ST_NOT_CONFIGURED)
+        {
+            log_warning("Policy evaluator returned {} for field {}", evalRet, fieldId);
+        }
+    }
+
+    return RoutePolicyViolations(violations);
+}
+
+dcgmReturn_t DcgmPolicyManager::RoutePolicyViolations(std::vector<dcgm_policy_violation_t> const &violations)
+{
+    dcgmReturn_t firstError = DCGM_ST_OK;
+    for (auto const &violation : violations)
+    {
+        auto ret = m_registry.RecordViolation(violation);
+        if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_CONFIGURED)
+        {
+            log_debug("Not routing policy violation for policyId {} and entity {}:{}: {}",
+                      violation.policyId,
+                      violation.entity.entityGroupId,
+                      violation.entity.entityId,
+                      ret);
+            continue;
+        }
+
+        if (ret != DCGM_ST_OK)
+        {
+            if (firstError == DCGM_ST_OK)
+            {
+                firstError = ret;
+            }
+            continue;
+        }
+
+        if ((ret = m_router.RouteViolation(violation)) != DCGM_ST_OK)
+        {
+            if (firstError == DCGM_ST_OK)
+            {
+                firstError = ret;
+            }
+        }
+    }
+    return firstError;
+}
+
+dcgmReturn_t DcgmPolicyManager::RefreshFieldPolicyWatchesAndSave()
+{
+    auto ret = ApplyPolicyWatchDelta();
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    ret = m_persistence.SavePolicies();
+    if (ret != DCGM_ST_OK)
+    {
+        log_warning("Policy persistence save returned {}", ret);
+        return ret;
+    }
+    return DCGM_ST_OK;
+}
+
+std::vector<DcgmPolicy> DcgmPolicyManager::SnapshotPolicies() const
+{
+    std::vector<DcgmPolicy> policies;
+    (void)m_registry.GetAllPolicies(std::back_inserter(policies));
+    return policies;
+}
+
+dcgmReturn_t DcgmPolicyManager::ReplaceRegistryPolicies(std::vector<DcgmPolicy> policies)
+{
+    if (auto ret = m_registry.RemoveAllPolicies(); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+    if (policies.empty())
+    {
+        return DCGM_ST_OK;
+    }
+    return m_registry.AddPolicies(policies.data(), policies.data() + policies.size());
+}
+
+void DcgmPolicyManager::RestorePoliciesAndWatches(std::vector<DcgmPolicy> policies)
+{
+    if (auto restoreRet = ReplaceRegistryPolicies(std::move(policies)); restoreRet != DCGM_ST_OK)
+    {
+        log_error("Unable to restore field policy registry after failed mutation: {}", restoreRet);
+        return;
+    }
+
+    if (auto restoreRet = ApplyPolicyWatchDelta(); restoreRet != DCGM_ST_OK)
+    {
+        log_error("Unable to restore field policy watches after failed mutation: {}", restoreRet);
+    }
+
+    if (auto restoreRet = m_persistence.SavePolicies(); restoreRet != DCGM_ST_OK)
+    {
+        log_error("Unable to restore field policy persistence after failed mutation: {}", restoreRet);
+    }
+}
+
+void DcgmPolicyManager::RestorePolicyAndWatches(DcgmPolicy const &policy)
+{
+    auto restoreRet = m_registry.ReplacePoliciesForField(policy.GetFieldId(), { policy });
+    if (restoreRet == DCGM_ST_NO_DATA)
+    {
+        restoreRet = m_registry.AddPolicy(policy);
+    }
+    if (restoreRet != DCGM_ST_OK)
+    {
+        log_error("Unable to restore field policy {} after failed mutation: {}", policy.GetPolicyId(), restoreRet);
+        return;
+    }
+
+    if (auto watchRestoreRet = ApplyPolicyWatchDelta(); watchRestoreRet != DCGM_ST_OK)
+    {
+        log_error("Unable to restore field policy watches after failed mutation: {}", watchRestoreRet);
+    }
+
+    if (auto persistenceRestoreRet = m_persistence.SavePolicies(); persistenceRestoreRet != DCGM_ST_OK)
+    {
+        log_error("Unable to restore field policy persistence after failed mutation: {}", persistenceRestoreRet);
+    }
+}
+
+void DcgmPolicyManager::RemovePolicyAndRefreshWatches(unsigned short fieldId, uint64_t policyId)
+{
+    if (auto restoreRet = m_registry.RemovePolicy(fieldId, policyId); restoreRet != DCGM_ST_OK)
+    {
+        log_error("Unable to remove field policy {} after failed create: {}", policyId, restoreRet);
+        return;
+    }
+
+    if (auto restoreRet = ApplyPolicyWatchDelta(); restoreRet != DCGM_ST_OK)
+    {
+        log_error("Unable to refresh field policy watches after failed create rollback: {}", restoreRet);
+    }
+
+    if (auto restoreRet = m_persistence.SavePolicies(); restoreRet != DCGM_ST_OK)
+    {
+        log_error("Unable to save field policy persistence after failed create rollback: {}", restoreRet);
+    }
+}
+
+dcgmReturn_t DcgmPolicyManager::ApplyPolicyWatchDelta()
+{
+    auto originalWatches = m_activeWatches;
+    auto desiredResult   = BuildDesiredPolicyWatches(m_registry, mpCoreProxy);
+    if (!desiredResult.has_value())
+    {
+        return desiredResult.error();
+    }
+
+    auto ret = ApplyPolicyWatchDeltaNoRollback(*desiredResult);
+    if (ret != DCGM_ST_OK)
+    {
+        if (auto restoreRet = ApplyPolicyWatchDeltaNoRollback(originalWatches); restoreRet != DCGM_ST_OK)
+        {
+            log_error("Unable to restore field policy watches after watch update failure: {}", restoreRet);
+        }
+    }
+    return ret;
+}
+
+dcgmReturn_t DcgmPolicyManager::ApplyPolicyWatchDeltaNoRollback(std::set<PolicyWatch> const &desired)
+{
+    DcgmWatcher watcher(DcgmWatcherTypePolicyManager, DCGM_CONNECTION_ID_NONE);
+    auto appliedWatches = m_activeWatches;
+
+    for (auto const &[entityGroupId, entityId, fieldId] : desired)
+    {
+        if (appliedWatches.contains({ entityGroupId, entityId, fieldId }))
+        {
+            continue;
+        }
+
+        bool wereFirstWatcher   = false;
+        bool updateOnFirstWatch = false;
+        auto ret                = mpCoreProxy.AddFieldWatch(
+            entityGroupId, entityId, fieldId, 10000000, 3600.0, 0, watcher, true, updateOnFirstWatch, wereFirstWatcher);
+        if (ret != DCGM_ST_OK)
+        {
+            log_error("Unable to watch field {} for entity {}:{}: {}", fieldId, entityGroupId, entityId, ret);
+            m_activeWatches = std::move(appliedWatches);
+            return ret;
+        }
+
+        appliedWatches.emplace(entityGroupId, entityId, fieldId);
+    }
+
+    for (auto it = appliedWatches.begin(); it != appliedWatches.end();)
+    {
+        if (desired.contains(*it))
+        {
+            ++it;
+            continue;
+        }
+
+        auto const [entityGroupId, entityId, fieldId] = *it;
+        auto ret = mpCoreProxy.RemoveFieldWatch(entityGroupId, entityId, fieldId, 0, watcher);
+        if (ret != DCGM_ST_OK)
+        {
+            log_error("Unable to unwatch field {} for entity {}:{}: {}", fieldId, entityGroupId, entityId, ret);
+            m_activeWatches = std::move(appliedWatches);
+            return ret;
+        }
+
+        it = appliedWatches.erase(it);
+    }
+
+    m_activeWatches = std::move(appliedWatches);
+    return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
@@ -98,6 +920,15 @@ dcgmReturn_t DcgmPolicyManager::Init(void)
     if (!outOfRangeGpuIds.empty())
     {
         log_error("Got {} out of range GPU ids: {}", outOfRangeGpuIds.size(), fmt::join(outOfRangeGpuIds, ", "));
+    }
+
+    if (auto ret = m_persistence.LoadPolicies(); ret != DCGM_ST_OK && ret != DCGM_ST_FILE_IO_ERROR)
+    {
+        log_warning("Policy persistence load returned {}", ret);
+    }
+    if (auto ret = ApplyPolicyWatchDelta(); ret != DCGM_ST_OK)
+    {
+        log_warning("Policy watch refresh after persistence load returned {}", ret);
     }
 
     return DCGM_ST_OK;
@@ -1245,18 +2076,25 @@ dcgmReturn_t DcgmPolicyManager::AttachGpus()
         WatchFields(connectionId);
     }
 
+    if (auto ret = ApplyPolicyWatchDelta(); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
     log_info("Attached {} GPUs to policy manager", deviceCount);
     return DCGM_ST_OK;
 }
 
 dcgmReturn_t DcgmPolicyManager::DetachGpus()
 {
-    DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
-    for (auto &gpu : m_gpus | std::views::take(m_numGpus))
     {
-        gpu.alive = false;
+        DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
+        for (auto &gpu : m_gpus | std::views::take(m_numGpus))
+        {
+            gpu.alive = false;
+        }
     }
-    return DCGM_ST_OK;
+    return ApplyPolicyWatchDelta();
 }
 
 void DcgmPolicyManager::AddMetaGroupWatcher(dpm_watcher_t watcher)

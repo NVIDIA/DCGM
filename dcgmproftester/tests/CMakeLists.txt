@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,15 +20,11 @@ add_executable(dcgmproftester_tests)
 
 target_sources(dcgmproftester_tests
     PRIVATE
-        DistributedCudaContextTests.cpp
         ArgumentsTests.cpp
-        FieldWorkersTests.cpp
-        PhysicalGpuStub.cpp  # Minimal stub for PhysicalGpu inheritance
-        ../DistributedCudaContext.cpp
-        ../Entity.cpp
-        ../Arguments.cpp
-        DcgmProfTesterStub.cpp  # Stub for g_signalCaught and other globals
-        CudaWorkerThreadStub.cpp  # Stub for CudaWorkerThread without CUDA dependencies
+        DcgmProfTesterTests.cpp
+        DistributedCudaContextTests.cpp
+        EntityTests.cpp
+        PhysicalGpuTests.cpp
 )
 
 target_link_libraries(dcgmproftester_tests
@@ -40,41 +36,25 @@ target_link_libraries(dcgmproftester_tests
         dcgm_interface  # Add dcgm_interface for DistributedCudaContext
         dcgm_logging
         dcgm_mutex
+        dcgmproftester_lib12
         fmt::fmt
-        testing_cuda_stubs 
-        testing_dcgm_cublas_stubs      # Use cublas stubs instead of real cublas for tests
+        mock_dcgmproftester
+        mock_dcgm_ops
+        mock_cublas_ops
+        mock_cuda_ops
         sdk_nvml_essentials_objects  # Add NVML objects for DistributedCudaContext
         transport_objects  # Add transport objects for DistributedCudaContext
-        ${CMAKE_THREAD_LIBS_INIT}
+        test-utils
+        Threads::Threads
         dl  # Add dl for dynamic linking
         rt  # Add rt for real-time extensions
-)
-
-target_include_directories(dcgmproftester_tests
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..  # Include parent directory for dcgmproftester headers
-        ${CUDA12_INCLUDE_DIR}          # Include CUDA headers for compilation
-        ${PROJECT_SOURCE_DIR}/cublas_proxy  # Include cublas_proxy headers
-        ${PROJECT_SOURCE_DIR}/common   # Include common headers
-        ${PROJECT_SOURCE_DIR}/common/tests  # Include common test helpers
-        ${PROJECT_SOURCE_DIR}/common/CudaWorker  # Include CudaWorker headers
-        ${PROJECT_SOURCE_DIR}/dcgmlib  # Include dcgmlib headers
-        ${PROJECT_SOURCE_DIR}/logging  # Include logging headers
-)
-
-target_compile_definitions(dcgmproftester_tests
-    PRIVATE
-        # Disable actual CUDA initialization for unit tests
-        DCGM_TESTING_MODE=1
-        # Use CUDA stubs instead of real CUDA
-        DCGM_USE_CUDA_STUBS=1
 )
 
 # Install test binary
 install(
     TARGETS dcgmproftester_tests
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/${DCGM_TESTS_ARCH}"
         COMPONENT Tests)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")

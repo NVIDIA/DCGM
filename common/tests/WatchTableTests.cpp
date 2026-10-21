@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <DcgmWatchTable.h>
-#include <Defer.hpp>
+#include <ScopedDcgmFields.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -131,9 +131,7 @@ TEST_CASE("WatchTable: RemoveConnectionWatches")
 TEST_CASE("WatchTable: GetFieldsToUpdate")
 {
     DcgmWatchTable wt;
-    auto ret = DcgmFieldsInit();
-    REQUIRE(ret == DCGM_ST_OK);
-    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
     for (unsigned int i = 0; i < 4; i++)
     {
         REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
@@ -233,9 +231,7 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
 TEST_CASE("WatchTable: Removing watches recalculates updateInterval")
 {
     DcgmWatchTable wt;
-    auto ret = DcgmFieldsInit();
-    REQUIRE(ret == DCGM_ST_OK);
-    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
 
     const unsigned int gpuId      = 0;
     const unsigned int maxAgeUsec = 1000000;

@@ -60,6 +60,9 @@ public:
 
     [[nodiscard]] std::string const &GetHomeDir() const; //!< Home directory for the host engine
 
+protected:
+    [[nodiscard]] static std::string ParseBindIp(std::string const &value);
+
 private:
     struct Impl;
     struct ImplDeleter
@@ -71,11 +74,3 @@ private:
 };
 
 HostEngineCommandLine ParseCommandLine(int argc, char *argv[]);
-
-#ifdef HOSTENGINE_TESTS
-class HostEngineCommandLineInterface
-{
-public:
-    std::string ParseBindIp(std::string const &value);
-};
-#endif

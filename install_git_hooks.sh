@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,19 +14,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CUR_DIR=$(dirname $(realpath ${0}))
-PRE_COMMIT_FILE=${CUR_DIR}/.git/hooks/pre-commit
+set -e -o pipefail -o nounset
 
-if [ -f ${PRE_COMMIT_FILE} ]; then
-    grep "./validate_format.sh" ${PRE_COMMIT_FILE} >/dev/null
-    if [ $? -ne 1 ]; then
-        echo "Pre-commit hooks is already installed"
-        exit 1
+CUR_DIR=$(dirname "$(realpath "${0}")")
+PRE_COMMIT_FILE=${CUR_DIR}/.git/hooks/pre-commit
+readonly HOOKS=(
+    "./validate_format.sh"
+    "./validate_clippy.sh"
+)
+
+if [ ! -f "${PRE_COMMIT_FILE}" ]; then
+    echo "#!/usr/bin/env bash" > "${PRE_COMMIT_FILE}"
+    echo "set -e" >> "${PRE_COMMIT_FILE}"
+    echo "" >> "${PRE_COMMIT_FILE}"
+    chmod +x "${PRE_COMMIT_FILE}"
+fi
+
+installed=0
+for hook in "${HOOKS[@]}"; do
+    if grep -Fx "${hook}" "${PRE_COMMIT_FILE}" >/dev/null; then
+        continue
     fi
-    echo "./validate_format.sh" >> ${PRE_COMMIT_FILE}
-else
-    echo "#!/usr/bin/env bash" > ${PRE_COMMIT_FILE}
-    echo "" >> ${PRE_COMMIT_FILE}
-    echo "./validate_format.sh" >> ${PRE_COMMIT_FILE}
-    chmod +x ${PRE_COMMIT_FILE}
+
+    echo "${hook}" >> "${PRE_COMMIT_FILE}"
+    installed=1
+done
+
+if [[ ${installed} -eq 0 ]]; then
+    echo "Pre-commit hooks are already installed"
+    exit 0
 fi

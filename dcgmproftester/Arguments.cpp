@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2025, NVIDIA CORPORATION.   All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,13 +23,11 @@
 
 namespace DcgmNs::ProfTester
 {
-dcgmReturn_t ArgumentSet_t::ProcessIntegerList(std::string argList,
-                                               std::shared_ptr<Arguments_t> arguments,
-                                               bool useDefaults,
-                                               dcgmReturn_t (*callback)(ArgumentSet_t &argumentSet,
-                                                                        std::shared_ptr<Arguments_t> arguments,
-                                                                        bool useDefaults,
-                                                                        unsigned int arg))
+dcgmReturn_t ArgumentSet_t::ProcessIntegerList(
+    std::string argList,
+    Arguments_t &arguments,
+    bool useDefaults,
+    dcgmReturn_t (*callback)(ArgumentSet_t &argumentSet, Arguments_t &arguments, bool useDefaults, unsigned int arg))
 {
     unsigned int argument { 0 };
     bool parsing { false };
@@ -65,15 +63,15 @@ dcgmReturn_t ArgumentSet_t::ProcessIntegerList(std::string argList,
         }
     }
 
-    return parsing ? callback(*this, std::move(arguments), useDefaults, argument) : DCGM_ST_OK;
+    return parsing ? callback(*this, arguments, useDefaults, argument) : DCGM_ST_OK;
 }
 
 
 dcgmReturn_t ArgumentSet_t::ProcessStringList(std::string argList,
-                                              std::shared_ptr<Arguments_t> arguments,
+                                              Arguments_t &arguments,
                                               bool useDefaults,
                                               dcgmReturn_t (*callback)(ArgumentSet_t &argumentSet,
-                                                                       std::shared_ptr<Arguments_t> arguments,
+                                                                       Arguments_t &arguments,
                                                                        bool useDefaults,
                                                                        const std::string &arg))
 
@@ -107,7 +105,7 @@ dcgmReturn_t ArgumentSet_t::ProcessStringList(std::string argList,
     if (parsing)
     {
         argument = std::string(argList, pos, argList.length() - pos);
-        rv       = (*callback)(*this, std::move(arguments), useDefaults, argument);
+        rv       = (*callback)(*this, arguments, useDefaults, argument);
     }
 
     return rv;
@@ -116,17 +114,17 @@ dcgmReturn_t ArgumentSet_t::ProcessStringList(std::string argList,
 
 dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
 {
-    auto arguments = std::make_shared<Arguments_t>();
+    Arguments_t arguments;
 
-    arguments->m_parameters.m_waitToCheck       = m_waitToCheck.Value();
-    arguments->m_parameters.m_maxGpusInParallel = m_maxGpusInParallel.Value();
-    arguments->m_parameters.m_duration          = m_duration.Value();
-    arguments->m_parameters.m_reportInterval    = m_reportInterval.Value();
-    arguments->m_parameters.m_syncCount         = m_syncCount.Value();
-    arguments->m_parameters.m_targetMaxValue    = m_targetMaxValue.Value();
-    arguments->m_parameters.m_noDcgmValidation  = m_noDcgmValidation.Value();
-    arguments->m_parameters.m_dvsOutput         = m_dvsOutput.Value();
-    arguments->m_parameters.m_cublas            = m_cublas.Value();
+    arguments.m_parameters.m_waitToCheck       = m_waitToCheck.Value();
+    arguments.m_parameters.m_maxGpusInParallel = m_maxGpusInParallel.Value();
+    arguments.m_parameters.m_duration          = m_duration.Value();
+    arguments.m_parameters.m_reportInterval    = m_reportInterval.Value();
+    arguments.m_parameters.m_syncCount         = m_syncCount.Value();
+    arguments.m_parameters.m_targetMaxValue    = m_targetMaxValue.Value();
+    arguments.m_parameters.m_noDcgmValidation  = m_noDcgmValidation.Value();
+    arguments.m_parameters.m_dvsOutput         = m_dvsOutput.Value();
+    arguments.m_parameters.m_cublas            = m_cublas.Value();
 
     double minValue;
     double maxValue;
@@ -198,8 +196,8 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
 
     if (!useDefaults)
     {
-        arguments->m_parameters.m_minValue = minValue;
-        arguments->m_parameters.m_maxValue = maxValue;
+        arguments.m_parameters.m_minValue = minValue;
+        arguments.m_parameters.m_maxValue = maxValue;
     }
 
     if (!m_gpuIdString.IsDefault()) // Some were specified: we need to get the list.
@@ -208,10 +206,10 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
                            arguments,
                            false,
                            [](ArgumentSet_t & /* self */,
-                              std::shared_ptr<Arguments_t> arguments,
+                              Arguments_t &arguments,
                               bool /* useDefaults */,
                               unsigned int gpuId) mutable -> dcgmReturn_t {
-                               arguments->m_gpuIds.push_back(gpuId);
+                               arguments.m_gpuIds.push_back(gpuId);
 
                                return DCGM_ST_OK;
                            });
@@ -221,7 +219,7 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
                       arguments,
                       false,
                       [](ArgumentSet_t & /* self */,
-                         std::shared_ptr<Arguments_t> arguments,
+                         Arguments_t &arguments,
                          bool /* useDefaults */,
                          const std::string &mode) mutable -> dcgmReturn_t {
                           bool setting { true };
@@ -235,19 +233,19 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
 
                           if (mode.compare(pos, std::string::npos, "generateload") == 0)
                           {
-                              arguments->m_parameters.m_generate = setting;
+                              arguments.m_parameters.m_generate = setting;
                           }
                           else if (mode.compare(pos, std::string::npos, "report") == 0)
                           {
-                              arguments->m_parameters.m_report = setting;
+                              arguments.m_parameters.m_report = setting;
                           }
                           else if (mode.compare(pos, std::string::npos, "validate") == 0)
                           {
-                              arguments->m_parameters.m_validate = setting;
+                              arguments.m_parameters.m_validate = setting;
                           }
                           else if (mode.compare(pos, std::string::npos, "fast") == 0)
                           {
-                              arguments->m_parameters.m_fast = setting;
+                              arguments.m_parameters.m_fast = setting;
                           }
                           else
                           {
@@ -259,9 +257,9 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
                           return DCGM_ST_OK;
                       });
 
-    arguments->m_parameters.m_logFile = m_logFileString.Value();
+    arguments.m_parameters.m_logFile = m_logFileString.Value();
 
-    arguments->m_parameters.m_logLevel
+    arguments.m_parameters.m_logLevel
         = LoggingSeverityFromString(m_logLevelString.Value().c_str(), DcgmLoggingSeverityInfo);
 
     bool limitedFields { false };
@@ -288,18 +286,18 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
 
     if (!m_percentTolerance.IsDefault())
     {
-        arguments->m_parameters.m_percentTolerance = true;
-        arguments->m_parameters.m_tolerance        = m_percentTolerance.Value();
+        arguments.m_parameters.m_percentTolerance = true;
+        arguments.m_parameters.m_tolerance        = m_percentTolerance.Value();
     }
     else if (!m_absoluteTolerance.IsDefault())
     {
-        arguments->m_parameters.m_percentTolerance = false;
-        arguments->m_parameters.m_tolerance        = m_absoluteTolerance.Value();
+        arguments.m_parameters.m_percentTolerance = false;
+        arguments.m_parameters.m_tolerance        = m_absoluteTolerance.Value();
     }
     else
     { // hard default.
-        arguments->m_parameters.m_percentTolerance = true;
-        arguments->m_parameters.m_tolerance        = 10.0;
+        arguments.m_parameters.m_percentTolerance = true;
+        arguments.m_parameters.m_tolerance        = 10.0;
     }
 
     if (limitedFields)
@@ -310,47 +308,36 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
             {
                 if (m_defaults.find(fieldId) != m_defaults.end())
                 {
-                    arguments->m_parameters.m_minValue   = m_defaults[fieldId].m_min;
-                    arguments->m_parameters.m_maxValue   = m_defaults[fieldId].m_max;
-                    arguments->m_parameters.m_valueValid = true;
+                    arguments.m_parameters.m_minValue   = m_defaults[fieldId].m_min;
+                    arguments.m_parameters.m_maxValue   = m_defaults[fieldId].m_max;
+                    arguments.m_parameters.m_valueValid = true;
                 }
                 else
                 {
-                    arguments->m_parameters.m_valueValid = false;
+                    arguments.m_parameters.m_valueValid = false;
                 }
             }
             else
             {
-                arguments->m_parameters.m_valueValid = false;
+                arguments.m_parameters.m_valueValid = false;
             }
 
-            arguments->m_parameters.m_fieldId = fieldId;
-            m_arguments.push_back(arguments);
-
-            // We make a copy for the next arguments with a different field.
-            if (fieldId != lastFieldId)
+            auto snapshot                   = arguments;
+            snapshot.m_parameters.m_fieldId = fieldId;
+            if (snapshot.m_parameters.m_valueValid)
             {
-                auto arguments2 = std::make_shared<Arguments_t>();
-
-                *arguments2 = *arguments;
-
-                // Just make these consistent.
-                if (arguments->m_parameters.m_valueValid)
-                {
-                    arguments->m_parameters.m_percentTolerance = false;
-                }
-
-                arguments = std::move(arguments2);
+                snapshot.m_parameters.m_percentTolerance = false;
             }
+            m_arguments.push_back(std::move(snapshot));
         }
     }
     else
     {
         return ProcessIntegerList(m_lastFieldIds,
-                                  std::move(arguments),
+                                  arguments,
                                   useDefaults,
                                   [](ArgumentSet_t &self,
-                                     std::shared_ptr<Arguments_t> arguments,
+                                     Arguments_t &arguments,
                                      bool useDefaults,
                                      unsigned int fieldId) mutable -> dcgmReturn_t {
                                       if (!DCGM_FIELD_ID_IS_PROF_FIELD(fieldId))
@@ -364,32 +351,31 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
                                       {
                                           if (self.m_defaults.find(fieldId) != self.m_defaults.end())
                                           {
-                                              arguments->m_parameters.m_minValue   = self.m_defaults[fieldId].m_min;
-                                              arguments->m_parameters.m_maxValue   = self.m_defaults[fieldId].m_max;
-                                              arguments->m_parameters.m_valueValid = true;
+                                              arguments.m_parameters.m_minValue   = self.m_defaults[fieldId].m_min;
+                                              arguments.m_parameters.m_maxValue   = self.m_defaults[fieldId].m_max;
+                                              arguments.m_parameters.m_valueValid = true;
                                           }
                                           else
                                           {
-                                              arguments->m_parameters.m_valueValid = false;
+                                              arguments.m_parameters.m_valueValid = false;
                                           }
                                       }
                                       else
                                       {
-                                          arguments->m_parameters.m_valueValid = false;
+                                          arguments.m_parameters.m_valueValid = false;
                                       }
 
                                       /**
                                        * We make a copy of the arguments with
                                        * each different field.
                                        */
-                                      auto arguments2                    = std::make_shared<Arguments_t>();
-                                      *arguments2                        = *arguments;
-                                      arguments2->m_parameters.m_fieldId = fieldId;
+                                      auto arguments2                   = arguments;
+                                      arguments2.m_parameters.m_fieldId = fieldId;
 
                                       // Just make these consistent.
-                                      if (arguments2->m_parameters.m_valueValid)
+                                      if (arguments2.m_parameters.m_valueValid)
                                       {
-                                          arguments2->m_parameters.m_percentTolerance = false;
+                                          arguments2.m_parameters.m_percentTolerance = false;
                                       }
 
                                       self.m_arguments.push_back(std::move(arguments2));
@@ -509,13 +495,13 @@ dcgmReturn_t ArgumentSet_t::Parse(int argc, char *argv[])
     return ProcessFieldIds();
 }
 
-dcgmReturn_t ArgumentSet_t::Process(std::function<dcgmReturn_t(std::shared_ptr<Arguments_t> arguments)> processor)
+dcgmReturn_t ArgumentSet_t::Process(std::function<dcgmReturn_t(Arguments_t const &arguments)> processArgument)
 {
     dcgmReturn_t retVal { DCGM_ST_OK };
 
-    for (auto arguments : m_arguments)
+    for (auto const &arguments : m_arguments)
     {
-        dcgmReturn_t rv = processor(std::move(arguments));
+        dcgmReturn_t rv = processArgument(arguments);
 
         if (rv != DCGM_ST_OK)
         {

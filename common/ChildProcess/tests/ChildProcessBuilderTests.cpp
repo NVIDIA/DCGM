@@ -16,15 +16,22 @@
 
 #include <catch2/catch_all.hpp>
 
+#include <atomic>
+#include <cerrno>
 #include <csignal>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <latch>
+#include <set>
+#include <stdexcept>
+#include <sys/wait.h>
 #include <thread>
+#include <unistd.h>
 
 #include <ChildProcess.hpp>
 #include <ChildProcessBuilder.hpp>
 #include <IoContext.hpp>
+#include <MockChildProcess.hpp>
 
 using namespace DcgmNs::Common::Subprocess;
 
@@ -87,6 +94,80 @@ TEST_CASE("ChildProcess sets environment variables correctly")
     REQUIRE(process.GetExitCode().has_value());
     REQUIRE(*process.GetExitCode() == 0);
     REQUIRE(process.ReceivedSignal() == std::nullopt);
+}
+
+TEST_CASE("ChildProcess environment composition supports inherited and replacement modes")
+{
+    ChildProcessEnvironment baseEnvironment {
+        { "DCGM_TEST_PARENT_ENV_KEY", "Parent" },
+        { "DCGM_TEST_SHARED_ENV_KEY", "Parent" },
+    };
+    ChildProcessEnvironment configuredEnvironment {
+        { "DCGM_TEST_ENV_KEY", "Capoo" },
+        { "DCGM_TEST_SHARED_ENV_KEY", "Configured" },
+    };
+
+    CHECK(ChildProcessBuilder {}
+              .AddEnvironment(ChildProcessEnvironment { configuredEnvironment })
+              .BuildEnvironment(baseEnvironment)
+          == ChildProcessEnvironment {
+              { "DCGM_TEST_PARENT_ENV_KEY", "Parent" },
+              { "DCGM_TEST_ENV_KEY", "Capoo" },
+              { "DCGM_TEST_SHARED_ENV_KEY", "Parent" },
+          });
+    CHECK(ChildProcessBuilder {}
+              .ReplaceEnvironment(ChildProcessEnvironment { configuredEnvironment })
+              .BuildEnvironment(baseEnvironment)
+          == ChildProcessEnvironment {
+              { "DCGM_TEST_ENV_KEY", "Capoo" },
+              { "DCGM_TEST_SHARED_ENV_KEY", "Configured" },
+          });
+    CHECK(BuildChildProcessEnvironment(baseEnvironment, configuredEnvironment, ChildProcessEnvironmentMode::Inherit)
+          == ChildProcessEnvironment {
+              { "DCGM_TEST_PARENT_ENV_KEY", "Parent" },
+              { "DCGM_TEST_ENV_KEY", "Capoo" },
+              { "DCGM_TEST_SHARED_ENV_KEY", "Parent" },
+          });
+    CHECK(BuildChildProcessEnvironment(baseEnvironment, configuredEnvironment, ChildProcessEnvironmentMode::Replace)
+          == ChildProcessEnvironment {
+              { "DCGM_TEST_ENV_KEY", "Capoo" },
+              { "DCGM_TEST_SHARED_ENV_KEY", "Configured" },
+          });
+}
+
+TEST_CASE("ChildProcess close-all-except descriptors merge caller selections and additional descriptors")
+{
+    auto allowedFds = BuildChildProcessAllowedFds(std::set<int> { 0, 9 }, { 4, 7, 11 });
+
+    CHECK(allowedFds == std::set<int> { 0, 4, 7, 9, 11 });
+    CHECK_FALSE(allowedFds.contains(1));
+    CHECK_FALSE(allowedFds.contains(2));
+    CHECK_FALSE(allowedFds.contains(3));
+}
+
+TEST_CASE("ChildProcess close-all-except descriptors support empty and merged selections")
+{
+    CHECK(BuildChildProcessAllowedFds({}, { 5 }) == std::set<int> { 5 });
+    CHECK(BuildChildProcessAllowedFds({ 1 }, { 4, 8 }) == std::set<int> { 1, 4, 8 });
+}
+
+TEST_CASE("ChildProcess builder passes close-all-except descriptors only when requested")
+{
+    auto ioContext = IoContext();
+
+    MockChildProcess::Reset();
+    auto inheritProcess = MockChildProcess {};
+    ChildProcessBuilder {}.SetExecutable("child").AddFramedChannel(3).Build(ioContext, inheritProcess);
+    CHECK_FALSE(MockChildProcess::GetSpawnParams().allowedFds.has_value());
+
+    MockChildProcess::Reset();
+    auto closeExceptProcess = MockChildProcess {};
+    ChildProcessBuilder {}.SetExecutable("child").CloseFdsExcept({ 0 }).AddFramedChannel(7).Build(ioContext,
+                                                                                                  closeExceptProcess);
+
+    auto const spawnParams = MockChildProcess::GetSpawnParams();
+    REQUIRE(spawnParams.allowedFds.has_value());
+    CHECK(*spawnParams.allowedFds == std::set<int> { 0, 7 });
 }
 
 TEST_CASE("ChildProcess can read from the channel file descriptor, when process returns 0")
@@ -221,6 +302,96 @@ TEST_CASE("ChildProcess does not block when killed")
     CHECK(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() < 1100);
 }
 
+TEST_CASE("ChannelTimeoutState tracks whether a timeout is armed")
+{
+    using State = ChannelTimeoutState;
+    State state;
+    auto const start = State::TimePoint {};
+
+    CHECK_FALSE(state.IsArmed());
+
+    state.Arm(std::chrono::milliseconds { 100 }, start);
+    CHECK(state.IsArmed());
+
+    state.Disarm();
+    CHECK_FALSE(state.IsArmed());
+
+    state.ObserveActivity(start + std::chrono::milliseconds { 50 });
+    CHECK_FALSE(state.IsArmed());
+}
+
+TEST_CASE("ChannelTimeoutState fires only at the active deadline")
+{
+    using State = ChannelTimeoutState;
+    State state;
+    auto const start = State::TimePoint {};
+
+    state.Arm(std::chrono::milliseconds { 100 }, start);
+    CHECK_FALSE(state.ShouldFire(start + std::chrono::milliseconds { 99 }));
+
+    state.ObserveActivity(start + std::chrono::milliseconds { 50 });
+    CHECK_FALSE(state.ShouldFire(start + std::chrono::milliseconds { 120 }));
+
+    CHECK(state.ShouldFire(start + std::chrono::milliseconds { 150 }));
+    CHECK_FALSE(state.IsArmed());
+    CHECK_FALSE(state.ShouldFire(start + std::chrono::milliseconds { 151 }));
+}
+
+TEST_CASE("ChildProcess OnChannelTimeout reports an unregistered channel fd")
+{
+    auto ioContext = IoContext();
+    auto process   = ChildProcessBuilder {}
+                         .SetExecutable("./childprocesstesttool")
+                         .AddFramedChannel(6)
+                         .AddArg("sleep")
+                         .AddArg("1")
+                         .Build(ioContext);
+
+    auto result = process.OnChannelTimeout(7, std::chrono::milliseconds(100), [] {});
+
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error() == ChannelTimeoutError::NotRegistered);
+}
+
+TEST_CASE("ChildProcess OnChannelTimeout rejects non-positive duration")
+{
+    auto ioContext = IoContext();
+    auto process   = ChildProcessBuilder {}
+                         .SetExecutable("./childprocesstesttool")
+                         .AddFramedChannel(6)
+                         .AddArg("sleep")
+                         .AddArg("1")
+                         .Build(ioContext);
+
+    auto zeroResult     = process.OnChannelTimeout(6, std::chrono::milliseconds(0), [] {});
+    auto negativeResult = process.OnChannelTimeout(6, std::chrono::milliseconds(-1), [] {});
+
+    REQUIRE_FALSE(zeroResult.has_value());
+    CHECK(zeroResult.error() == ChannelTimeoutError::InvalidDuration);
+    REQUIRE_FALSE(negativeResult.has_value());
+    CHECK(negativeResult.error() == ChannelTimeoutError::InvalidDuration);
+}
+
+SCENARIO("ChildProcess can be destroyed while its asynchronous exit callback is pending")
+{
+    auto ioContext = IoContext();
+
+    // ASAN is the primary regression check: repeated immediate destruction widens the
+    // callback race window. The assertions ensure every iteration reached that window.
+    for (int iteration = 0; iteration < 100; ++iteration)
+    {
+        auto process = ChildProcessBuilder {}
+                           .SetExecutable("./childprocesstesttool")
+                           .AddArg("sleep")
+                           .AddArg("10")
+                           .Build(ioContext);
+        process.Run();
+        auto const pid = process.GetPid();
+        REQUIRE(pid.has_value());
+        REQUIRE(::kill(*pid, SIGKILL) == 0);
+    }
+}
+
 TEST_CASE("ChildProcess does not throw when invalid executable is provided")
 {
     boost::filesystem::path exePath("invalid/file");
@@ -234,6 +405,28 @@ TEST_CASE("ChildProcess does not throw when invalid executable is provided")
     auto proc      = ChildProcessBuilder {}.SetExecutable(std::move(exePath)).Build(ioContext);
     proc.Run();
     REQUIRE(!proc.IsAlive());
+
+    // ChildProcess::Impl::Run captures the failed-launch child's pid through a side pipe
+    // written by on_exec_setup and reaps it. Assert no unreaped children remain.
+    int status           = 0;
+    pid_t const leftover = ::waitpid(-1, &status, WNOHANG);
+    int const savedErrno = errno;
+    REQUIRE(leftover == -1);
+    REQUIRE(savedErrno == ECHILD);
+}
+
+TEST_CASE("ChildProcess close-all-except preserves launch failure reporting")
+{
+    auto ioContext = IoContext();
+    auto proc      = ChildProcessBuilder {}
+                         .SetExecutable("invalid/file")
+                         .CloseFdsExcept({ STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO })
+                         .Build(ioContext);
+
+    proc.Run();
+
+    CHECK(proc.FailedToLaunch());
+    CHECK_FALSE(proc.IsAlive());
 }
 
 TEST_CASE("ChildProcess GetStdErrBuffer blocks on stderr reads when indicated - process generates error")

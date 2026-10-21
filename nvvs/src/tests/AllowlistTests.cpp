@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #include <DcgmError.h>
 #include <Defer.hpp>
+#include <NvvsCommon.h>
 #include <ParsingUtility.h>
 #include <PluginStrings.h>
 #include <catch2/catch_all.hpp>
@@ -22,6 +23,15 @@
 #include <stdexcept>
 
 #include <Allowlist.h>
+
+
+namespace
+{
+struct AllowlistTestFixture
+{
+    NvvsCommon nvvsCommon;
+};
+} // namespace
 
 #define VALID_ID   "1194"
 #define INVALID_ID "1190"
@@ -32,20 +42,20 @@ class TestAllowlist : protected Allowlist
 {
 public:
     void WrapperUpdateGlobalsForDeviceId(const std::string &deviceId);
-    TestAllowlist(const ConfigFileParser_v2 &parser)
-        : Allowlist(parser)
+    TestAllowlist(NvvsCommon *nvvsCommon, const ConfigFileParser_v2 &parser)
+        : Allowlist(nvvsCommon, parser)
     {}
 };
 
 static FrameworkConfig fwcfg;
 
 // bool Allowlist::IsAllowlisted(std::string deviceId)
-SCENARIO("Allowlist is initialized when constructed", "[.]")
+SCENARIO_METHOD(AllowlistTestFixture, "Allowlist is initialized when constructed", "[.]")
 {
     try
     {
-        ConfigFileParser_v2 parser("", fwcfg);
-        Allowlist wl(parser);
+        ConfigFileParser_v2 parser(&nvvsCommon, "", fwcfg);
+        Allowlist wl(&nvvsCommon, parser);
         WHEN("Allowlist is initialized")
         {
             THEN("Allowlist correctly returns status of device IDs")
@@ -61,12 +71,12 @@ SCENARIO("Allowlist is initialized when constructed", "[.]")
     }
 }
 
-SCENARIO("All valid GPUs are in allowlist", "[.]")
+SCENARIO_METHOD(AllowlistTestFixture, "All valid GPUs are in allowlist", "[.]")
 {
     try
     {
-        ConfigFileParser_v2 parser("", fwcfg);
-        Allowlist wl(parser);
+        ConfigFileParser_v2 parser(&nvvsCommon, "", fwcfg);
+        Allowlist wl(&nvvsCommon, parser);
         // Tesla K8
         CHECK(wl.IsAllowlisted("1194"));
         // Tesla K80 ("Stella Duo" Gemini)
@@ -174,12 +184,12 @@ SCENARIO("All valid GPUs are in allowlist", "[.]")
     }
 }
 
-SCENARIO("Allowlist provides default values for device", "[.]")
+SCENARIO_METHOD(AllowlistTestFixture, "Allowlist provides default values for device", "[.]")
 {
     try
     {
-        ConfigFileParser_v2 parser("", fwcfg);
-        Allowlist wl(parser);
+        ConfigFileParser_v2 parser(&nvvsCommon, "", fwcfg);
+        Allowlist wl(&nvvsCommon, parser);
         TestParameters tp;
         GIVEN("valid id, valid test")
         {
@@ -205,12 +215,12 @@ SCENARIO("Allowlist provides default values for device", "[.]")
     }
 }
 
-SCENARIO("UpdateGlobalsForDeviceId sets the appropriate global flags", "[.]")
+SCENARIO_METHOD(AllowlistTestFixture, "UpdateGlobalsForDeviceId sets the appropriate global flags", "[.]")
 {
     try
     {
-        ConfigFileParser_v2 parser("", fwcfg);
-        TestAllowlist wl(parser);
+        ConfigFileParser_v2 parser(&nvvsCommon, "", fwcfg);
+        TestAllowlist wl(&nvvsCommon, parser);
 
         GIVEN("An ID that requires global change")
         {
@@ -272,17 +282,14 @@ void TestAllowlist::WrapperUpdateGlobalsForDeviceId(const std::string &deviceId)
     UpdateGlobalsForDeviceId(deviceId);
 }
 
-TEST_CASE("Allowlist applies configured defaults and global clock masks")
+TEST_CASE_METHOD(AllowlistTestFixture, "Allowlist applies configured defaults and global clock masks")
 {
-    auto const savedClockEventIgnoreMask = nvvsCommon.clocksEventIgnoreMask;
-    DcgmNs::Defer restoreClockEventIgnoreMask([&] { nvvsCommon.clocksEventIgnoreMask = savedClockEventIgnoreMask; });
-
-    ConfigFileParser_v2 parser("", fwcfg);
+    ConfigFileParser_v2 parser(&nvvsCommon, "", fwcfg);
     REQUIRE(parser.Init());
 
     SECTION("known device ids are allowlisted")
     {
-        Allowlist wl(parser);
+        Allowlist wl(&nvvsCommon, parser);
 
         CHECK(wl.IsAllowlisted(VALID_ID));
         CHECK_FALSE(wl.IsAllowlisted(INVALID_ID));
@@ -291,7 +298,7 @@ TEST_CASE("Allowlist applies configured defaults and global clock masks")
 
     SECTION("device-specific defaults override bootstrap values")
     {
-        Allowlist wl(parser);
+        Allowlist wl(&nvvsCommon, parser);
         TestParameters tp;
         tp.AddDouble(SMSTRESS_STR_TARGET_PERF, 0.0);
         tp.AddString(SMSTRESS_STR_USE_DGEMM, "True");
@@ -306,7 +313,7 @@ TEST_CASE("Allowlist applies configured defaults and global clock masks")
 
     SECTION("global clock masks are applied only when unset")
     {
-        TestAllowlist wl(parser);
+        TestAllowlist wl(&nvvsCommon, parser);
 
         nvvsCommon.clocksEventIgnoreMask = DCGM_INT64_BLANK;
         wl.WrapperUpdateGlobalsForDeviceId("102d");

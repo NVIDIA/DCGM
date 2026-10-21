@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,19 @@
 #include "CudaCommon.h"
 
 #include "DcgmError.h"
-#include "cuda_runtime.h"
 #include <NvvsCommon.h>
 #include <PluginCommon.h>
 
 #include <fmt/format.h>
 
-std::string AppendCudaDriverError(const std::string &error, CUresult cuRes)
+CudaCommon::CudaCommon(CudaOpsAnyPtr cudaOps)
+    : m_cudaOps(cudaOps)
+{}
+
+std::string CudaCommon::AppendCudaDriverError(const std::string &error, CUresult cuRes) const
 {
     const char *cudaErrorStr = nullptr;
-    cuGetErrorString(cuRes, &cudaErrorStr);
+    m_cudaOps->cuGetErrorString(cuRes, &cudaErrorStr);
 
     if (cudaErrorStr != nullptr)
     {
@@ -34,12 +37,11 @@ std::string AppendCudaDriverError(const std::string &error, CUresult cuRes)
     return error;
 }
 
-
 #define caseForEnumToString(name) \
     case name:                    \
         return #name
 /* cudaGetErrorString equivalent for cublasStatus_t */
-const char *cublasGetErrorString(cublasStatus_t status)
+const char *CudaCommon::CublasGetErrorString(cublasStatus_t status) const
 {
     switch (status)
     {
@@ -59,13 +61,13 @@ const char *cublasGetErrorString(cublasStatus_t status)
 }
 
 /*************************************************************************/
-std::string AddAPIError(Plugin *p,
-                        std::string const &testName,
-                        const char *callName,
-                        const char *errorText,
-                        unsigned int gpuId,
-                        size_t bytes,
-                        bool isGpuSpecific)
+std::string CudaCommon::AddAPIError(Plugin *p,
+                                    std::string const &testName,
+                                    const char *callName,
+                                    const char *errorText,
+                                    unsigned int gpuId,
+                                    size_t bytes,
+                                    bool isGpuSpecific) const
 {
     DcgmError d { DcgmError::GpuIdTag::Unknown };
 
@@ -93,28 +95,66 @@ std::string AddAPIError(Plugin *p,
 }
 
 /*****************************************************************************/
-std::string AddCudaError(Plugin *p,
-                         std::string const &testName,
-                         const char *callName,
-                         cudaError_t cuSt,
-                         unsigned int gpuId,
-                         size_t bytes,
-                         bool isGpuSpecific)
+std::string CudaCommon::AddCudaError(Plugin *p,
+                                     std::string const &testName,
+                                     const char *callName,
+                                     cudaError_t cuSt,
+                                     unsigned int gpuId) const
 {
-    return AddAPIError(p, testName, callName, cudaGetErrorString(cuSt), gpuId, bytes, isGpuSpecific);
+    return AddCudaError(p, testName, callName, cuSt, gpuId, 0, true);
+}
+
+std::string CudaCommon::AddCudaError(Plugin *p,
+                                     std::string const &testName,
+                                     const char *callName,
+                                     cudaError_t cuSt,
+                                     unsigned int gpuId,
+                                     size_t bytes) const
+{
+    return AddCudaError(p, testName, callName, cuSt, gpuId, bytes, true);
+}
+
+std::string CudaCommon::AddCudaError(Plugin *p,
+                                     std::string const &testName,
+                                     const char *callName,
+                                     cudaError_t cuSt,
+                                     unsigned int gpuId,
+                                     size_t bytes,
+                                     bool isGpuSpecific) const
+{
+    return AddAPIError(p, testName, callName, m_cudaOps->cudaGetErrorString(cuSt), gpuId, bytes, isGpuSpecific);
 }
 
 /*****************************************************************************/
-std::string AddCudaError(Plugin *p,
-                         std::string const &testName,
-                         const char *callName,
-                         CUresult cuSt,
-                         unsigned int gpuId,
-                         size_t bytes,
-                         bool isGpuSpecific)
+std::string CudaCommon::AddCudaError(Plugin *p,
+                                     std::string const &testName,
+                                     const char *callName,
+                                     CUresult cuSt,
+                                     unsigned int gpuId) const
+{
+    return AddCudaError(p, testName, callName, cuSt, gpuId, 0, true);
+}
+
+std::string CudaCommon::AddCudaError(Plugin *p,
+                                     std::string const &testName,
+                                     const char *callName,
+                                     CUresult cuSt,
+                                     unsigned int gpuId,
+                                     size_t bytes) const
+{
+    return AddCudaError(p, testName, callName, cuSt, gpuId, bytes, true);
+}
+
+std::string CudaCommon::AddCudaError(Plugin *p,
+                                     std::string const &testName,
+                                     const char *callName,
+                                     CUresult cuSt,
+                                     unsigned int gpuId,
+                                     size_t bytes,
+                                     bool isGpuSpecific) const
 {
     const char *errorText = nullptr;
-    cuGetErrorString(cuSt, &errorText);
+    m_cudaOps->cuGetErrorString(cuSt, &errorText);
 
     std::string errorBuf;
     if (errorText == nullptr)
@@ -136,18 +176,37 @@ std::string AddCudaError(Plugin *p,
 }
 
 /*****************************************************************************/
-std::string AddCublasError(Plugin *p,
-                           std::string const &testName,
-                           const char *callName,
-                           cublasStatus_t cubSt,
-                           unsigned int gpuId,
-                           size_t bytes,
-                           bool isGpuSpecific)
+std::string CudaCommon::AddCublasError(Plugin *p,
+                                       std::string const &testName,
+                                       const char *callName,
+                                       cublasStatus_t cubSt,
+                                       unsigned int gpuId) const
 {
-    return AddAPIError(p, testName, callName, cublasGetErrorString(cubSt), gpuId, bytes, isGpuSpecific);
+    return AddCublasError(p, testName, callName, cubSt, gpuId, 0, true);
 }
 
-const char *GetAdditionalCuInitDetail(CUresult cuSt)
+std::string CudaCommon::AddCublasError(Plugin *p,
+                                       std::string const &testName,
+                                       const char *callName,
+                                       cublasStatus_t cubSt,
+                                       unsigned int gpuId,
+                                       size_t bytes) const
+{
+    return AddCublasError(p, testName, callName, cubSt, gpuId, bytes, true);
+}
+
+std::string CudaCommon::AddCublasError(Plugin *p,
+                                       std::string const &testName,
+                                       const char *callName,
+                                       cublasStatus_t cubSt,
+                                       unsigned int gpuId,
+                                       size_t bytes,
+                                       bool isGpuSpecific) const
+{
+    return AddAPIError(p, testName, callName, CublasGetErrorString(cubSt), gpuId, bytes, isGpuSpecific);
+}
+
+const char *CudaCommon::GetAdditionalCuInitDetail(CUresult cuSt) const
 {
     if (cuSt == CUDA_ERROR_NOT_INITIALIZED)
     {

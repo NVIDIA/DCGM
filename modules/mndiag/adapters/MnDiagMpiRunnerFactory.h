@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #pragma once
 
 #include "MnDiagMpiMnubergemmRunner.h"
+#include "MnDiagMpiNvbandwidthRunner.h"
+#include "MnDiagMpiNvloomRunner.h"
 #include "MnDiagMpiRunnerAdapter.h"
 #include "MnDiagMpiRunnerFactoryBase.h"
 
@@ -44,6 +46,12 @@ public:
             case dcgmMultinodeTestType_t::mnubergemm:
                 return std::make_unique<MnDiagMpiRunnerAdapter>(
                     std::make_unique<MnDiagMpiMnubergemmRunner>(coreProxy, effectiveUid));
+            case dcgmMultinodeTestType_t::nvloom:
+                return std::make_unique<MnDiagMpiRunnerAdapter>(
+                    std::make_unique<MnDiagMpiNvloomRunner>(coreProxy, effectiveUid));
+            case dcgmMultinodeTestType_t::mnnvbandwidth:
+                return std::make_unique<MnDiagMpiRunnerAdapter>(
+                    std::make_unique<MnDiagMpiNvbandwidthRunner>(coreProxy, effectiveUid));
             default:
                 return nullptr;
         }

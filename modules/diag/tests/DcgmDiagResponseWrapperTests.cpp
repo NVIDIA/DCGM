@@ -22,11 +22,23 @@
 #include <UniquePtrUtil.h>
 #include <dcgm_errors.h>
 
-#define __DIAG_UNIT_TESTING__
 #include <DcgmDiagResponseWrapper.h>
 
 namespace
 {
+/**
+ * Test adapter that exposes protected response-wrapper helpers used by these tests.
+ */
+class TestDcgmDiagResponseWrapper : public DcgmDiagResponseWrapper
+{
+public:
+    using DcgmDiagResponseWrapper::AddGpuStatusToAllTests;
+    using DcgmDiagResponseWrapper::m_version;
+    using DcgmDiagResponseWrapper::SetVersion10;
+    using DcgmDiagResponseWrapper::SetVersion11;
+    using DcgmDiagResponseWrapper::SetVersion12;
+};
+
 template <typename ResponseType>
 void PopulateSetResultSource(ResponseType &response)
 {
@@ -64,7 +76,7 @@ TEST_CASE("DcgmDiagResponseWrapper: HasTest")
 {
     SECTION("Unsupported version")
     {
-        DcgmDiagResponseWrapper ddr;
+        TestDcgmDiagResponseWrapper ddr;
         auto dr12Uptr = MakeUniqueZero<dcgmDiagResponse_v12>();
         auto &dr12    = *dr12Uptr;
 
@@ -80,7 +92,7 @@ TEST_CASE("DcgmDiagResponseWrapper: HasTest")
 
     SECTION("Basic case")
     {
-        DcgmDiagResponseWrapper ddr;
+        TestDcgmDiagResponseWrapper ddr;
         auto dr12Uptr = MakeUniqueZero<dcgmDiagResponse_v12>();
         auto &dr12    = *dr12Uptr;
 
@@ -102,11 +114,11 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::Version Mismatch")
 {
     SECTION("v12/v11 mismatch")
     {
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         dest.SetVersion(destResponse.get());
 
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v11>();
         src.SetVersion(srcResponse.get());
 
@@ -115,11 +127,11 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::Version Mismatch")
 
     SECTION("v11/v10 mismatch")
     {
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v11>();
         dest.SetVersion(destResponse.get());
 
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v10>();
         src.SetVersion(srcResponse.get());
 
@@ -131,14 +143,14 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
 {
     SECTION("Version 12: Destination includes eud results with non-DCGM_FR_EUD_NON_ROOT_USER code")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
         srcResponse->tests[0].result = DCGM_DIAG_RESULT_PASS;
         srcResponse->numTests        = 1;
         src.SetVersion(srcResponse.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(destResponse->tests[0].name, EUD_PLUGIN_NAME);
         destResponse->tests[0].result          = DCGM_DIAG_RESULT_FAIL;
@@ -154,7 +166,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
 
     SECTION("Version 12: Category found")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
         srcResponse->tests[0].result = DCGM_DIAG_RESULT_PASS;
@@ -163,7 +175,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
         SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
         src.SetVersion(srcResponse.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
         destResponse->tests[1].result          = DCGM_DIAG_RESULT_FAIL;
@@ -185,7 +197,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
 
     SECTION("Version 12: Category not found")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
         srcResponse->tests[0].result = DCGM_DIAG_RESULT_PASS;
@@ -194,7 +206,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
         SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
         src.SetVersion(srcResponse.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(destResponse->tests[0].name, EUD_PLUGIN_NAME);
         destResponse->tests[0].result          = DCGM_DIAG_RESULT_FAIL;
@@ -214,7 +226,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
 
     SECTION("Version 12: Merge error")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
         srcResponse->tests[0].result          = DCGM_DIAG_RESULT_FAIL;
@@ -228,7 +240,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
         SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
         src.SetVersion(srcResponse.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
         SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
@@ -257,7 +269,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
 
     SECTION("Version 12: Merge info")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
         srcResponse->tests[0].result         = DCGM_DIAG_RESULT_FAIL;
@@ -271,7 +283,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
         SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
         src.SetVersion(srcResponse.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
         SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
@@ -300,7 +312,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
 
     SECTION("Version 12: Merge empty results")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
         srcResponse->tests[0].result           = DCGM_DIAG_RESULT_FAIL;
@@ -316,7 +328,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
         SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
         src.SetVersion(srcResponse.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
         SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
@@ -349,7 +361,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
 
     SECTION("Version 12: Merge non-empty results")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
         srcResponse->tests[0].result           = DCGM_DIAG_RESULT_FAIL;
@@ -368,7 +380,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
         SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
         src.SetVersion(srcResponse.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
         SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
@@ -411,7 +423,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
 
     SECTION("Version 12: Merge aux")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
         SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
         srcResponse->tests[0].result = DCGM_DIAG_RESULT_PASS;
@@ -423,9 +435,8 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
         SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
         src.SetVersion(srcResponse.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
-        memset(destResponse.get(), 0, sizeof(dcgmDiagResponse_v12));
         SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
         SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
         destResponse->tests[1].result          = DCGM_DIAG_RESULT_FAIL;
@@ -451,7 +462,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
 {
     SECTION("Version 11: Destination includes eud results with non-DCGM_FR_EUD_NON_ROOT_USER code")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Src = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Src.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Src->tests[0].name, "eud");
@@ -459,7 +470,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
         dr11Src->numTests        = 1;
         src.SetVersion11(dr11Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Dest = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Dest.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Dest->tests[0].name, "eud");
@@ -476,7 +487,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
 
     SECTION("Version 11: Category found")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Src = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Src.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Src->tests[0].name, "eud");
@@ -486,7 +497,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
         SafeCopyTo(dr11Src->categories[0], "hardware");
         src.SetVersion11(dr11Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Dest = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Dest.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Dest->tests[1].name, "eud");
@@ -509,7 +520,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
 
     SECTION("Version 11: Category not found")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Src = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Src.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Src->tests[0].name, "eud");
@@ -519,7 +530,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
         SafeCopyTo(dr11Src->categories[0], "hardware");
         src.SetVersion11(dr11Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Dest = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Dest.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Dest->tests[0].name, "eud");
@@ -540,7 +551,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
 
     SECTION("Version 11: Merge error")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Src = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Src.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Src->tests[0].name, "eud");
@@ -555,7 +566,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
         SafeCopyTo(dr11Src->categories[0], "hardware");
         src.SetVersion11(dr11Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Dest = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Dest.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Dest->tests[0].name, "memory");
@@ -585,7 +596,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
 
     SECTION("Version 11: Merge info")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Src = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Src.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Src->tests[0].name, "eud");
@@ -600,7 +611,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
         SafeCopyTo(dr11Src->categories[0], "hardware");
         src.SetVersion11(dr11Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Dest = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Dest.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Dest->tests[0].name, "memory");
@@ -630,7 +641,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
 
     SECTION("Version 11: Merge empty results")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Src = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Src.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Src->tests[0].name, "eud");
@@ -647,7 +658,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
         SafeCopyTo(dr11Src->categories[0], "hardware");
         src.SetVersion11(dr11Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Dest = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Dest.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Dest->tests[0].name, "memory");
@@ -681,7 +692,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
 
     SECTION("Version 11: Merge non-empty results")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Src = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Src.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Src->tests[0].name, "eud");
@@ -701,7 +712,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
         SafeCopyTo(dr11Src->categories[0], "hardware");
         src.SetVersion11(dr11Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Dest = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Dest.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Dest->tests[0].name, "memory");
@@ -745,7 +756,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
 
     SECTION("Version 11: Merge aux")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Src = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Src.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Src->tests[0].name, "eud");
@@ -758,7 +769,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
         SafeCopyTo(dr11Src->categories[0], "hardware");
         src.SetVersion11(dr11Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v11> dr11Dest = std::make_unique<dcgmDiagResponse_v11>();
         memset(dr11Dest.get(), 0, sizeof(dcgmDiagResponse_v11));
         SafeCopyTo(dr11Dest->tests[0].name, "memory");
@@ -787,7 +798,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v10")
 {
     SECTION("Version 10: Merge aux")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v10> dr10Src = std::make_unique<dcgmDiagResponse_v10>();
         memset(dr10Src.get(), 0, sizeof(dcgmDiagResponse_v10));
         SafeCopyTo(dr10Src->auxDataPerTest[DCGM_EUD_TEST_INDEX].data, "Hello Capoo!");
@@ -796,7 +807,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v10")
         dr10Src->auxDataPerTest[DCGM_EUD_TEST_INDEX].version            = dcgmDiagTestAuxData_version1;
         src.SetVersion10(dr10Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v10> dr10Dest = std::make_unique<dcgmDiagResponse_v10>();
         memset(dr10Dest.get(), 0, sizeof(dcgmDiagResponse_v10));
         dr10Dest->gpuCount                                                      = 1;
@@ -811,7 +822,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v10")
 
     SECTION("Version 10: Skip merge")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v10> dr10Src = std::make_unique<dcgmDiagResponse_v10>();
         memset(dr10Src.get(), 0, sizeof(dcgmDiagResponse_v10));
         SafeCopyTo(dr10Src->auxDataPerTest[DCGM_EUD_TEST_INDEX].data, "Hello Capoo!");
@@ -820,7 +831,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v10")
         dr10Src->auxDataPerTest[DCGM_EUD_TEST_INDEX].version            = dcgmDiagTestAuxData_version1;
         src.SetVersion10(dr10Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v10> dr10Dest = std::make_unique<dcgmDiagResponse_v10>();
         memset(dr10Dest.get(), 0, sizeof(dcgmDiagResponse_v10));
         dr10Dest->gpuCount                                               = 1;
@@ -834,7 +845,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v10")
 
     SECTION("Version 10: Merge - Fail with NON_ROOT_USER case")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v10> dr10Src = std::make_unique<dcgmDiagResponse_v10>();
         memset(dr10Src.get(), 0, sizeof(dcgmDiagResponse_v10));
         SafeCopyTo(dr10Src->auxDataPerTest[DCGM_EUD_TEST_INDEX].data, "Hello Capoo!");
@@ -843,7 +854,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v10")
         dr10Src->perGpuResponses[0].results[DCGM_EUD_TEST_INDEX].error[0].code = 0xc8763;
         src.SetVersion10(dr10Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v10> dr10Dest = std::make_unique<dcgmDiagResponse_v10>();
         memset(dr10Dest.get(), 0, sizeof(dcgmDiagResponse_v10));
         dr10Dest->gpuCount                                                      = 1;
@@ -858,7 +869,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v10")
 
     SECTION("Version 10: Merge - NOT_RUN case")
     {
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         std::unique_ptr<dcgmDiagResponse_v10> dr10Src = std::make_unique<dcgmDiagResponse_v10>();
         memset(dr10Src.get(), 0, sizeof(dcgmDiagResponse_v10));
         SafeCopyTo(dr10Src->auxDataPerTest[DCGM_EUD_TEST_INDEX].data, "Hello Capoo!");
@@ -867,7 +878,7 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v10")
         dr10Src->perGpuResponses[0].results[DCGM_EUD_TEST_INDEX].error[0].code = 0xc8763;
         src.SetVersion10(dr10Src.get());
 
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         std::unique_ptr<dcgmDiagResponse_v10> dr10Dest = std::make_unique<dcgmDiagResponse_v10>();
         memset(dr10Dest.get(), 0, sizeof(dcgmDiagResponse_v10));
         dr10Dest->gpuCount                                                      = 1;
@@ -894,7 +905,7 @@ TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::RecordSystemError",
 
     DYNAMIC_SECTION("Testing version " << DcgmNs::ResponseVersionTrait<ResponseType>::version)
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
 
         auto response = MakeUniqueZero<ResponseType>();
         wrapper.SetVersion(response.get());
@@ -919,13 +930,13 @@ TEST_CASE("DcgmDiagResponseWrapper::GetSystemErr")
 {
     SECTION("uninitialized wrapper returns explanatory error")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         REQUIRE(wrapper.GetSystemErr() == "ERROR: Must initialize DcgmDiagResponseWrapper before using.");
     }
 
     SECTION("v12 concatenates all system errors")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
         wrapper.SetVersion(response.get());
 
@@ -949,7 +960,7 @@ TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::SetResult",
 
     DYNAMIC_SECTION("Testing version " << DcgmNs::ResponseVersionTrait<ResponseType>::version)
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<ResponseType>();
         REQUIRE(wrapper.SetVersion(response.get()) == DCGM_ST_OK);
 
@@ -972,7 +983,7 @@ TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::SetResult",
 
 TEST_CASE("DcgmDiagResponseWrapper::SetResult rejects unset version")
 {
-    DcgmDiagResponseWrapper wrapper;
+    TestDcgmDiagResponseWrapper wrapper;
     dcgmDiagResponse_v12 src {};
     auto data = std::as_writable_bytes(std::span(&src, 1));
 
@@ -983,13 +994,13 @@ TEST_CASE("DcgmDiagResponseWrapper::AddCpuSerials")
 {
     SECTION("uninitialized wrapper is invalid")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         REQUIRE(wrapper.AddCpuSerials() == false);
     }
 
     SECTION("legacy versions are unsupported")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v10>();
         wrapper.SetVersion(response.get());
 
@@ -998,7 +1009,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddCpuSerials")
 
     SECTION("v12 with no CPU entities succeeds without querying serials")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response                              = MakeUniqueZero<dcgmDiagResponse_v12>();
         response->numEntities                      = 1;
         response->entities[0].entity.entityGroupId = DCGM_FE_GPU;
@@ -1022,7 +1033,7 @@ TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::AdoptEudResponse",
 
     DYNAMIC_SECTION("Testing version " << DcgmNs::ResponseVersionTrait<ResponseType>::version)
     {
-        DcgmDiagResponseWrapper dest;
+        TestDcgmDiagResponseWrapper dest;
         auto destResponse = MakeUniqueZero<ResponseType>();
 
         // Set up destination response
@@ -1036,7 +1047,7 @@ TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::AdoptEudResponse",
         }
         dest.SetVersion(destResponse.get());
 
-        DcgmDiagResponseWrapper src;
+        TestDcgmDiagResponseWrapper src;
         auto srcResponse = MakeUniqueZero<ResponseType>();
 
         // Set up source response
@@ -1067,11 +1078,11 @@ TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::AdoptEudResponse",
 
 TEST_CASE("DcgmDiagResponseWrapper::AdoptEudResponse::Version mismatch")
 {
-    DcgmDiagResponseWrapper dest;
+    TestDcgmDiagResponseWrapper dest;
     auto destRv7 = MakeUniqueZero<dcgmDiagResponse_v7>();
     dest.SetVersion(destRv7.get());
 
-    DcgmDiagResponseWrapper src;
+    TestDcgmDiagResponseWrapper src;
     auto srcRv8 = MakeUniqueZero<dcgmDiagResponse_v8>();
     src.SetVersion(srcRv8.get());
 
@@ -1082,14 +1093,14 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 {
     SECTION("Returns error for uninitialized wrapper")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
         REQUIRE(ret == DCGM_ST_UNINITIALIZED);
     }
 
     SECTION("Returns error for unsupported version")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v11>();
         wrapper.SetVersion(response.get());
 
@@ -1099,7 +1110,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Adds entity and results to response")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
 
         // With no tests: adds entity but no results
@@ -1121,7 +1132,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Always adds error message regardless of isFail flag")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
 
         response->numTests = 1;
@@ -1142,7 +1153,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
     SECTION("Updates test result based on isFail flag")
     {
         // Test isFail=true: updates PASS to FAIL
-        DcgmDiagResponseWrapper wrapper1;
+        TestDcgmDiagResponseWrapper wrapper1;
         auto response1             = MakeUniqueZero<dcgmDiagResponse_v12>();
         response1->numTests        = 1;
         response1->tests[0].result = DCGM_DIAG_RESULT_PASS;
@@ -1152,7 +1163,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
         REQUIRE(response1->tests[0].result == DCGM_DIAG_RESULT_FAIL);
 
         // Test isFail=false: does not update result
-        DcgmDiagResponseWrapper wrapper2;
+        TestDcgmDiagResponseWrapper wrapper2;
         auto response2             = MakeUniqueZero<dcgmDiagResponse_v12>();
         response2->numTests        = 1;
         response2->tests[0].result = DCGM_DIAG_RESULT_PASS;
@@ -1164,7 +1175,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Adds result for each test")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
 
         response->numTests = 3;
@@ -1181,7 +1192,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Manages entities correctly")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
 
         response->numTests = 1;
@@ -1201,7 +1212,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Does not update test result if already FAIL")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
 
         response->numTests        = 1;
@@ -1216,7 +1227,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Uses correct status strings")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
 
         response->numTests = 1;
@@ -1237,7 +1248,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Returns error when arrays are full")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
 
         // Test entities array full
@@ -1258,7 +1269,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Skips a test whose result index array is full")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response                 = MakeUniqueZero<dcgmDiagResponse_v12>();
         response->numTests            = 1;
         response->tests[0].numResults = DCGM_DIAG_TEST_RUN_RESULTS_MAX;
@@ -1274,7 +1285,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Skips error details when response error storage is full")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response       = MakeUniqueZero<dcgmDiagResponse_v12>();
         response->numTests  = 1;
         response->numErrors = DCGM_DIAG_RESPONSE_ERRORS_MAX;
@@ -1291,7 +1302,7 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
     SECTION("Skips error details when a test error index array is full")
     {
-        DcgmDiagResponseWrapper wrapper;
+        TestDcgmDiagResponseWrapper wrapper;
         auto response                = MakeUniqueZero<dcgmDiagResponse_v12>();
         response->numTests           = 1;
         response->tests[0].numErrors = DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX;

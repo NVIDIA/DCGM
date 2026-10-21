@@ -121,8 +121,8 @@ Callback function for comparing two elements. This should return:
     /*
 Allocate an initialize this structure
 
-elemSize     IN: The size of a raw element structure including key and
-                    value
+elemSize     IN: The positive size of a raw element structure including key
+                    and value
 subBlockSize IN: Size of a subblock in bytes. 0=use default. Making this
                     larger incurs more overhead for smaller KeyedVectors
                     but results in less memory allocations occuring

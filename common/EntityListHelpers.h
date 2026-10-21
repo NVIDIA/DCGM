@@ -15,10 +15,13 @@
  */
 #pragma once
 
+#include "DcgmGroupEntityPairHelpers.h"
 #include "DcgmUtilities.h"
 #include "MigIdParser.hpp"
 
+#include <DcgmOpsAnyPtr.hpp>
 #include <dcgm_structs.h>
+
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -30,6 +33,9 @@ namespace DcgmNs
 {
 
 using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>;
+
+/** Substring shared by oversize parse errors; used to map them to DCGM_ST_MAX_LIMIT. */
+inline constexpr std::string_view TooManyEntitiesMessageFragment = "too many entities";
 
 namespace EntityPrefixes
 {
@@ -84,12 +90,14 @@ EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info)
  * parse the provided string with entities list validating that every entity is known to the hostengine.
  * @param dcgmHandle A handle to a live connection to the hostengine
  * @param ids Comma separated list of entity ids
+ * @param dcgmOps DCGM API adapter used to query hostengine state
  * @return Tuple of two things: <br>
  *          1) vector of validated entities <br>
  *          2) a comma separated list of unrecognized entities.
  */
 [[nodiscard]] std::tuple<std::vector<dcgmGroupEntityPair_t>, std::string> TryParseEntityList(dcgmHandle_t dcgmHandle,
-                                                                                             std::string const &ids);
+                                                                                             std::string const &ids,
+                                                                                             DcgmOpsAnyPtr dcgmOps);
 
 /**
  * This function acquires list of valid Entity Ids for GPUs and MIG instances from a hostengine and tries to
@@ -105,22 +113,6 @@ EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info)
 
 namespace detail
 {
-    struct GroupEntityPairHasher
-    {
-        size_t operator()(dcgmGroupEntityPair_t const &value) const
-        {
-            return Utils::Hash::CompoundHash(value.entityGroupId, value.entityId);
-        }
-    };
-
-    struct GroupEntityPairEq
-    {
-        constexpr bool operator()(dcgmGroupEntityPair_t const &left, dcgmGroupEntityPair_t const &right) const
-        {
-            return std::tie(left.entityGroupId, left.entityId) == std::tie(right.entityGroupId, right.entityId);
-        }
-    };
-
     /**
      * @brief Result type for the `HandleWildcard()` function
      * @see `HandleWildcard()` for details about each value meaning.
@@ -132,7 +124,7 @@ namespace detail
         Error,     /*!< Error during parsing */
     };
 
-    using EntityGroupContainer = std::unordered_set<dcgmGroupEntityPair_t, GroupEntityPairHasher, GroupEntityPairEq>;
+    using EntityGroupContainer = std::unordered_set<dcgmGroupEntityPair_t>;
 
     /**
      * @brief Handles cases if \a value has wildcards in one of its fields.
@@ -161,44 +153,60 @@ namespace detail
                                             std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids);
 
 /**
+ * Parameterized cardinality limits for entity-list range expansion.
+ *
+ * Defaults align with DCGM_GROUP_MAX_ENTITIES_V2 (1024) so parse fail-fast
+ * matches group and diagnostic buffer contracts.
+ */
+struct EntityListParseLimits
+{
+    std::size_t maxRangeExpansion { DCGM_GROUP_MAX_ENTITIES_V2 };
+    std::size_t maxLinkProduct { DCGM_GROUP_MAX_ENTITIES_V2 };
+    std::size_t maxTotalEntities { DCGM_GROUP_MAX_ENTITIES_V2 };
+};
+
+/**
  * Parse entity list string to entity group vector.
  *
  * @param[in] entityList        Entity list
  * @param[out] entityGroups     Parsed results
+ * @param[in] limits            Expansion budgets (defaults: group-aligned 1024)
  * @return A string to indicate error message.
  */
-std::string EntityListParser(std::string const &entityList, std::vector<dcgmGroupEntityPair_t> &entityGroups);
+std::string EntityListParser(std::string const &entityList,
+                             std::vector<dcgmGroupEntityPair_t> &entityGroups,
+                             EntityListParseLimits const &limits = {});
 
 /**
- * Parse entity list string to entity group vector. This function will use dcmgHandle to get the system current known
+ * Parse entity list string to entity group vector. This function will use dcgmHandle to get the system current known
  * GPU and MIG instances.
  *
- * @param dcgmHandle A handle to a live connection to the hostengine
+ * @param[in] dcgmHandle       A handle to a live connection to the hostengine
  * @param[in] entityList        Entity list
  * @param[out] entityGroups     Parsed results
- * @return A string to indicate error message.
+ * @param[in] dcgmOps           DCGM API adapter used to query hostengine state
+ * @return Empty string on success; otherwise, a non-empty descriptive error string.
  */
 std::string EntityListWithMigAndUuidParser(dcgmHandle_t dcgmHandle,
                                            std::string const &entityList,
-                                           std::vector<dcgmGroupEntityPair_t> &entityGroups);
+                                           std::vector<dcgmGroupEntityPair_t> &entityGroups,
+                                           DcgmOpsAnyPtr dcgmOps);
 
 /**
- * Parse entity list string to entity group vector. This function will use provided migHierarchy and gpuIdUuids as
- * the hint to parse GPU UUIDs and MIG instances.
+ * Parse entity-id text and return the GPU entity IDs present in the result.
  *
- * @param migHierarchy GPU instance hierachy.
- * @param gpuIdUuids GPU ID and UUID pairs in this system.
- * @param[in] entityIds        Entity id list
- * @return Parsed results
+ * GPU ids are reported in first-seen order with duplicates removed. Oversize
+ * input is rejected against the parse budget before this unique-ing.
+ *
+ * @param[in] migHierarchy  MIG hierarchy used to resolve MIG / UUID tokens
+ * @param[in] gpuIdUuids    GPU id/UUID pairs used to resolve GPU tokens
+ * @param[in] entityIds     Entity-id selector string
+ * @return GPU ids on success, or a dcgmReturn_t on parse failure (including oversize).
  */
-std::vector<dcgmGroupEntityPair_t> EntityListWithMigAndUuidParser(
+DcgmResult<std::vector<std::uint32_t>> ParseEntityIdsAndFilterGpu(
     dcgmMigHierarchy_v2 const &migHierarchy,
     std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids,
     std::string_view entityIds);
-
-std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(dcgmMigHierarchy_v2 const &migHierarchy,
-                                                      std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids,
-                                                      std::string_view entityIds);
 
 
 /**

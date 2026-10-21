@@ -21,9 +21,12 @@
 #include "PluginInterface.h"
 #include "PluginStrings.h"
 #include "TestParameters.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmRecorder.h>
+#include <DcgmSystem.h>
 #include <NvvsStructs.h>
 #include <iostream>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -31,7 +34,15 @@
 class Software : public Plugin
 {
 public:
-    Software(dcgmHandle_t handle, std::unique_ptr<DcgmSystemBase> dcgmSystem = nullptr);
+    /**
+     * Creates the software checks plugin.
+     *
+     * @param[in] handle DCGM connection handle.
+     * @param[in] dcgmOps Non-owned DCGM API interface.
+     * @param[in] nvvsCommon Non-owned NVVS runtime configuration.
+     * @param[in] dcgmSystem Non-owned DCGM system interface.
+     */
+    Software(dcgmHandle_t handle, DcgmNs::DcgmOpsAnyPtr dcgmOps, NvvsCommon *nvvsCommon, DcgmSystemBase *dcgmSystem);
     ~Software()
     {}
 
@@ -55,9 +66,7 @@ public:
     std::string GetSoftwareTestName() const;
     std::string GetSoftwareTestCategory() const;
 
-#ifndef TEST_SOFTWARE_PLUGIN
-private:
-#endif
+protected:
     enum libraryCheck_t
     {
         CHECK_NVML,   // NVML library
@@ -70,7 +79,7 @@ private:
     std::string m_subtestName;
     TestParameters tp;
     DcgmRecorder m_dcgmRecorder;
-    std::unique_ptr<DcgmSystemBase> m_dcgmSystem;
+    DcgmSystemBase *m_dcgmSystem; // DCGM system interface.
     dcgmHandle_t m_handle;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
 

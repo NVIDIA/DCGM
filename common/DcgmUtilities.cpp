@@ -22,6 +22,7 @@
 #include "DcgmStringHelpers.h"
 
 #include <Defer.hpp>
+#include <UserCredentials.hpp>
 #include <cstdio>
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -32,11 +33,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
-#include <grp.h>
 #include <iterator>
 #include <linux/prctl.h>
 #include <pthread.h>
-#include <pwd.h>
 #include <string>
 #include <sys/epoll.h>
 #include <sys/prctl.h>
@@ -45,73 +44,6 @@
 #include <thread>
 #include <unistd.h>
 
-
-std::optional<UserCredentials> GetUserCredentials(char const *userName) noexcept(false)
-{
-    constexpr size_t INITIAL_BUFFER_SIZE = 1024;
-    constexpr size_t MAX_BUFFER_SIZE     = 1024 * 1024; // 1MB
-    passwd pwInfo {};
-    passwd *result = nullptr;
-    std::vector<std::byte> buffer;
-    int err = 0;
-
-    if (userName == nullptr)
-    {
-        fmt::print(stderr, "No username provided\n");
-        fflush(stderr);
-        return std::nullopt;
-    }
-
-    auto pwRecSizeMax = sysconf(_SC_GETPW_R_SIZE_MAX);
-    if (pwRecSizeMax > 0 && pwRecSizeMax > static_cast<long>(MAX_BUFFER_SIZE))
-    {
-        // try with the max size, and hope for the best
-        pwRecSizeMax = static_cast<long>(MAX_BUFFER_SIZE);
-        fmt::print(stderr, "Limiting buffer size for getpwnam_r to {}\n", MAX_BUFFER_SIZE);
-        fflush(stderr);
-    }
-
-    size_t bufferSize
-        = std::min((pwRecSizeMax > 0 ? static_cast<size_t>(pwRecSizeMax) : INITIAL_BUFFER_SIZE), MAX_BUFFER_SIZE);
-
-    do
-    {
-        if (bufferSize > MAX_BUFFER_SIZE)
-        {
-            throw std::system_error(std::error_code(ERANGE, std::generic_category()),
-                                    "Buffer size for getpwnam_r exceeds maximum allowed");
-        }
-
-        buffer.resize(bufferSize);
-        err = getpwnam_r(userName, &pwInfo, std::bit_cast<char *>(buffer.data()), buffer.size(), &result);
-
-        if (err == ERANGE && bufferSize <= MAX_BUFFER_SIZE)
-        {
-            size_t const newSize = bufferSize * 2;
-            if (newSize <= bufferSize)
-            {
-                throw std::system_error(std::error_code(ERANGE, std::generic_category()),
-                                        "Buffer size for getpwnam_r exceeds maximum allowed");
-            }
-            bufferSize = newSize;
-        }
-    } while ((err == ERANGE && bufferSize <= MAX_BUFFER_SIZE) || err == EINTR);
-
-    if (err != 0)
-    {
-        auto const msg = fmt::format("Unable to get gid/uid for user {}", userName);
-        fmt::print(stderr, "{}. Error = {}\n", msg, err);
-        fflush(stderr);
-        throw std::system_error(std::error_code(err, std::generic_category()), msg);
-    }
-
-    if (result != nullptr)
-    {
-        return UserCredentials { result->pw_gid, result->pw_uid, {} };
-    }
-
-    return std::nullopt;
-}
 
 /**
  * @brief Temporarily block all signals to prevent signals from being delivered to the forked process.
@@ -183,183 +115,6 @@ static void EnableDeathSignalToChildProcesses()
     {
         DCGM_LOG_WARNING << "Unable to set death signal to child processes";
     }
-}
-
-namespace
-{
-/**
- * @brief Changes current uid/euid, gid/egid to the provided \a newCredentials .uid/.gid respectively.
- * @param[in] permanent         If permanent is required, the uid/gid will be changed irreversibly. Otherwise only
- *                              euid/egid will be changed that will allow regain permissions back later.
- * @param[in] newCredentials    The uid/gid of a target user to switch to.
- * @return \c std::nullopt                    If the permanent change is requested.
- * @return \c std::optional<UserCredentials>  UserCredentials of the user that called this method if \a permanent was
- *                                            false.
- * @see \c RestorePrivs()
- * @note If the \a permanent is set to true, the function will not return previous credentials (credentials of the user
- *       who called this method, and it will double check that the old permissions cannot be reacquired. This has an
- *       implication that \a newCredentials should not belong to user with root privileges, as the check will fail as
- *       root users can change their uid/gid to whatever they want.
- * @note If the \a permanent is set to false, the credentials of the user that called this function will be returned.
- *       One can reacquire the permissions back later calling \c RestorePrivs() function.
- * @throws std::system_error            if underlying uid/gid functions return error codes.
- * @throws ChangePrivilegesException    if there is some logic error that does not depend on underlying system call. For
- *                                      example, if it's possible to regain privileges back if the \a permanent is set
- *                                      to true.
- */
-std::optional<UserCredentials> DropPrivs(bool permanent, UserCredentials const &newCredentials) noexcept(false)
-{
-    /*
-     * Please read this article before doing any changes to this function:
-     * https://www.oreilly.com/library/view/secure-programming-cookbook/0596003943/ch01s03.html
-     */
-    UserCredentials oldCredentials { getegid(), geteuid(), {} };
-    oldCredentials.groups.resize(_SC_NGROUPS_MAX);
-    auto const newGroupsSize = getgroups(_SC_NGROUPS_MAX, oldCredentials.groups.data());
-    oldCredentials.groups.resize(newGroupsSize);
-
-    if (oldCredentials.uid == 0 && setgroups(1, &newCredentials.gid) != 0)
-    {
-        auto const err = errno;
-        fmt::print(stderr, "Unable to change groups. errno = {}\n", err);
-        fflush(stderr);
-        throw std::system_error(std::error_code(err, std::generic_category()), "Unable to change groups");
-    }
-
-    if (setegid(newCredentials.gid) != 0)
-    {
-        auto const err = errno;
-        fmt::print(stderr, "Unable to drop root privileges. setegid returned errno = {}\n", err);
-        fflush(stderr);
-        throw std::system_error(std::error_code(err, std::generic_category()), "Dropping root privileges");
-    }
-
-    if (permanent && setgid(newCredentials.gid) != 0)
-    {
-        auto const err = errno;
-        fmt::print(stderr, "Unable to permanently drop root privileges. setgid returned errno = {}\n", err);
-        fflush(stderr);
-        throw std::system_error(std::error_code(err, std::generic_category()), "Permanently dropping root privileges");
-    }
-
-    if (newCredentials.uid != oldCredentials.uid)
-    {
-        if (permanent)
-        {
-            if (setuid(newCredentials.uid) != 0)
-            {
-                auto const err = errno;
-                fmt::print(stderr, "Unable to permanently drop root privileges. setuid returned errno = {}\n", err);
-                fflush(stderr);
-                throw std::system_error(std::error_code(err, std::generic_category()),
-                                        "Permanently dropping root privileges");
-            }
-        }
-        else if (seteuid(newCredentials.uid) != 0)
-        {
-            auto const err = errno;
-            fmt::print(stderr, "Unable to drop root privileges. seteuid returned errno = {}\n", err);
-            fflush(stderr);
-            throw std::system_error(std::error_code(err, std::generic_category()), "Dropping root privileges");
-        }
-    }
-
-    if (permanent)
-    {
-        /*
-         * Trying to reacquire root privileges. This must fail if we are permanently dropping the root privileges.
-         */
-        if (newCredentials.gid != oldCredentials.gid
-            && (setegid(oldCredentials.gid) == 0 || getegid() != newCredentials.gid))
-        {
-            throw ChangeUserException("Failed to drop root privileges. Managed to reacquire root egid.");
-        }
-
-        if (newCredentials.uid != oldCredentials.uid
-            && (seteuid(oldCredentials.uid) == 0 || geteuid() != newCredentials.uid))
-        {
-            throw ChangeUserException("Failed to drop root privileges. Managed to reacquire root euid.");
-        }
-
-        return std::nullopt;
-    }
-
-    return oldCredentials;
-}
-
-void RestorePrivs(UserCredentials const &oldCredentials) noexcept(false)
-{
-    if (geteuid() != oldCredentials.gid)
-    {
-        if (seteuid(oldCredentials.uid) != 0)
-        {
-            auto const err = errno;
-            auto const msg = fmt::format("Unable to restore euid to {}", oldCredentials.uid);
-            fmt::print(stderr, "{}\n", msg);
-            fflush(stderr);
-            throw std::system_error(std::error_code(err, std::generic_category()), msg);
-        }
-        if (geteuid() != oldCredentials.uid)
-        {
-            auto const msg
-                = fmt::format("Restoring euid to {} failed. Actual euid remains {}", oldCredentials.uid, geteuid());
-            fmt::print(stderr, "{}\n", msg);
-            fflush(stderr);
-            throw ChangeUserException(msg);
-        }
-    }
-
-    if (getegid() != oldCredentials.gid)
-    {
-        if (setegid(oldCredentials.gid) != 0)
-        {
-            auto const err = errno;
-            auto const msg = fmt::format("Unable to restore egid to {}", oldCredentials.gid);
-            fmt::print(stderr, "{}\n", msg);
-            fflush(stderr);
-            throw std::system_error(std::error_code(err, std::generic_category()), msg);
-        }
-        if (getegid() != oldCredentials.gid)
-        {
-            auto const msg
-                = fmt::format("Restoring egid to {} failed. Actual egid remains {}", oldCredentials.gid, getegid());
-            fmt::print(stderr, "{}\n", msg);
-            fflush(stderr);
-            throw ChangeUserException(msg);
-        }
-    }
-
-    if (oldCredentials.uid == 0 && !oldCredentials.groups.empty()
-        && setgroups(oldCredentials.groups.size(), oldCredentials.groups.data()) != 0)
-    {
-        auto const err = errno;
-        fmt::print(stderr, "Unable to restore groups. errno = {}\n", err);
-        fflush(stderr);
-        throw std::system_error(std::error_code(err, std::generic_category()), "Unable to restore groups");
-    }
-}
-
-} // namespace
-
-std::optional<UserCredentials> ChangeUser(ChangeUserPolicy policy,
-                                          UserCredentials const &newCredentials) noexcept(false)
-{
-    switch (policy)
-    {
-        case ChangeUserPolicy::Permanently:
-            return DropPrivs(true, newCredentials);
-        case ChangeUserPolicy::Temporarily:
-            return DropPrivs(false, newCredentials);
-        case ChangeUserPolicy::Rollback:
-            RestorePrivs(newCredentials);
-            break;
-        default:
-            fmt::print(stderr,
-                       "Unexpected privilege policy: {}\n",
-                       static_cast<std::underlying_type_t<ChangeUserPolicy>>(policy));
-            fflush(stderr);
-    }
-    return std::nullopt;
 }
 
 std::chrono::milliseconds DcgmNs::Utils::GetMaxAge(std::chrono::milliseconds monitorFrequency,
@@ -758,7 +513,7 @@ bool IsProcessRunning(pid_t pid)
 }
 
 dcgmReturn_t TerminateProcess(pid_t pid,
-                              LivenessCheckFn const &isAlive,
+                              TerminateProcessCallbacks const &callbacks,
                               unsigned int maxAttempts,
                               std::chrono::milliseconds retryDelay)
 {
@@ -767,19 +522,24 @@ dcgmReturn_t TerminateProcess(pid_t pid,
         return DCGM_ST_OK;
     }
 
+    if (!callbacks.isAlive || !callbacks.sendSignal)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
     unsigned int attempts = 0;
-    while (attempts < maxAttempts && isAlive(pid))
+    while (attempts < maxAttempts && callbacks.isAlive(pid))
     {
         if (attempts < maxAttempts - 1)
         {
-            kill(pid, SIGTERM);
+            callbacks.sendSignal(pid, SIGTERM);
         }
         else
         {
             log_warning("Unable to terminate process {} with SIGTERM after {} attempts, escalating to SIGKILL",
                         pid,
                         maxAttempts - 1);
-            kill(pid, SIGKILL);
+            callbacks.sendSignal(pid, SIGKILL);
         }
 
         if (attempts == 0)
@@ -793,7 +553,7 @@ dcgmReturn_t TerminateProcess(pid_t pid,
         attempts++;
     }
 
-    if (isAlive(pid))
+    if (callbacks.isAlive(pid))
     {
         return DCGM_ST_CHILD_NOT_KILLED;
     }
@@ -807,7 +567,10 @@ void KillAndReapChild(pid_t pid, unsigned int maxAttempts, std::chrono::millisec
         return;
     }
 
-    TerminateProcess(pid, [](pid_t p) { return waitpid(p, nullptr, WNOHANG) == 0; }, maxAttempts, retryDelay);
+    TerminateProcessCallbacks callbacks {
+        .isAlive = [](pid_t p) { return waitpid(p, nullptr, WNOHANG) == 0; },
+    };
+    TerminateProcess(pid, callbacks, maxAttempts, retryDelay);
 
     waitpid(pid, nullptr, 0);
 }
@@ -1073,109 +836,6 @@ dcgmReturn_t RunCmdHelper::RunCmdAndGetOutputWithTimeout(std::string const &cmd,
     return DcgmNs::Utils::RunCmdAndGetOutputWithTimeout(cmd, output, timeout);
 }
 
-FileHandle::FileHandle() noexcept
-    : FileHandle(-1)
-{}
-
-FileHandle::FileHandle(int fd) noexcept
-    : m_fd(fd)
-    , m_errno(0)
-{}
-
-FileHandle::~FileHandle() noexcept
-{
-    if (m_fd != -1)
-    {
-        while ((close(m_fd) == -1) && (errno == EINTR))
-        {
-        }
-        m_fd = -1;
-    }
-}
-
-FileHandle::FileHandle(FileHandle &&other) noexcept
-{
-    m_fd       = other.m_fd;
-    other.m_fd = -1;
-}
-
-FileHandle &FileHandle::operator=(FileHandle &&other) noexcept
-{
-    if (this != &other)
-    {
-        using std::swap;
-        swap(m_fd, other.m_fd);
-    }
-    return *this;
-}
-
-FileHandle::operator int() const
-{
-    return Get();
-}
-
-int FileHandle::Get() const &
-{
-    return m_fd;
-}
-
-int FileHandle::Release()
-{
-    int const result = m_fd;
-    m_fd             = -1;
-    return result;
-}
-
-ssize_t FileHandle::ReadExact(std::byte *buffer, size_t size)
-{
-    if (m_fd == -1)
-    {
-        m_errno = EBADF;
-        return -1;
-    }
-    size_t totalBytesRead = 0;
-    while (totalBytesRead < size)
-    {
-        ssize_t bytesRead = read(m_fd, buffer + totalBytesRead, size - totalBytesRead);
-        if (bytesRead == 0)
-        {
-            // EOF reached
-            return 0;
-        }
-        if (bytesRead < 0)
-        {
-            m_errno = errno;
-            if (GetErrno() == EINTR)
-            {
-                continue;
-            }
-            return -1;
-        }
-        totalBytesRead += bytesRead;
-    }
-    return totalBytesRead;
-}
-
-int FileHandle::GetErrno() const
-{
-    return m_errno;
-}
-
-ssize_t FileHandle::Write(void const *buffer, size_t size)
-{
-    if (m_fd == -1)
-    {
-        m_errno = EBADF;
-        return -1;
-    }
-    auto ret = write(m_fd, buffer, size);
-    if (ret < 0)
-    {
-        m_errno = errno;
-    }
-    return ret;
-}
-
 std::unique_ptr<PipePair> PipePair::Create(PipePair::BlockingType const blockingType) noexcept
 {
     std::unique_ptr<PipePair> result = std::unique_ptr<PipePair>(new PipePair());
@@ -1288,22 +948,6 @@ std::tuple<uint64_t, uint64_t, double> NvmlBerParser(int64_t ber)
     uint64_t const mantissa = NVML_NVLINK_ERROR_COUNTER_BER_GET(ber, BER_MANTISSA);
     uint64_t const exponent = NVML_NVLINK_ERROR_COUNTER_BER_GET(ber, BER_EXP);
     return std::make_tuple(mantissa, exponent, mantissa * std::pow(10.0, -1.0 * static_cast<double>(exponent)));
-}
-
-[[nodiscard]] bool IsEffectiveBerThresholdExceeded(uint64_t mantissa, uint64_t exponent)
-{
-    uint64_t constexpr berZeroMantissa                       = 15;
-    uint64_t constexpr berZeroExponent                       = 255;
-    uint64_t constexpr effectiveBerFailureExponent           = 12; // 1e-12 threshold
-    uint64_t constexpr effectiveBerMaxPassingMantissaAtExp12 = 1;
-    // For exp=13: 10e-13 equals 1e-12, so mantissa > 10 exceeds the threshold.
-    uint64_t constexpr effectiveBerMaxPassingMantissaAtExp13 = 10;
-
-    bool const isZeroBer = mantissa == berZeroMantissa && exponent == berZeroExponent;
-    return !isZeroBer
-           && ((exponent < effectiveBerFailureExponent)
-               || (exponent == effectiveBerFailureExponent && mantissa > effectiveBerMaxPassingMantissaAtExp12)
-               || (exponent == (effectiveBerFailureExponent + 1) && mantissa > effectiveBerMaxPassingMantissaAtExp13));
 }
 
 LogPaths GetLogFilePath(std::string_view testName)

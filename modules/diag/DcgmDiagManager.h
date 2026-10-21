@@ -24,6 +24,7 @@
 #include "DcgmMutex.h"
 #include "DcgmUtilities.h"
 #include "PluginStrings.h"
+#include "UserCredentialsOpsAnyValue.hpp"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include <DcgmCoreProxy.h>
@@ -82,7 +83,8 @@ class DcgmDiagManager
 {
 public:
     /* ctor/dtor responsible for nvmlInit/nvmlShutdown in case not already open */
-    explicit DcgmDiagManager(dcgmCoreCallbacks_t &dcc);
+    explicit DcgmDiagManager(dcgmCoreCallbacks_t &dcc,
+                             UserCredentialsOpsAnyValue userCredentialsOps = UserCredentialsOps {});
 
     ~DcgmDiagManager();
 
@@ -203,9 +205,7 @@ public:
      */
     void OnAttachDetachGpus(bool isAttached);
 
-#ifndef __DIAG_UNIT_TESTING__
-private:
-#endif
+protected:
     /* variables */
     const std::string m_nvvsPath;
 
@@ -244,7 +244,11 @@ private:
             { CPU_EUD_TEST_NAME, DCGM_FI_DEV_DIAG_CPU_EUD_RESULT },
             { SW_PLUGIN_NAME, DCGM_FI_DEV_DIAG_SOFTWARE_RESULT },
             { NVBANDWIDTH_PLUGIN_NAME, DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT },
-            { NCCL_TESTS_PLUGIN_NAME, DCGM_FI_DEV_DIAG_NCCL_TESTS_RESULT } };
+            { NCCL_TESTS_PLUGIN_NAME, DCGM_FI_DEV_DIAG_NCCL_TESTS_RESULT },
+            { CPU_SDC_PLUGIN_NAME, DCGM_FI_DEV_DIAG_CPU_SDC_RESULT } };
+
+    /* User-credential lookup, injectable for unit tests */
+    UserCredentialsOpsAnyValue m_userCredentialsOps;
 
     /* methods */
 
@@ -362,6 +366,18 @@ private:
                                  std::vector<DetachedGpuInfo> &detachedGpuInfos,
                                  bool &allDetached);
 
+    /**
+     * Parse entityIds via the core proxy.
+     *
+     * GPU inventory and MIG hierarchy lookups may fail. Numeric and brace GPU
+     * selectors still parse with empty metadata. GPU wildcards fail closed if
+     * GetAllGpuInfo fails. Instance and compute-instance selectors fail closed
+     * if GetGpuInstanceHierarchy fails, returning that lookup's status.
+     *
+     * @param[in] entityIds Entity-id selector text
+     * @return GPU ids on success, or a dcgmReturn_t parse or metadata-lookup failure
+     */
+    DcgmResult<std::vector<std::uint32_t>> ParseEntityIdsAndFilterGpu(std::string_view entityIds);
 
     /**
      * Check if entity IDs string contains any GPU-related request.

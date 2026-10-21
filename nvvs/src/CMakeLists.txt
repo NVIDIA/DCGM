@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,16 +29,6 @@ target_link_libraries(nvvs_without_main_objects
         dcgm_mutex
         nvvs_interface
         serialize)
-
-target_include_directories(nvvs_without_main_objects
-    PRIVATE
-        "${YAML_INCLUDE_DIR}"
-        "${JSONCPP_INCLUDE_DIR}")
-
-if (BUILD_TESTING)
-    target_include_directories(nvvs_without_main_objects PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
-    target_link_libraries(nvvs_without_main_objects PRIVATE common_tests_includes)
-endif()
 
 target_sources(nvvs_without_main_objects
     PRIVATE
@@ -85,9 +75,9 @@ target_link_libraries(nvvs
         nvvs_plugins
         perfworks
     PRIVATE
-        ${CMAKE_THREAD_LIBS_INIT}
-        ${JSONCPP_STATIC_LIBS}
-        ${YAML_STATIC_LIBS}
+        Threads::Threads
+        jsoncpp_static
+        yaml-cpp::yaml-cpp
         dl
         nvvs_main_objects
         nvvs_without_main_objects

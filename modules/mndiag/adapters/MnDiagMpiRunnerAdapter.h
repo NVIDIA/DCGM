@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,9 +63,17 @@ public:
     /**
      * @brief Construct MPI command using the real MnDiagMpiRunner
      */
-    void ConstructMpiCommand(void const *params) override
+    std::expected<void, dcgmReturn_t> ConstructMpiCommand(void const *params) override
     {
-        m_mpiRunner->ConstructMpiCommand(params);
+        return m_mpiRunner->ConstructMpiCommand(params);
+    }
+
+    std::expected<void, dcgmReturn_t> RunBatch(dcgmRunMnDiag_t const &params,
+                                               nodeInfoMap_t const &nodeInfo,
+                                               dcgmMnDiagResponse_t &response,
+                                               std::chrono::milliseconds timeout) override
+    {
+        return m_mpiRunner->RunBatch(params, nodeInfo, response, timeout);
     }
 
     /**

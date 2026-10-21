@@ -147,7 +147,7 @@ def ensure_instance_ids(handle, gpuId, minInstances, minCIs):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(gpuCount=8)
 def test_instances_large_mig_topology_getlatestvalues_v2(handle, gpuIds):
@@ -241,7 +241,7 @@ def test_instances_large_mig_topology_getlatestvalues_v2(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(gpuCount=1)
 def test_instances_fetch_global_fields(handle, gpuIds):
@@ -397,7 +397,7 @@ def helper_test_inject_instance_fields(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_with_injection_gpus()
 def test_inject_instance_fields_standalone(handle, gpuIds):
@@ -519,7 +519,7 @@ def helper_test_health_check_instances(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_instances_standalone(handle, gpuIds):

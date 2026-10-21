@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,9 @@
 class DcgmiTest : public Command
 {
 public:
-    DcgmiTest() = default;
+    explicit DcgmiTest(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+        : Command(dcgmOps)
+    {}
 
     /* View information in cache on host specified by mDcgmHandle */
     dcgmReturn_t IntrospectCache(dcgmHandle_t mDcgmHandle,
@@ -68,7 +70,11 @@ private:
 class IntrospectCache : public Command
 {
 public:
-    IntrospectCache(std::string hostname, unsigned int gpuId, std::string fieldId, bool isGroup);
+    IntrospectCache(std::string hostname,
+                    unsigned int gpuId,
+                    std::string fieldId,
+                    bool isGroup,
+                    DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -90,7 +96,8 @@ public:
                 unsigned int gId,
                 std::string fieldId,
                 unsigned int pTime,
-                std::string injectValue);
+                std::string injectValue,
+                DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -106,7 +113,7 @@ private:
 class ModulesPauseResume : public Command
 {
 public:
-    ModulesPauseResume(std::string hostname, bool pause);
+    ModulesPauseResume(std::string hostname, bool pause, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

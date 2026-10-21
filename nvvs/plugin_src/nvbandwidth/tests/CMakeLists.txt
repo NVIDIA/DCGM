@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,34 +20,26 @@ add_executable(nvbandwidthtests)
 target_sources(nvbandwidthtests
     PRIVATE
         NVBandwidthPluginTests.cpp
-        NVBandwidthResultTests.cpp
         NVBandwidthTestsInputs.cpp
-        ../NVBandwidthPlugin.cpp
-        ../NVBandwidthResult.cpp
+        NVBandwidthWrapperTests.cpp
 )
 
-target_include_directories(nvbandwidthtests PRIVATE ${YAML_INCLUDE_DIR})
-target_include_directories(nvbandwidthtests PRIVATE ${JSONCPP_INCLUDE_DIR})
-target_include_directories(nvbandwidthtests PRIVATE ${CUDA12_INCLUDE_DIR})
-target_include_directories(nvbandwidthtests PRIVATE ${PROJECT_SOURCE_DIR}/cublas_proxy)
-target_include_directories(nvbandwidthtests PRIVATE ..) # include the plugin dir
-target_include_directories(nvbandwidthtests PRIVATE ../../include) # include the plugin_src/include dir
-
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
-# NOTE: linking cuda is not allowed for this library. We are using a CUDA stub library instead (testing_cuda_stubs)
-#
 target_link_libraries(nvbandwidthtests
     PRIVATE
         nvvs_without_main_objects
+        nvvs_plugins_nvbandwidth_interface
         Catch2::Catch2WithMain
-        testing_cuda_stubs
-        testing_dcgm_cublas_stubs
-        cuda_common_interface
+        test-utils
+        mock_cuda_ops
+        mock_cublas_ops
+        mock_common
+        mock_dcgm_ops
+        nvbandwidth_common
+        serialize
 )
 target_link_libraries(nvbandwidthtests PUBLIC nvvs_interface)
-target_link_libraries(nvbandwidthtests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
-target_link_libraries(nvbandwidthtests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(nvbandwidthtests PRIVATE yaml-cpp::yaml-cpp jsoncpp_static rt dl)
+target_link_libraries(nvbandwidthtests PRIVATE Threads::Threads)
 target_link_libraries(nvbandwidthtests PRIVATE sdk_nvml_loader)
 target_link_libraries(nvbandwidthtests PRIVATE sdk_nvml_essentials_objects fmt::fmt)
 target_link_libraries(nvbandwidthtests PUBLIC nvvs_plugins_common_objects)

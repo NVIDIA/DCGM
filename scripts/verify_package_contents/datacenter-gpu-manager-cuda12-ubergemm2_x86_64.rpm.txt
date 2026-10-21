@@ -1,0 +1,6 @@
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda12
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda12/bin
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda12/bin/ubergemm2
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda12-ubergemm2-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda12-ubergemm2-<BASEPACKAGEVERSION>/LICENSE

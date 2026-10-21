@@ -429,10 +429,7 @@ def test_dcgm_vgpu_default_status_handler(handle, gpuIds):
 '''
 
 
-@test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
+def helper_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
     test_utils.skip_test("Skipping this test until bug 200377294 is fixed")
 
     groupId = dcgm_agent.dcgmGroupCreate(
@@ -532,7 +529,12 @@ def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(60)
 @test_utils.run_only_with_live_gpus()
-def test_dcgm_vgpu_attributes(handle, gpuIds):
+@test_utils.run_only_as_root()
+def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
+    helper_dcgm_vgpu_configure_ecc_mode(handle, gpuIds)
+
+
+def helper_dcgm_vgpu_attributes(handle, gpuIds):
     """
     Verifies that vGPU attributes are properly queried
     """
@@ -545,3 +547,9 @@ def test_dcgm_vgpu_attributes(handle, gpuIds):
             handle, vgpuAttributes.activeVgpuInstanceIds[0])
         assert len(
             vgpuInstanceAttributes.vmName) > 0, "Active vGPU VM name is blank!"
+
+
+@test_utils.run_with_standalone_host_engine(60)
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_vgpu_attributes(handle, gpuIds):
+    helper_dcgm_vgpu_attributes(handle, gpuIds)

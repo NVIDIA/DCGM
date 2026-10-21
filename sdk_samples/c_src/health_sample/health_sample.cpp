@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,18 +29,19 @@ int displayFieldValue(unsigned int gpuId, dcgmFieldValue_v1 *values, int numValu
 bool ReceivedIncompatibleMigConfigurationMessage(dcgmDiagResponse_v12 const &response, std::string &msg)
 {
     // Check for errors not specific to any entity group
-    for (auto const &error :
-         std::span(response.errors,
-                   std::min(static_cast<unsigned int>(response.numErrors),
-                            static_cast<unsigned int>(std::size(response.errors))))
-             | std::views::filter([](auto const &error) {
-                   return error.testId == DCGM_DIAG_RESPONSE_SYSTEM_ERROR
-                          && (std::string_view(error.msg).find("MIG configuration is incompatible with the diagnostic")
-                                  != std::string_view::npos
-                              || std::string_view(error.msg).find(
-                                     "Cannot run diagnostic: CUDA does not support enumerating GPUs with MIG mode")
-                                     != std::string_view::npos);
-               }))
+    for (
+        auto const &error :
+        std::span(response.errors,
+                  std::min(static_cast<unsigned int>(response.numErrors),
+                           static_cast<unsigned int>(std::size(response.errors))))
+            | std::views::filter([](auto const &error) {
+                  return error.testId == DCGM_DIAG_RESPONSE_SYSTEM_ERROR
+                         && (std::string_view(error.msg).find("MIG configuration is incompatible with the diagnostic")
+                                 != std::string_view::npos
+                             || std::string_view(error.msg).find(
+                                    "Cannot run diagnostic: CUDA before 12.8 does not support enumerating GPUs with MIG mode enabled")
+                                    != std::string_view::npos);
+              }))
     {
         msg = std::string(error.msg);
         return true;

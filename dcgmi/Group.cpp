@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,17 @@
  */
 
 #include "Group.h"
-#include "EntityListHelpers.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
+
 #include "dcgmi_common.h"
+
+#include <EntityListHelpers.h>
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
 
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 
 /***************************************************************************/
@@ -42,6 +45,11 @@ static char const GROUP_INFO_HEADER[] = "GROUP INFO";
 
 
 /*****************************************************************************/
+Group::Group(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+{}
+
+/*****************************************************************************/
 
 dcgmReturn_t Group::RunGroupList(dcgmHandle_t mDcgmHandle, bool json)
 {
@@ -55,7 +63,7 @@ dcgmReturn_t Group::RunGroupList(dcgmHandle_t mDcgmHandle, bool json)
 
     groupId = 0;
 
-    result = dcgmGroupGetAllIds(mDcgmHandle, groupIdList, &count);
+    result = m_dcgmOps->dcgmGroupGetAllIds(mDcgmHandle, groupIdList, &count);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Cannot retrieve group list. Return: " << errorString(result) << std::endl;
@@ -103,7 +111,7 @@ dcgmReturn_t Group::RunGroupCreate(dcgmHandle_t mDcgmHandle, dcgmGroupType_t gro
     dcgmReturn_t result     = DCGM_ST_OK;
     dcgmGpuGrp_t newGroupId = 0;
 
-    result = dcgmGroupCreate(mDcgmHandle, groupType, (char *)groupName.c_str(), &newGroupId);
+    result = m_dcgmOps->dcgmGroupCreate(mDcgmHandle, groupType, (char *)groupName.c_str(), &newGroupId);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Cannot create group " << groupName << ". Return: " << errorString(result) << std::endl;
@@ -129,7 +137,7 @@ dcgmReturn_t Group::RunGroupDestroy(dcgmHandle_t mDcgmHandle)
 {
     dcgmReturn_t result = DCGM_ST_OK;
 
-    result = dcgmGroupDestroy(mDcgmHandle, groupId);
+    result = m_dcgmOps->dcgmGroupDestroy(mDcgmHandle, groupId);
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -173,7 +181,7 @@ dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t dcgmHandle, DcgmiOutputBoxer &outG
     std::stringstream ss;
 
     stDcgmGroupInfo->version = dcgmGroupInfo_version;
-    result                   = dcgmGroupGetInfo(dcgmHandle, groupId, stDcgmGroupInfo.get());
+    result                   = m_dcgmOps->dcgmGroupGetInfo(dcgmHandle, groupId, stDcgmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -244,7 +252,7 @@ dcgmReturn_t Group::RunGroupManageDevice(dcgmHandle_t dcgmHandle, bool add)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::vector<dcgmGroupEntityPair_t> entityList;
-    auto err = DcgmNs::EntityListWithMigAndUuidParser(dcgmHandle, groupInfo, entityList);
+    auto err = DcgmNs::EntityListWithMigAndUuidParser(dcgmHandle, groupInfo, entityList, m_dcgmOps);
     if (!err.empty())
     {
         SHOW_AND_LOG_ERROR << "Error: parsing for GPUs failed. Error: " << err;
@@ -255,11 +263,13 @@ dcgmReturn_t Group::RunGroupManageDevice(dcgmHandle_t dcgmHandle, bool add)
     {
         if (add)
         {
-            result = dcgmGroupAddEntity(dcgmHandle, groupId, entityList[i].entityGroupId, entityList[i].entityId);
+            result = m_dcgmOps->dcgmGroupAddEntity(
+                dcgmHandle, groupId, entityList[i].entityGroupId, entityList[i].entityId);
         }
         else
         {
-            result = dcgmGroupRemoveEntity(dcgmHandle, groupId, entityList[i].entityGroupId, entityList[i].entityId);
+            result = m_dcgmOps->dcgmGroupRemoveEntity(
+                dcgmHandle, groupId, entityList[i].entityGroupId, entityList[i].entityId);
         }
         if (DCGM_ST_OK != result)
         {
@@ -323,8 +333,9 @@ std::string Group::getGroupInfo()
  *****************************************************************************/
 
 /*****************************************************************************/
-GroupList::GroupList(std::string hostname, bool json)
-    : Command()
+GroupList::GroupList(std::string hostname, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , groupObj(dcgmOps)
 {
     m_hostName = std::move(hostname);
     m_json     = json;
@@ -346,8 +357,8 @@ dcgmReturn_t GroupList::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-GroupCreate::GroupCreate(std::string hostname, Group &obj, dcgmGroupType_t groupType)
-    : Command()
+GroupCreate::GroupCreate(std::string hostname, Group &obj, dcgmGroupType_t groupType, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
     , groupObj(obj)
     , groupType(groupType)
 {
@@ -371,8 +382,8 @@ dcgmReturn_t GroupCreate::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-GroupDestroy::GroupDestroy(std::string hostname, Group &obj)
-    : Command()
+GroupDestroy::GroupDestroy(std::string hostname, Group &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
     , groupObj(obj)
 {
     m_hostName = std::move(hostname);
@@ -394,8 +405,8 @@ dcgmReturn_t GroupDestroy::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-GroupInfo::GroupInfo(std::string hostname, Group &obj, bool json)
-    : Command()
+GroupInfo::GroupInfo(std::string hostname, Group &obj, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
     , groupObj(obj)
 {
     m_hostName = std::move(hostname);
@@ -419,8 +430,8 @@ dcgmReturn_t GroupInfo::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-GroupAddTo::GroupAddTo(std::string hostname, Group &obj)
-    : Command()
+GroupAddTo::GroupAddTo(std::string hostname, Group &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
     , groupObj(obj)
 {
     m_hostName = std::move(hostname);
@@ -442,8 +453,8 @@ dcgmReturn_t GroupAddTo::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-GroupDeleteFrom::GroupDeleteFrom(std::string hostname, Group &obj)
-    : Command()
+GroupDeleteFrom::GroupDeleteFrom(std::string hostname, Group &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
     , groupObj(obj)
 {
     m_hostName = std::move(hostname);

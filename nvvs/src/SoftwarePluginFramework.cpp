@@ -17,6 +17,7 @@
 #include <SoftwarePluginFramework.h>
 
 #include <DcgmHandle.h>
+#include <DcgmOpsAnyPtr.hpp>
 #include <Gpu.h>
 #include <NvvsCommon.h>
 #include <PluginLib.h>
@@ -25,6 +26,7 @@
 #include <dcgm_structs.h>
 
 #include <atomic>
+#include <cassert>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -42,20 +44,17 @@
 #include <unistd.h>
 #include <vector>
 
-extern DcgmHandle dcgmHandle;
-extern DcgmSystem dcgmSystem;
-
-// Constructor, Destructor
-SoftwarePluginFramework::SoftwarePluginFramework(EntitySet &entitySet)
-    : m_entitySet(entitySet)
-{
-    // initalizing the test name map
-    initTestNameMap();
-}
-
-/*****************************************************************************/
-SoftwarePluginFramework::SoftwarePluginFramework(std::vector<Gpu *> gpuList, EntitySet &entitySet)
-    : m_entityList(std::make_unique<dcgmDiagPluginEntityList_v1>())
+SoftwarePluginFramework::SoftwarePluginFramework(std::vector<Gpu *> gpuList,
+                                                 EntitySet &entitySet,
+                                                 DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                                                 NvvsCommon *nvvsCommon,
+                                                 DcgmHandle *dcgmHandle,
+                                                 DcgmSystemBase *dcgmSystem)
+    : m_nvvsCommon(nvvsCommon)
+    , m_dcgmOps(dcgmOps)
+    , m_dcgmHandle(dcgmHandle)
+    , m_dcgmSystem(dcgmSystem)
+    , m_entityList(std::make_unique<dcgmDiagPluginEntityList_v1>())
     , m_entitySet(entitySet)
 {
     // initalizing the test name map
@@ -64,13 +63,6 @@ SoftwarePluginFramework::SoftwarePluginFramework(std::vector<Gpu *> gpuList, Ent
     // get gpu information for software
     populateGpuInfo(gpuList);
 }
-
-/*****************************************************************************/
-SoftwarePluginFramework::SoftwarePluginFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList,
-                                                 EntitySet &entitySet)
-    : m_entityList(std::move(entityList))
-    , m_entitySet(entitySet)
-{}
 
 /*****************************************************************************/
 SoftwarePluginFramework::~SoftwarePluginFramework()
@@ -107,7 +99,7 @@ void SoftwarePluginFramework::initTestParametersMap()
         std::string name                   = pair.first;
 
         tp->AddString(SW_STR_DO_TEST, m_testNameMap[name]);
-        tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
+        tp->AddDouble(PS_LOGFILE_TYPE, (double)m_nvvsCommon->logFileType);
 
         if (name == "Permissions and OS-related Blocks")
         {
@@ -177,7 +169,7 @@ void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse,
 
     // ------------------------------------------
     // init the software plugin obj
-    m_softwareObj = std::make_unique<Software>(dcgmHandle.GetHandle());
+    m_softwareObj = std::make_unique<Software>(m_dcgmHandle->GetHandle(), m_dcgmOps, m_nvvsCommon, m_dcgmSystem);
     m_softwareObj->SetPluginAttr(pluginAttr);
 
     // ---------------------------------
@@ -197,11 +189,11 @@ void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse,
         std::vector<dcgmDiagPluginTestParameter_t> parameters = m_testParamMap[pair.second]->GetParametersAsStruct();
 
         // Add ignoreErrorCodes param here
-        if (!nvvsCommon.ignoreErrorCodesString.empty())
+        if (!m_nvvsCommon->ignoreErrorCodesString.empty())
         {
             dcgmDiagPluginTestParameter_t ignoreErrorCodes;
             SafeCopyTo(ignoreErrorCodes.parameterName, PS_IGNORE_ERROR_CODES);
-            SafeCopyTo(ignoreErrorCodes.parameterValue, nvvsCommon.ignoreErrorCodesString.c_str());
+            SafeCopyTo(ignoreErrorCodes.parameterValue, m_nvvsCommon->ignoreErrorCodesString.c_str());
             ignoreErrorCodes.type = DcgmPluginParamString;
             parameters.push_back(std::move(ignoreErrorCodes));
         }
@@ -220,11 +212,11 @@ void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse,
 
         auto const testDuration
             = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - testStart);
-        log_debug("{}",
-                  FormatTestEndMessage(testName,
-                                       m_softwareObj->GetResult(m_softwareObj->GetSoftwareTestName()),
-                                       testDuration,
-                                       nvvsCommon.configless));
+        log_info("{}",
+                 FormatTestEndMessage(testName,
+                                      m_softwareObj->GetResult(m_softwareObj->GetSoftwareTestName()),
+                                      testDuration,
+                                      m_nvvsCommon->configless));
     }
 
     if (did)

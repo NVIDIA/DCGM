@@ -23,11 +23,15 @@
 #include <PluginStrings.h>
 
 #include <DcgmLogging.h>
+#include <DcgmOps.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <dcgm_structs.h>
 
 #include <boost/stacktrace.hpp>
 #include <fmt/core.h>
 #include <fmt/format.h>
+
+#include <memory>
 
 extern "C" {
 
@@ -73,6 +77,7 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
                               dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              NvvsCommonPtr nvvsCommon,
                               HangDetectMonitor *monitor)
 {
     // auto nbp  = new NVBandwidthPlugin(handle, entityInfo);
@@ -95,7 +100,7 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
     {
         using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
         // Use unique_ptr and release in the last step to prevent the object from leaking when an exception occurs.
-        auto tmpObj = std::make_unique<NVBandwidthPlugin>(handle);
+        auto tmpObj = std::make_unique<NVBandwidthPlugin>(handle, std::make_unique<DcgmNs::DcgmOps>(), nvvsCommon);
         tmpObj->SetPluginAttr(pluginAttr);
         tmpObj->SetHangDetectMonitor(monitor);
         *userData = tmpObj.release();
@@ -166,6 +171,7 @@ dcgmReturn_t ShutdownPlugin(void *userData)
     using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
     auto *nbp = std::launder(reinterpret_cast<NVBandwidthPlugin *>(userData));
     nbp->Shutdown();
+    delete nbp;
 
     return DCGM_ST_OK;
 }

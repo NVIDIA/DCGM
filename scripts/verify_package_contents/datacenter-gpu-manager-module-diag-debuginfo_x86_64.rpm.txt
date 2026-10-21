@@ -1,0 +1,9 @@
+/usr/lib/debug
+/usr/lib/debug/usr
+/usr/lib/debug/usr/libexec
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulediag.so.<SOFTWAREVERSION>-<PACKAGEVERSION>.x86_64.debug
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/nvvs-<PACKAGEVERSION>.x86_64.debug
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless/libpluginCommon.so.<SOFTWAREVERSION>-<PACKAGEVERSION>.x86_64.debug

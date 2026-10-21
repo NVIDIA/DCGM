@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,4 +35,41 @@ TEST_CASE("TimeLib: FromLegacyTimestamp. Negative")
     auto newTs = FromLegacyTimestamp<std::chrono::milliseconds>(-50000);
     REQUIRE(newTs == (-std::chrono::milliseconds(50)));
     REQUIRE(newTs == std::chrono::milliseconds(-50));
+}
+
+TEST_CASE("TimeLib: FormatTimestampIso")
+{
+    SECTION("Epoch zero")
+    {
+        REQUIRE(FormatTimestampIso(0) == "1970-01-01T00:00:00.000000Z");
+    }
+
+    SECTION("Known timestamp without fractional seconds")
+    {
+        REQUIRE(FormatTimestampIso(1772625600000000LL) == "2026-03-04T12:00:00.000000Z");
+    }
+
+    SECTION("Microsecond precision preserved")
+    {
+        REQUIRE(FormatTimestampIso(1772625600123456LL) == "2026-03-04T12:00:00.123456Z");
+    }
+
+    SECTION("Single microsecond after epoch")
+    {
+        REQUIRE(FormatTimestampIso(1) == "1970-01-01T00:00:00.000001Z");
+    }
+
+    SECTION("Single microsecond before epoch")
+    {
+        REQUIRE(FormatTimestampIso(-1) == "1969-12-31T23:59:59.999999Z");
+    }
+
+    SECTION("Output format structure")
+    {
+        auto result = FormatTimestampIso(1772625600123456LL);
+        REQUIRE(result.size() == 27);
+        REQUIRE(result[10] == 'T');
+        REQUIRE(result[19] == '.');
+        REQUIRE(result[26] == 'Z');
+    }
 }

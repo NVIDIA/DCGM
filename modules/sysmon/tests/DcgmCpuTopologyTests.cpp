@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,26 @@
 #include <catch2/catch_all.hpp>
 #include <fmt/format.h>
 
-#define DCGM_SYSMON_TEST
 #include <DcgmCpuTopology.h>
 
 using namespace DcgmNs;
+
+namespace
+{
+/**
+ * Test adapter that exposes protected CPU topology parsing state.
+ */
+class TestDcgmCpuTopology : public DcgmCpuTopology
+{
+public:
+    using DcgmCpuTopology::m_coreCount;
+    using DcgmCpuTopology::m_coresPerSocket;
+    using DcgmCpuTopology::m_initialized;
+    using DcgmCpuTopology::m_numaNodeToCoreRange;
+    using DcgmCpuTopology::m_socketCount;
+    using DcgmCpuTopology::ParseLscpuOutputAndReadValues;
+};
+} // namespace
 
 std::string lscpuShortInvalidJson = R""(
 {
@@ -305,7 +321,7 @@ std::string lscpuShortValidJsonWithInvalidFieldType = R""(
 
 TEST_CASE("DcgmCpuTopology::ParseLscpuOutputAndReadValues")
 {
-    DcgmCpuTopology dct;
+    TestDcgmCpuTopology dct;
     CHECK(dct.ParseLscpuOutputAndReadValues(lscpuBadSyntaxJson) != DCGM_ST_OK);
     CHECK(dct.ParseLscpuOutputAndReadValues(lscpuShortInvalidJson) != DCGM_ST_OK);
 
@@ -324,7 +340,7 @@ TEST_CASE("DcgmCpuTopology::ParseLscpuOutputAndReadValues")
         CHECK(dct.m_numaNodeToCoreRange[index] == fmt::format("{}-{}", firstCore, firstCore + 1));
     }
 
-    DcgmCpuTopology dct2;
+    TestDcgmCpuTopology dct2;
     CHECK(dct2.ParseLscpuOutputAndReadValues(lscpuSkinnyJoeFullJson) == DCGM_ST_OK);
     CHECK(dct2.m_socketCount == 4);
     CHECK(dct2.m_coresPerSocket == 72);

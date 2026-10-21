@@ -15,13 +15,17 @@
  */
 #include "dcgm_fields.h"
 #include <unordered_set>
+#include <utility>
 
+#include <DcgmOpsAnyPtr.hpp>
 #include <NvvsCommon.h>
 #include <PluginCoreFunctionality.h>
 #include <PluginStrings.h>
 
-PluginCoreFunctionality::PluginCoreFunctionality()
-    : m_dcgmRecorder()
+PluginCoreFunctionality::PluginCoreFunctionality(DcgmNs::DcgmOpsAnyPtr dcgmOps, NvvsCommon *nvvsCommon)
+    : m_dcgmOps(dcgmOps)
+    , m_dcgmRecorder(nullptr)
+    , m_nvvsCommon(nvvsCommon)
     , m_entityInfos()
     , m_initialized(false)
     , m_fatalErrors()
@@ -31,7 +35,9 @@ PluginCoreFunctionality::PluginCoreFunctionality()
 {}
 
 PluginCoreFunctionality::PluginCoreFunctionality(PluginCoreFunctionality &&other) noexcept
-    : m_dcgmRecorder(std::move(other.m_dcgmRecorder))
+    : m_dcgmOps(other.m_dcgmOps)
+    , m_dcgmRecorder(std::move(other.m_dcgmRecorder))
+    , m_nvvsCommon(other.m_nvvsCommon)
     , m_entityInfos(other.m_entityInfos)
     , m_initialized(other.m_initialized)
     , m_fatalErrors(other.m_fatalErrors)
@@ -42,8 +48,8 @@ PluginCoreFunctionality::PluginCoreFunctionality(PluginCoreFunctionality &&other
 
 void PluginCoreFunctionality::Init(dcgmHandle_t handle)
 {
-    m_dcgmRecorder.Init(handle);
-    m_initialized = true;
+    m_dcgmRecorder = std::make_unique<DcgmRecorder>(handle, m_dcgmOps, m_nvvsCommon);
+    m_initialized  = true;
 }
 
 void PluginCoreFunctionality::PopulateFieldIds(const std::vector<unsigned short> &additionalFields,
@@ -108,13 +114,13 @@ dcgmReturn_t PluginCoreFunctionality::PluginPreStart(const std::vector<unsigned 
     std::string groupName("nvvs-group-");
     groupName += pluginName;
     m_pluginName = pluginName;
-    m_dcgmRecorder.SetWatchFrequency(static_cast<long long>(nvvsCommon.watchFrequency));
-    dcgmReturn_t dcgmRet = m_dcgmRecorder.AddWatches(fieldIds, gpuIds, false, fieldGroupName, groupName, 600);
+    m_dcgmRecorder->SetWatchFrequency(static_cast<long long>(m_nvvsCommon->watchFrequency));
+    dcgmReturn_t dcgmRet = m_dcgmRecorder->AddWatches(fieldIds, gpuIds, false, fieldGroupName, groupName, 600);
     m_startTime          = timelib_usecSince1970();
 
     if (dcgmRet != DCGM_ST_OK)
     {
-        log_error("Could not watch fields in DCGM: ({}) {}", dcgmRet, m_dcgmRecorder.ErrorAsString(dcgmRet));
+        log_error("Could not watch fields in DCGM: ({}) {}", dcgmRet, m_dcgmRecorder->ErrorAsString(dcgmRet));
     }
 
     return dcgmRet;
@@ -128,17 +134,17 @@ void PluginCoreFunctionality::WriteStatsFile(const std::string &statsfile, int l
         return;
     }
 
-    if (nvvsCommon.statsOnlyOnFail && result == NVVS_RESULT_PASS)
+    if (m_nvvsCommon->statsOnlyOnFail && result == NVVS_RESULT_PASS)
     {
         return;
     }
 
-    m_dcgmRecorder.WriteToFile(statsfile, logFileType, m_startTime);
+    m_dcgmRecorder->WriteToFile(statsfile, logFileType, m_startTime);
 }
 
 nvvsPluginResult_t PluginCoreFunctionality::CheckCommonErrors(TestParameters &tp, nvvsPluginResult_t &result)
 {
-    m_dcgmRecorder.CheckCommonErrors(tp, m_startTime, result, m_entityInfos, m_fatalErrors, m_ignoredErrors);
+    m_dcgmRecorder->CheckCommonErrors(tp, m_startTime, result, m_entityInfos, m_fatalErrors, m_ignoredErrors);
 
     return result;
 }
@@ -157,11 +163,11 @@ dcgmReturn_t PluginCoreFunctionality::PluginEnded(const std::string &statsfile,
     log_info("Checking for common errors");
     CheckCommonErrors(tp, result);
 
-    m_dcgmRecorder.AddDiagStats(customStats);
+    m_dcgmRecorder->AddDiagStats(customStats);
 
     WriteStatsFile(statsfile, tp.GetDouble(PS_LOGFILE_TYPE), result);
 
-    m_dcgmRecorder.Shutdown();
+    m_dcgmRecorder->Shutdown();
     return DCGM_ST_OK;
 }
 
@@ -177,7 +183,7 @@ std::vector<DcgmError> PluginCoreFunctionality::GetIgnoredErrors() const
 
 void PluginCoreFunctionality::SetRecorderIgnoreErrorCodes(gpuIgnoreErrorCodeMap_t const &map)
 {
-    m_dcgmRecorder.SetIgnoreErrorCodes(map);
+    m_dcgmRecorder->SetIgnoreErrorCodes(map);
 }
 
 HangDetectMonitor *PluginCoreFunctionality::GetHangDetectMonitor() const

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,15 @@
 
 #include "Command.h"
 #include "DcgmiOutput.h"
-#include "dcgm_structs.h"
+
+#include <DcgmOpsAnyPtr.hpp>
+#include <dcgm_structs.h>
+
 
 class Module
 {
 public:
-    Module();
+    explicit Module(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~Module();
     dcgmReturn_t RunDenylistModule(dcgmHandle_t dcgmHandle, dcgmModuleId_t moduleId, DcgmiOutput &out);
     dcgmReturn_t RunListModule(dcgmHandle_t dcgmHandle, DcgmiOutput &out);
@@ -31,12 +34,16 @@ public:
     static dcgmReturn_t moduleIdToName(dcgmModuleId_t moduleId, std::string &str);
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
 };
 
 class DenylistModule : public Command
 {
 public:
-    DenylistModule(const std::string &hostname, const std::string &moduleName, bool json);
+    DenylistModule(const std::string &hostname,
+                   const std::string &moduleName,
+                   bool json,
+                   DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -50,7 +57,7 @@ private:
 class ListModule : public Command
 {
 public:
-    ListModule(const std::string &hostname, bool json);
+    ListModule(const std::string &hostname, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

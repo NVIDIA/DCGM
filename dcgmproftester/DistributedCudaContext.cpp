@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "DistributedCudaContext.h"
+
+#include "PhysicalGpu.h"
 #include <DcgmLogging.h>
 #include <cuda.h>
-
-#include "DistributedCudaContext.h"
-#include "PhysicalGpu.h"
 #include <dcgm_agent.h>
 #include <dcgm_structs.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cstdarg>
 #include <cstdint>
@@ -37,9 +38,6 @@
 #include <timelib.h>
 #include <unistd.h>
 #include <vector>
-
-using namespace Dcgm;
-
 
 namespace DcgmNs::ProfTester
 {
@@ -80,10 +78,10 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         return cvdResult;
     }
 
-    if (cuSt = cuInit(0); cuSt != CUDA_SUCCESS)
+    if (cuSt = m_cudaOps->cuInit(0); cuSt != CUDA_SUCCESS)
     {
         const char *errorString { nullptr };
-        cuGetErrorString(cuSt, &errorString);
+        m_cudaOps->cuGetErrorString(cuSt, &errorString);
 
         m_error << "cuInit returned " << static_cast<unsigned int>(cuSt) << " - " << errorString << " for "
                 << (GetPhysicalGpu()->IsMIG() ? m_cudaVisibleDevices.c_str() : std::to_string(m_device)) << '\n';
@@ -99,10 +97,10 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
 
         std::string busId = GetPhysicalGpu()->GetGpuBusId().c_str();
 
-        if (cuSt = cuDeviceGetByPCIBusId(&m_device, busId.c_str()); cuSt != CUDA_SUCCESS)
+        if (cuSt = m_cudaOps->cuDeviceGetByPCIBusId(&m_device, busId.c_str()); cuSt != CUDA_SUCCESS)
         {
             const char *errorString { nullptr };
-            cuGetErrorString(cuSt, &errorString);
+            m_cudaOps->cuGetErrorString(cuSt, &errorString);
             m_error << "cuDeviceGetByPCIBusId returned " << static_cast<unsigned int>(cuSt) << " - " << errorString
                     << " for " << busId.c_str() << '\n';
             return DCGM_ST_GENERIC_ERROR;
@@ -129,10 +127,10 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
     for (auto [value, cuDevAttr] : attributes)
     {
         bool const isMIG = GetPhysicalGpu()->IsMIG();
-        if (cuSt = cuDeviceGetAttribute(value, cuDevAttr, m_device); cuSt != CUDA_SUCCESS)
+        if (cuSt = m_cudaOps->cuDeviceGetAttribute(value, cuDevAttr, m_device); cuSt != CUDA_SUCCESS)
         {
             const char *errorString { nullptr };
-            cuGetErrorString(cuSt, &errorString);
+            m_cudaOps->cuGetErrorString(cuSt, &errorString);
             m_error << "cuDeviceGetAttribute(" << static_cast<unsigned int>(cuDevAttr) << ") returned "
                     << static_cast<unsigned int>(cuSt) << " - " << errorString << " for "
                     << (isMIG ? m_cudaVisibleDevices.c_str() : std::to_string(m_device)) << "\n";
@@ -505,68 +503,23 @@ void DistributedCudaContext::Respond(const char *format, ...)
 }
 
 
-// Move other object to this.
-void DistributedCudaContext::MoveFrom(DistributedCudaContext &&other)
-{
-    if (this == &other)
-    {
-        return;
-    }
-
-    m_groupId       = other.m_groupId;
-    other.m_groupId = 0;
-
-    m_cudaVisibleDevices = std::move(other.m_cudaVisibleDevices);
-
-    m_input   = std::move(other.m_input);
-    m_message = std::move(other.m_message);
-    m_error   = std::move(other.m_error);
-
-    std::swap(m_inFd, other.m_inFd);
-    std::swap(m_outFd, other.m_outFd);
-
-    m_physicalGpu       = other.m_physicalGpu;
-    other.m_physicalGpu = nullptr;
-
-    m_device         = other.m_device;
-    m_attributes     = other.m_attributes;
-    m_isInitialized  = other.m_isInitialized;
-    m_failed         = other.m_failed;
-    m_pid            = other.m_pid;
-    m_part           = other.m_part;
-    m_parts          = other.m_parts;
-    m_activity       = other.m_activity;
-    m_tick           = other.m_tick;
-    m_testFieldId    = other.m_testFieldId;
-    m_duration       = other.m_duration;
-    m_reportInterval = other.m_reportInterval;
-    m_targetMaxValue = other.m_targetMaxValue;
-    m_wait           = other.m_wait;
-    m_buffered       = other.m_buffered;
-    m_finished       = other.m_finished;
-    m_validated      = other.m_validated;
-
-    other.Reset();
-}
-
-
-DistributedCudaContext::DistributedCudaContext(
-    std::shared_ptr<PhysicalGpu> physicalGpu,
-    std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> entities,
-    const dcgmGroupEntityPair_t &entity,
-    const std::string &cudaVisibleDevices)
-    : m_physicalGpu(std::move(physicalGpu))
+DistributedCudaContext::DistributedCudaContext(PhysicalGpuAnyPtr physicalGpu,
+                                               std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> entities,
+                                               const dcgmGroupEntityPair_t &entity,
+                                               const std::string &cudaVisibleDevices,
+                                               DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                                               CudaOpsAnyPtr cudaOps,
+                                               DistributedCudaContextRuntimeAnyPtr runtime,
+                                               CudaWorkerThreadAnyUniquePtr cudaWorker)
+    : m_physicalGpu(physicalGpu)
+    , m_dcgmOps(dcgmOps)
+    , m_cudaOps(cudaOps)
+    , m_runtime(runtime)
     , m_cudaVisibleDevices(cudaVisibleDevices)
     , m_entity(entity)
+    , m_cudaWorker(std::move(cudaWorker))
 {
     ReInitialize(std::move(entities));
-}
-
-
-DistributedCudaContext::DistributedCudaContext(DistributedCudaContext &&other)
-    : m_entity({})
-{
-    MoveFrom(std::move(other));
 }
 
 
@@ -578,12 +531,12 @@ DistributedCudaContext::~DistributedCudaContext()
     {
         usleep(200000); // Wait a little bit.
 
-        pid_t result = waitpid(m_pid, NULL, WNOHANG);
+        pid_t result = m_runtime.WaitPid(m_pid, NULL, WNOHANG);
 
         if (result == 0)
         {
             // Child still alive
-            kill(m_pid, SIGKILL);
+            m_runtime.Kill(m_pid, SIGKILL);
         }
     }
 }
@@ -595,25 +548,14 @@ void DistributedCudaContext::ReInitialize()
 }
 
 
-void DistributedCudaContext::ReInitialize(
-    std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> entities)
+void DistributedCudaContext::ReInitialize(std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> entities)
 {
     m_entities = std::move(entities);
     CreateDcgmGroups();
 }
 
 
-DistributedCudaContext &DistributedCudaContext::operator=(DistributedCudaContext &&other) noexcept
-{
-    Reset();
-    MoveFrom(std::move(other));
-    other.Reset();
-
-    return *this;
-}
-
-
-std::shared_ptr<PhysicalGpu> DistributedCudaContext::GetPhysicalGpu(void)
+PhysicalGpuAnyPtr const &DistributedCudaContext::GetPhysicalGpu(void) const
 {
     return m_physicalGpu;
 }
@@ -628,17 +570,17 @@ const dcgmGroupEntityPair_t &DistributedCudaContext::EntityId(void) const
     return m_entity;
 }
 
-std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> &DistributedCudaContext::Entities(void) const
+std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> &DistributedCudaContext::Entities(void)
 {
-    return *m_entities;
+    return m_entities;
 }
 
-struct cbData
+struct DistributedDcgmValueCbData
 {
     unsigned int m_gpuId;
     std::map<Entity, std::vector<dcgmFieldValue_v1>> &m_values;
 
-    cbData(unsigned int gpuId, std::map<Entity, std::vector<dcgmFieldValue_v1>> &values)
+    DistributedDcgmValueCbData(unsigned int gpuId, std::map<Entity, std::vector<dcgmFieldValue_v1>> &values)
         : m_gpuId(gpuId)
         , m_values(values)
     {}
@@ -664,7 +606,7 @@ dcgmReturn_t DistributedCudaContext::CreateDcgmGroups(void)
     char groupName[256] = { 0 };
     snprintf(groupName, sizeof(groupName), "dpt_%d_%s", getpid(), Device().c_str());
 
-    dcgmReturn = dcgmGroupCreate(GetPhysicalGpu()->GetHandle(), DCGM_GROUP_EMPTY, groupName, &m_groupId);
+    dcgmReturn = m_dcgmOps->dcgmGroupCreate(GetPhysicalGpu()->GetHandle(), DCGM_GROUP_EMPTY, groupName, &m_groupId);
 
     if (dcgmReturn != DCGM_ST_OK)
     {
@@ -672,15 +614,15 @@ dcgmReturn_t DistributedCudaContext::CreateDcgmGroups(void)
         return dcgmReturn;
     }
 
-    for (auto &[type, id] : *m_entities)
+    for (auto &[type, id] : m_entities)
     {
         /**
          * Remove it in case it is already there as we can't add it more than
          * once.
          */
 
-        dcgmGroupRemoveEntity(GetPhysicalGpu()->GetHandle(), m_groupId, type, id);
-        dcgmReturn = dcgmGroupAddEntity(GetPhysicalGpu()->GetHandle(), m_groupId, type, id);
+        m_dcgmOps->dcgmGroupRemoveEntity(GetPhysicalGpu()->GetHandle(), m_groupId, type, id);
+        dcgmReturn = m_dcgmOps->dcgmGroupAddEntity(GetPhysicalGpu()->GetHandle(), m_groupId, type, id);
 
         if (dcgmReturn != DCGM_ST_OK)
         {
@@ -705,7 +647,7 @@ dcgmReturn_t DistributedCudaContext::DestroyDcgmGroups(void)
             return DCGM_ST_OK;
         }
 
-        dcgmReturn = dcgmGroupDestroy(GetPhysicalGpu()->GetHandle(), m_groupId);
+        dcgmReturn = m_dcgmOps->dcgmGroupDestroy(GetPhysicalGpu()->GetHandle(), m_groupId);
 
         if (dcgmReturn != DCGM_ST_OK)
         {
@@ -759,7 +701,7 @@ static int dptGetLatestDcgmValueCB(dcgm_field_entity_group_t entityGroupId,
         return DCGM_ST_BADPARAM;
     }
 
-    cbData *data = (cbData *)userData;
+    auto *data = static_cast<DistributedDcgmValueCbData *>(userData);
 
     /**
      * If there's no data yet, status of the first record will be
@@ -798,15 +740,15 @@ dcgmReturn_t DistributedCudaContext::GetLatestDcgmValues(std::map<Entity, dcgmFi
     if (!GetPhysicalGpu()->GetDcgmValidation())
         return DCGM_ST_OK;
 
-    cbData data(GetPhysicalGpu()->GetGpuId(), m_dcgmValues);
+    DistributedDcgmValueCbData data(GetPhysicalGpu()->GetGpuId(), m_dcgmValues);
 
-    dcgmReturn = dcgmGetValuesSince_v2(GetPhysicalGpu()->GetHandle(),
-                                       m_groupId,
-                                       GetPhysicalGpu()->GetFieldGroupId(),
-                                       m_sinceTimestamp,
-                                       &nextSinceTimestamp,
-                                       dptGetLatestDcgmValueCB,
-                                       &data);
+    dcgmReturn = m_dcgmOps->dcgmGetValuesSince_v2(GetPhysicalGpu()->GetHandle(),
+                                                  m_groupId,
+                                                  GetPhysicalGpu()->GetFieldGroupId(),
+                                                  m_sinceTimestamp,
+                                                  &nextSinceTimestamp,
+                                                  dptGetLatestDcgmValueCB,
+                                                  &data);
 
     if (dcgmReturn == DCGM_ST_OK)
     {
@@ -840,12 +782,12 @@ int DistributedCudaContext::RunSubtestSmOccupancyTargetMax(void)
     double tick             = startTime + m_reportInterval;
     unsigned int activities = (duration + m_reportInterval / 2.0) / m_reportInterval;
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     Respond("S\nD 0 1\n");
 
-    m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY_RATIO, 1.0, true);
+    m_cudaWorker->SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY_RATIO, 1.0, true);
 
     for (unsigned int activity = 0; activity < activities; activity++)
     {
@@ -878,7 +820,7 @@ int DistributedCudaContext::RunSubtestSmOccupancyTargetMax(void)
 
     Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     return retSt;
 }
@@ -896,7 +838,7 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
     double tick             = startTime + m_reportInterval;
     unsigned int activities = (duration + m_reportInterval / 2.0) / m_reportInterval;
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     double curOccupancy  = 0.0;
     double prevOccupancy = 0.0;
@@ -917,7 +859,7 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
     {
         double howFarIn = 1.0 * activity / activities;
 
-        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY_RATIO, howFarIn);
+        m_cudaWorker->SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY_RATIO, howFarIn);
         curOccupancy = ((double)(unsigned int)(howFarIn * m_attributes.m_maxThreadsPerMultiProcessor))
                        / m_attributes.m_maxThreadsPerMultiProcessor;
 
@@ -950,7 +892,7 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
         }
     }
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
@@ -972,7 +914,7 @@ int DistributedCudaContext::RunSubtestSmActivity(void)
     double prevSmActivity   = 0.0;
     unsigned int activities = (duration + m_reportInterval / 2.0) / m_reportInterval;
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     Respond("S\nD 0 1\n");
@@ -981,7 +923,7 @@ int DistributedCudaContext::RunSubtestSmActivity(void)
     {
         double howFarIn = 1.0 * activity / activities;
 
-        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_UTIL_RATIO, howFarIn);
+        m_cudaWorker->SetWorkloadAndTarget(DCGM_FI_PROF_SM_UTIL_RATIO, howFarIn);
         curSmActivity = ((double)(unsigned int)(howFarIn * m_attributes.m_multiProcessorCount))
                         / m_attributes.m_multiProcessorCount;
 
@@ -1014,7 +956,7 @@ int DistributedCudaContext::RunSubtestSmActivity(void)
         }
     }
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
@@ -1034,7 +976,7 @@ int DistributedCudaContext::RunSubtestGrActivity(void)
     double tick             = startTime + m_reportInterval;
     unsigned int activities = (duration + m_reportInterval / 2.0) / m_reportInterval;
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     Respond("S\nD 0 1\n");
@@ -1050,7 +992,7 @@ int DistributedCudaContext::RunSubtestGrActivity(void)
     {
         double howFarIn = 1.0 * activity / activities;
 
-        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO, howFarIn);
+        m_cudaWorker->SetWorkloadAndTarget(DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO, howFarIn);
         ReportIntervalSleep();
 
         now = timelib_dsecSince1970();
@@ -1073,7 +1015,7 @@ int DistributedCudaContext::RunSubtestGrActivity(void)
         }
     }
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
@@ -1088,7 +1030,7 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
 
     /* Setting target to 1.0 since it's ignored anyway. We can update
        FieldWorkerPciRxTxBytes in the future if we need specific targets */
-    m_cudaWorker.SetWorkloadAndTarget(m_testFieldId, 1.0, true);
+    m_cudaWorker->SetWorkloadAndTarget(m_testFieldId, 1.0, true);
 
     /* Set timers after we've allocated memory since that takes a while */
 
@@ -1106,7 +1048,7 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
 
         double howFarIn      = 1.0 * activity / activities;
         double prevPerSecond = perSecond;
-        perSecond            = m_cudaWorker.GetCurrentAchievedLoad();
+        perSecond            = m_cudaWorker->GetCurrentAchievedLoad();
         perSecond /= 1000000.0; /* Bytes -> MiB */
 
         /* Adjust for PCIe protocol overhead per chip generation */
@@ -1132,7 +1074,7 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
         }
     }
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     // coverity[dead_error_condition] - Leaving in case retSt is nonzero in the future
     Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
@@ -1146,23 +1088,23 @@ int DistributedCudaContext::RunSubtestNvLinkBandwidth(void)
 {
     int retSt { 0 };
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     /* Get our best peer to do NvLink copies to. Copy in rest of request line
      * and parse it.
      */
     std::string PeerBusId;
     m_input >> PeerBusId;
-    m_cudaWorker.SetPeerByBusId(std::move(PeerBusId));
+    m_cudaWorker->SetPeerByBusId(std::move(PeerBusId));
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
     unsigned int activities = (m_duration + m_reportInterval / 2.0) / m_reportInterval;
 
     /* Load target is irrelevant because we target SOL anyway */
-    m_cudaWorker.SetWorkloadAndTarget(m_testFieldId, 1.0, true);
+    m_cudaWorker->SetWorkloadAndTarget(m_testFieldId, 1.0, true);
 
     Respond("S\nD 0 1\n");
 
@@ -1175,7 +1117,7 @@ int DistributedCudaContext::RunSubtestNvLinkBandwidth(void)
 
         double howFarIn = 1.0 * activity / activities;
         prevPerSecond   = perSecond;
-        perSecond       = m_cudaWorker.GetCurrentAchievedLoad();
+        perSecond       = m_cudaWorker->GetCurrentAchievedLoad();
         perSecond /= 1000000.0; /* Bytes -> MiB */
 
         Respond("T %u %0.3f %0.3f %0.3f\n", activity, howFarIn, prevPerSecond, perSecond);
@@ -1190,7 +1132,7 @@ int DistributedCudaContext::RunSubtestNvLinkBandwidth(void)
         }
     }
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
@@ -1225,7 +1167,7 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
     /* This has always been full speed. load target is ignored */
-    m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_DRAM_UTIL_RATIO, 1.0, true);
+    m_cudaWorker->SetWorkloadAndTarget(DCGM_FI_PROF_DRAM_UTIL_RATIO, 1.0, true);
 
     Respond("S\nD 0 1\n");
 
@@ -1241,7 +1183,7 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
 
         double howFarIn      = 1.0 * activity / activities;
         double prevPerSecond = perSecond;
-        perSecond            = m_cudaWorker.GetCurrentAchievedLoad();
+        perSecond            = m_cudaWorker->GetCurrentAchievedLoad();
         prevDramAct          = utilRate;
         utilRate             = perSecond / m_attributes.m_maxMemBandwidth;
         perSecond /= 1000000000.0;
@@ -1265,7 +1207,7 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
         }
     }
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     // coverity[dead_error_condition] - Leaving in case retSt is nonzero in the future
     Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
@@ -1283,7 +1225,7 @@ int DistributedCudaContext::RunSubtestGemmUtil(void)
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
     /* This has always been full speed. load target is ignored */
-    m_cudaWorker.SetWorkloadAndTarget(m_testFieldId, 1.0, true, m_physicalGpu->UseCublas());
+    m_cudaWorker->SetWorkloadAndTarget(m_testFieldId, 1.0, true, m_physicalGpu->UseCublas());
 
     /* Run our test, noting we started (S\n) and have completed zero sub-parts
      *  of one (D 0 1\n).
@@ -1300,7 +1242,7 @@ int DistributedCudaContext::RunSubtestGemmUtil(void)
         ReportIntervalSleep();
 
         double howFarIn = std::max(1.0, (now - startTime) / m_duration);
-        double gflops   = m_cudaWorker.GetCurrentAchievedLoad() / 1000000000.0;
+        double gflops   = m_cudaWorker->GetCurrentAchievedLoad() / 1000000000.0;
 
         Respond("T %u %0.3f %0.3f %0.3f\n", activity, howFarIn, gflops, gflops);
 
@@ -1316,7 +1258,7 @@ int DistributedCudaContext::RunSubtestGemmUtil(void)
         now = timelib_dsecSince1970();
     }
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     // coverity[dead_error_condition] - Leaving in case retSt is nonzero in the future
     Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
@@ -1337,7 +1279,7 @@ int DistributedCudaContext::RunSubtestDataTypeActive(void)
     double tick               = startTime + m_reportInterval;
     double prevTargetActivity = 0.0;
     unsigned int activities   = (duration + m_reportInterval) / m_reportInterval;
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     Respond("S\nD 0 1\n");
@@ -1347,7 +1289,7 @@ int DistributedCudaContext::RunSubtestDataTypeActive(void)
         double howFarIn       = 1.0 * activity / activities;
         double targetActivity = 1.0; /* Go for 100% for now to match old behavior */
 
-        m_cudaWorker.SetWorkloadAndTarget(m_testFieldId, targetActivity);
+        m_cudaWorker->SetWorkloadAndTarget(m_testFieldId, targetActivity);
 
         ReportIntervalSleep();
 
@@ -1378,7 +1320,7 @@ int DistributedCudaContext::RunSubtestDataTypeActive(void)
         }
     }
 
-    m_cudaWorker.SetWorkerToIdle();
+    m_cudaWorker->SetWorkerToIdle();
 
     // coverity[dead_error_condition] - Leaving in case retSt is nonzero in the future
     Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
@@ -1416,10 +1358,10 @@ int DistributedCudaContext::RunTest(void)
 
     m_message << "CU_DEVICE_ATTRIBUTE_ECC_SUPPORT: " << ((m_attributes.m_eccSupport > 0) ? "true" : "false") << '\n';
 
-    dcgmReturn_t dcgmReturn = m_cudaWorker.Init(m_device);
+    dcgmReturn_t dcgmReturn = m_cudaWorker->Init(m_device);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        DCGM_LOG_ERROR << "m_cudaWorker.Init failed with " << dcgmReturn;
+        DCGM_LOG_ERROR << "m_cudaWorker->Init failed with " << dcgmReturn;
         return -1;
     }
 
@@ -1500,12 +1442,12 @@ int DistributedCudaContext::Run(void)
 
     // TODO: SET GPU CUDA environment here or before entry.
 
-    if ((retSt = pipe(toChildPipe)) != 0)
+    if ((retSt = m_runtime.Pipe(toChildPipe)) != 0)
     {
         return retSt;
     }
 
-    if ((retSt = pipe(toParentPipe)) != 0)
+    if ((retSt = m_runtime.Pipe(toParentPipe)) != 0)
     {
         close(toChildPipe[0]);
         close(toChildPipe[1]);
@@ -1518,7 +1460,7 @@ int DistributedCudaContext::Run(void)
      */
     Reset(true);
 
-    pid_t pid = fork();
+    pid_t pid = m_runtime.Fork();
 
     if (pid < 0) // error
     {
@@ -1677,7 +1619,7 @@ int DistributedCudaContext::Run(void)
 
     /* Make sure our worker thread is inactive before exiting to avoid queuing cuda work
        at the same time the cuda atexit() handlers are running */
-    m_cudaWorker.Shutdown();
+    m_cudaWorker->Shutdown();
 
     /* In the future, we shouldn't exit here, but that will require a more substantial
        refactor of DistributedCudaContext and our forked worker */

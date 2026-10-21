@@ -15,13 +15,19 @@
  */
 
 #include <DcgmDiagCommon.h>
+#include <DcgmStringHelpers.h>
 
-#include <catch2/catch_all.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <string>
+#include <string_view>
 
-namespace
+namespace detail
 {
+/**
+ * Options passed to dcgm_diag_common_populate_run_diag by test helpers.
+ */
 struct PopulateOptions
 {
     std::string testNames           = "1";
@@ -46,7 +52,10 @@ struct PopulateOptions
     bool enableHeartbeat            = false;
 };
 
-dcgmReturn_t Populate(dcgmRunDiag_v10 &drd, PopulateOptions const &options, std::string &error)
+/**
+ * Populate a run diag structure from test-friendly option defaults.
+ */
+inline dcgmReturn_t Populate(dcgmRunDiag_v10 &drd, PopulateOptions const &options, std::string &error)
 {
     return dcgm_diag_common_populate_run_diag(drd,
                                               options.testNames,
@@ -71,16 +80,76 @@ dcgmReturn_t Populate(dcgmRunDiag_v10 &drd, PopulateOptions const &options, std:
                                               options.enableHeartbeat,
                                               error);
 }
-} // namespace
+
+/**
+ * Populate fields shared by legacy run diag structure versions.
+ */
+template <typename T>
+inline void PopulateLegacyRunDiagCommonFields(T &runDiag, unsigned int version)
+{
+    runDiag.version           = version;
+    runDiag.flags             = 0xA5A5;
+    runDiag.debugLevel        = 4;
+    runDiag.groupId           = static_cast<dcgmGpuGrp_t>(77);
+    runDiag.validate          = DCGM_POLICY_VALID_SV_SHORT;
+    runDiag.currentIteration  = 2;
+    runDiag.totalIterations   = 5;
+    runDiag.timeoutSeconds    = 99;
+    runDiag.failCheckInterval = 7;
+
+    SafeCopyTo(runDiag.testNames[0], "diagnostic");
+    SafeCopyTo(runDiag.testNames[1], "pcie");
+    SafeCopyTo(runDiag.testParms[0], "diagnostic.test_duration=5");
+    SafeCopyTo(runDiag.testParms[1], "pcie.test_pinned=false");
+    SafeCopyTo(runDiag.fakeGpuList, "fake0");
+    SafeCopyTo(runDiag.debugLogFile, "/tmp/nvvs-debug.log");
+    SafeCopyTo(runDiag.statsPath, "/tmp/nvvs-stats");
+    SafeCopyTo(runDiag.configFileContents, "config: value");
+    SafeCopyTo(runDiag.clocksEventMask, "hw_slowdown");
+    SafeCopyTo(runDiag.pluginPath, "/tmp/plugins");
+}
+
+/**
+ * Check fields common to every converted legacy run diag structure.
+ */
+template <typename T>
+inline void CheckCommonConvertedRunDiagFields(T const &legacyRunDiag, dcgmRunDiag_v10 const &convertedRunDiag)
+{
+    CHECK(convertedRunDiag.version == dcgmRunDiag_version10);
+    CHECK(convertedRunDiag.flags == legacyRunDiag.flags);
+    CHECK(convertedRunDiag.debugLevel == legacyRunDiag.debugLevel);
+    CHECK(convertedRunDiag.validate == legacyRunDiag.validate);
+    CHECK(std::string_view(convertedRunDiag.testNames[0]) == legacyRunDiag.testNames[0]);
+    CHECK(std::string_view(convertedRunDiag.testNames[1]) == legacyRunDiag.testNames[1]);
+    CHECK(std::string_view(convertedRunDiag.testParms[0]) == legacyRunDiag.testParms[0]);
+    CHECK(std::string_view(convertedRunDiag.testParms[1]) == legacyRunDiag.testParms[1]);
+    CHECK(std::string_view(convertedRunDiag.fakeGpuList) == legacyRunDiag.fakeGpuList);
+    CHECK(std::string_view(convertedRunDiag.debugLogFile) == legacyRunDiag.debugLogFile);
+    CHECK(std::string_view(convertedRunDiag.statsPath) == legacyRunDiag.statsPath);
+    CHECK(std::string_view(convertedRunDiag.configFileContents) == legacyRunDiag.configFileContents);
+    CHECK(std::string_view(convertedRunDiag.clocksEventMask) == legacyRunDiag.clocksEventMask);
+    CHECK(std::string_view(convertedRunDiag.pluginPath) == legacyRunDiag.pluginPath);
+    CHECK(convertedRunDiag.currentIteration == legacyRunDiag.currentIteration);
+    CHECK(convertedRunDiag.totalIterations == legacyRunDiag.totalIterations);
+    CHECK(convertedRunDiag.timeoutSeconds == legacyRunDiag.timeoutSeconds);
+    CHECK(convertedRunDiag.failCheckInterval == legacyRunDiag.failCheckInterval);
+}
+} // namespace detail
+
+using detail::CheckCommonConvertedRunDiagFields;
+using detail::Populate;
+using detail::PopulateLegacyRunDiagCommonFields;
+using detail::PopulateOptions;
 
 TEST_CASE("dcgm_diag_common_populate_run_diag maps validation shortcuts")
 {
     struct ShortcutCase
     {
-        std::string option;
+        char const *option;
         dcgmPolicyValidation_t validation;
     };
 
+    PopulateOptions options;
     for (auto const &[option, validation] : { ShortcutCase { "1", DCGM_POLICY_VALID_SV_SHORT },
                                               ShortcutCase { "2", DCGM_POLICY_VALID_SV_MED },
                                               ShortcutCase { "3", DCGM_POLICY_VALID_SV_LONG },
@@ -91,7 +160,8 @@ TEST_CASE("dcgm_diag_common_populate_run_diag maps validation shortcuts")
             dcgmRunDiag_v10 drd {};
             std::string error;
 
-            REQUIRE(Populate(drd, { .testNames = option }, error) == DCGM_ST_OK);
+            options.testNames = option;
+            REQUIRE(Populate(drd, options, error) == DCGM_ST_OK);
 
             CHECK(drd.validate == validation);
             CHECK(error.empty());
@@ -166,45 +236,77 @@ TEST_CASE("dcgm_diag_common_populate_run_diag validates input")
     dcgmRunDiag_v10 drd {};
     std::string error;
 
-    SECTION("rejects invalid test names")
+    WHEN("an invalid test name is populated")
     {
-        CHECK(Populate(drd, { .testNames = "x" }, error) == DCGM_ST_BADPARAM);
-        CHECK_THAT(error, Catch::Matchers::ContainsSubstring("Invalid value 'x'"));
+        auto const result = Populate(drd, { .testNames = "x" }, error);
+
+        THEN("bad parameter is returned with a test name error")
+        {
+            CHECK(result == DCGM_ST_BADPARAM);
+            CHECK_THAT(error, Catch::Matchers::ContainsSubstring("Invalid value 'x'"));
+        }
     }
 
-    SECTION("rejects invalid fake gpu lists")
+    WHEN("an invalid fake GPU list is populated")
     {
-        CHECK(Populate(drd, { .fakeGpuList = "0,gpu1" }, error) == DCGM_ST_BADPARAM);
-        CHECK_THAT(error, Catch::Matchers::ContainsSubstring("Invalid fake gpu list"));
+        auto const result = Populate(drd, { .fakeGpuList = "0,gpu1" }, error);
+
+        THEN("bad parameter is returned with a fake gpu list error")
+        {
+            CHECK(result == DCGM_ST_BADPARAM);
+            CHECK_THAT(error, Catch::Matchers::ContainsSubstring("Invalid fake gpu list"));
+        }
     }
 
-    SECTION("rejects invalid gpu lists")
+    WHEN("an invalid GPU list is populated")
     {
-        CHECK(Populate(drd, { .gpuList = "0,1a" }, error) == DCGM_ST_BADPARAM);
-        CHECK_THAT(error, Catch::Matchers::ContainsSubstring("Invalid gpu list"));
+        auto const result = Populate(drd, { .gpuList = "0,1a" }, error);
+
+        THEN("bad parameter is returned with a gpu list error")
+        {
+            CHECK(result == DCGM_ST_BADPARAM);
+            CHECK_THAT(error, Catch::Matchers::ContainsSubstring("Invalid gpu list"));
+        }
     }
 
-    SECTION("rejects missing entity ids when no gpu list is provided")
+    WHEN("missing entity ids are populated without a GPU list")
     {
-        CHECK(Populate(drd, { .entityIds = "" }, error) == DCGM_ST_BADPARAM);
-        CHECK_THAT(error, Catch::Matchers::ContainsSubstring("Invalid entity id"));
+        auto const result = Populate(drd, { .entityIds = "" }, error);
+
+        THEN("bad parameter is returned with an entity id error")
+        {
+            CHECK(result == DCGM_ST_BADPARAM);
+            CHECK_THAT(error, Catch::Matchers::ContainsSubstring("Invalid entity id"));
+        }
     }
 
-    SECTION("rejects out-of-range watch frequencies")
+    WHEN("out-of-range watch frequencies are populated")
     {
-        CHECK(Populate(drd, { .watchFrequency = 99999 }, error) == DCGM_ST_BADPARAM);
-        CHECK_THAT(error, Catch::Matchers::ContainsSubstring("watch frequency"));
+        auto const lowResult = Populate(drd, { .watchFrequency = 99999 }, error);
+        auto const lowError  = error;
 
         error.clear();
-        drd = {};
-        CHECK(Populate(drd, { .watchFrequency = 60000001 }, error) == DCGM_ST_BADPARAM);
-        CHECK_THAT(error, Catch::Matchers::ContainsSubstring("watch frequency"));
+        drd                   = {};
+        auto const highResult = Populate(drd, { .watchFrequency = 60000001 }, error);
+
+        THEN("bad parameter is returned for both lower and upper violations")
+        {
+            CHECK(lowResult == DCGM_ST_BADPARAM);
+            CHECK_THAT(lowError, Catch::Matchers::ContainsSubstring("watch frequency"));
+            CHECK(highResult == DCGM_ST_BADPARAM);
+            CHECK_THAT(error, Catch::Matchers::ContainsSubstring("watch frequency"));
+        }
     }
 
-    SECTION("rejects expected entity counts with custom entity ids")
+    WHEN("expected entity counts are populated with custom entity ids")
     {
-        CHECK(Populate(drd, { .entityIds = "gpu:0", .expectedNumEntities = "gpu:1" }, error) == DCGM_ST_BADPARAM);
-        CHECK_THAT(error, Catch::Matchers::ContainsSubstring("expectedNumEntities"));
+        auto const result = Populate(drd, { .entityIds = "gpu:0", .expectedNumEntities = "gpu:1" }, error);
+
+        THEN("bad parameter is returned with an expected entity count error")
+        {
+            CHECK(result == DCGM_ST_BADPARAM);
+            CHECK_THAT(error, Catch::Matchers::ContainsSubstring("expectedNumEntities"));
+        }
     }
 }
 
@@ -212,7 +314,161 @@ TEST_CASE("dcgm_diag_common_set_config_file_contents copies config text")
 {
     dcgmRunDiag_v10 drd {};
 
-    dcgm_diag_common_set_config_file_contents("custom: true", drd);
+    WHEN("config file contents are set")
+    {
+        dcgm_diag_common_set_config_file_contents("custom: true", drd);
 
-    CHECK(std::string_view(drd.configFileContents) == "custom: true");
+        THEN("the config text is copied")
+        {
+            CHECK(std::string_view(drd.configFileContents) == "custom: true");
+        }
+    }
+}
+
+TEST_CASE("dcgm_diag_common_convert_to_latest_run_diag preserves shared fields")
+{
+    GIVEN("a dcgmRunDiag_v9 request with common fields populated")
+    {
+        dcgmRunDiag_v9 runDiag {};
+        PopulateLegacyRunDiagCommonFields(runDiag, dcgmRunDiag_version9);
+
+        WHEN("the request is converted to dcgmRunDiag_v10")
+        {
+            auto const convertedRunDiag = dcgm_diag_common_convert_to_latest_run_diag(runDiag);
+
+            THEN("shared fields and groupId are preserved")
+            {
+                CheckCommonConvertedRunDiagFields(runDiag, convertedRunDiag);
+                CHECK(convertedRunDiag.groupId == runDiag.groupId);
+            }
+        }
+    }
+
+    GIVEN("a dcgmRunDiag_v8 request with common fields populated")
+    {
+        dcgmRunDiag_v8 runDiag {};
+        PopulateLegacyRunDiagCommonFields(runDiag, dcgmRunDiag_version8);
+
+        WHEN("the request is converted to dcgmRunDiag_v10")
+        {
+            auto const convertedRunDiag = dcgm_diag_common_convert_to_latest_run_diag(runDiag);
+
+            THEN("shared fields are preserved")
+            {
+                CheckCommonConvertedRunDiagFields(runDiag, convertedRunDiag);
+            }
+        }
+    }
+
+    GIVEN("a dcgmRunDiag_v7 request with common fields populated")
+    {
+        dcgmRunDiag_v7 runDiag {};
+        PopulateLegacyRunDiagCommonFields(runDiag, dcgmRunDiag_version7);
+
+        WHEN("the request is converted to dcgmRunDiag_v10")
+        {
+            auto const convertedRunDiag = dcgm_diag_common_convert_to_latest_run_diag(runDiag);
+
+            THEN("shared fields are preserved")
+            {
+                CheckCommonConvertedRunDiagFields(runDiag, convertedRunDiag);
+            }
+        }
+    }
+}
+
+TEST_CASE("dcgm_diag_common_convert_to_latest_run_diag preserves version-specific fields")
+{
+    GIVEN("a dcgmRunDiag_v7 request with gpuList populated")
+    {
+        dcgmRunDiag_v7 runDiag {};
+        PopulateLegacyRunDiagCommonFields(runDiag, dcgmRunDiag_version7);
+        SafeCopyTo(runDiag.gpuList, "0,1");
+
+        WHEN("the request is converted to dcgmRunDiag_v10")
+        {
+            auto const convertedRunDiag = dcgm_diag_common_convert_to_latest_run_diag(runDiag);
+
+            THEN("gpuList takes precedence over groupId")
+            {
+                CHECK(convertedRunDiag.groupId == DCGM_GROUP_NULL);
+                CHECK(std::string_view(convertedRunDiag.entityIds) == runDiag.gpuList);
+            }
+        }
+    }
+
+    GIVEN("a dcgmRunDiag_v7 request with empty gpuList")
+    {
+        dcgmRunDiag_v7 runDiag {};
+        PopulateLegacyRunDiagCommonFields(runDiag, dcgmRunDiag_version7);
+
+        WHEN("the request is converted to dcgmRunDiag_v10")
+        {
+            auto const convertedRunDiag = dcgm_diag_common_convert_to_latest_run_diag(runDiag);
+
+            THEN("groupId is preserved and entityIds stays empty")
+            {
+                CHECK(convertedRunDiag.groupId == runDiag.groupId);
+                CHECK(std::string_view(convertedRunDiag.entityIds).empty());
+            }
+        }
+    }
+
+    GIVEN("a dcgmRunDiag_v8 request with expected entity counts")
+    {
+        dcgmRunDiag_v8 runDiag {};
+        PopulateLegacyRunDiagCommonFields(runDiag, dcgmRunDiag_version8);
+        SafeCopyTo(runDiag.expectedNumEntities, "gpu:2");
+
+        WHEN("the request is converted to dcgmRunDiag_v10")
+        {
+            auto const convertedRunDiag = dcgm_diag_common_convert_to_latest_run_diag(runDiag);
+
+            THEN("groupId and expected entity counts are preserved")
+            {
+                CHECK(convertedRunDiag.groupId == runDiag.groupId);
+                CHECK(std::string_view(convertedRunDiag.expectedNumEntities) == runDiag.expectedNumEntities);
+            }
+        }
+    }
+
+    GIVEN("a dcgmRunDiag_v8 request with gpuList populated")
+    {
+        dcgmRunDiag_v8 runDiag {};
+        PopulateLegacyRunDiagCommonFields(runDiag, dcgmRunDiag_version8);
+        SafeCopyTo(runDiag.gpuList, "2,3");
+
+        WHEN("the request is converted to dcgmRunDiag_v10")
+        {
+            auto const convertedRunDiag = dcgm_diag_common_convert_to_latest_run_diag(runDiag);
+
+            THEN("gpuList takes precedence over groupId")
+            {
+                CHECK(convertedRunDiag.groupId == DCGM_GROUP_NULL);
+                CHECK(std::string_view(convertedRunDiag.entityIds) == runDiag.gpuList);
+            }
+        }
+    }
+
+    GIVEN("a dcgmRunDiag_v9 request with entity and watch settings")
+    {
+        dcgmRunDiag_v9 runDiag {};
+        PopulateLegacyRunDiagCommonFields(runDiag, dcgmRunDiag_version9);
+        SafeCopyTo(runDiag.entityIds, "gpu:0,cpu:1");
+        SafeCopyTo(runDiag.expectedNumEntities, "gpu:1,cpu:1");
+        runDiag.watchFrequency = 123456;
+
+        WHEN("the request is converted to dcgmRunDiag_v10")
+        {
+            auto const convertedRunDiag = dcgm_diag_common_convert_to_latest_run_diag(runDiag);
+
+            THEN("entity and watch settings are preserved")
+            {
+                CHECK(convertedRunDiag.groupId == runDiag.groupId);
+                CHECK(std::string_view(convertedRunDiag.entityIds) == runDiag.entityIds);
+                CHECK(std::string_view(convertedRunDiag.expectedNumEntities) == runDiag.expectedNumEntities);
+                CHECK(convertedRunDiag.watchFrequency == runDiag.watchFrequency);
+            }
+        }
+    }
 }

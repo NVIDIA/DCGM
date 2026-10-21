@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +15,15 @@
  */
 #include "DcgmiProfile.h"
 
-#include "MigIdParser.hpp"
-#include "dcgm_agent.h"
-#include "dcgm_fields.h"
-#include "dcgm_structs.h"
 #include "dcgmi_common.h"
+
+#include <DcgmOps.h>
 #include <DcgmStringHelpers.h>
 #include <EntityListHelpers.h>
+#include <MigIdParser.hpp>
+#include <dcgm_agent.h>
+#include <dcgm_fields.h>
+#include <dcgm_structs.h>
 
 #include <sstream>
 
@@ -29,6 +31,11 @@
 #define COLUMN_MG_ID     "Group.Subgroup"
 #define COLUMN_FIELD_ID  "Field ID"
 #define COLUMN_FIELD_TAG "Field Tag"
+
+/*****************************************************************************/
+DcgmiProfile::DcgmiProfile(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+{}
 
 /*****************************************************************************/
 dcgmReturn_t DcgmiProfile::RunProfileList(dcgmHandle_t dcgmHandle, unsigned int gpuId, bool outputAsJson)
@@ -42,7 +49,7 @@ dcgmReturn_t DcgmiProfile::RunProfileList(dcgmHandle_t dcgmHandle, unsigned int 
     gmg.version = dcgmProfGetMetricGroups_version;
     gmg.gpuId   = gpuId;
 
-    dcgmReturn_t dcgmReturn = dcgmProfGetSupportedMetricGroups(dcgmHandle, &gmg);
+    dcgmReturn_t dcgmReturn = m_dcgmOps->dcgmProfGetSupportedMetricGroups(dcgmHandle, &gmg);
     if (dcgmReturn != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to Get supported metric groups: " << errorString(dcgmReturn) << "." << std::endl;
@@ -98,12 +105,12 @@ dcgmReturn_t DcgmiProfile::RunProfileSetPause(dcgmHandle_t dcgmHandle, bool paus
     if (pause)
     {
         action     = "pause";
-        dcgmReturn = dcgmProfPause(dcgmHandle);
+        dcgmReturn = m_dcgmOps->dcgmProfPause(dcgmHandle);
     }
     else
     {
         action     = "resume";
-        dcgmReturn = dcgmProfResume(dcgmHandle);
+        dcgmReturn = m_dcgmOps->dcgmProfResume(dcgmHandle);
     }
 
     if (dcgmReturn != DCGM_ST_OK)
@@ -122,8 +129,11 @@ dcgmReturn_t DcgmiProfile::RunProfileSetPause(dcgmHandle_t dcgmHandle, bool paus
 DcgmiProfileList::DcgmiProfileList(std::string hostname,
                                    std::string gpuIdsStr,
                                    std::string groupIdStr,
-                                   bool outputAsJson)
-    : mGpuIdsStr(std::move(gpuIdsStr))
+                                   bool outputAsJson,
+                                   DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mProfileObj(dcgmOps)
+    , mGpuIdsStr(std::move(gpuIdsStr))
     , mGroupIdStr(std::move(groupIdStr))
     , mGpuId(0)
 {
@@ -135,7 +145,7 @@ DcgmiProfileList::DcgmiProfileList(std::string hostname,
 dcgmReturn_t DcgmiProfileList::SetGpuIdFromEntityList()
 {
     std::vector<dcgmGroupEntityPair_t> entityList;
-    auto err = DcgmNs::EntityListWithMigAndUuidParser(m_dcgmHandle, mGpuIdsStr, entityList);
+    auto err = DcgmNs::EntityListWithMigAndUuidParser(m_dcgmHandle, mGpuIdsStr, entityList, m_dcgmOps);
     if (!err.empty())
     {
         SHOW_AND_LOG_ERROR << err;
@@ -176,7 +186,7 @@ dcgmReturn_t DcgmiProfileList::SetGpuId(void)
     {
         unsigned int gpuIdList[DCGM_MAX_NUM_DEVICES];
         int count  = 0;
-        dcgmReturn = dcgmGetAllSupportedDevices(m_dcgmHandle, gpuIdList, &count);
+        dcgmReturn = m_dcgmOps->dcgmGetAllSupportedDevices(m_dcgmHandle, gpuIdList, &count);
 
         if (dcgmReturn != DCGM_ST_OK)
         {
@@ -215,7 +225,7 @@ dcgmReturn_t DcgmiProfileList::SetGpuId(void)
     std::unique_ptr<dcgmGroupInfo_t> groupInfo = std::make_unique<dcgmGroupInfo_t>();
     groupInfo->version                         = dcgmGroupInfo_version;
 
-    dcgmReturn = dcgmGroupGetInfo(m_dcgmHandle, groupId, groupInfo.get());
+    dcgmReturn = m_dcgmOps->dcgmGroupGetInfo(m_dcgmHandle, groupId, groupInfo.get());
     if (DCGM_ST_OK != dcgmReturn)
     {
         std::string error = (dcgmReturn == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(dcgmReturn);
@@ -251,8 +261,10 @@ dcgmReturn_t DcgmiProfileList::DoExecuteConnected()
 }
 
 /*****************************************************************************/
-DcgmiProfileSetPause::DcgmiProfileSetPause(std::string hostname, bool pause)
-    : m_pause(pause)
+DcgmiProfileSetPause::DcgmiProfileSetPause(std::string hostname, bool pause, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mProfileObj(dcgmOps)
+    , m_pause(pause)
 {
     m_hostName = std::move(hostname);
 }

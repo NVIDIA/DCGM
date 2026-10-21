@@ -57,6 +57,9 @@ struct MockPolicyContext
     int m_notifyCount                     = 0;
     dcgmPolicyCondition_t m_lastCondition = static_cast<dcgmPolicyCondition_t>(0);
     unsigned int m_lastNotifyGpuId        = UINT_MAX;
+    int m_completionCount                 = 0;
+    dcgm_connection_id_t m_lastCompletionConnectionId {};
+    dcgm_request_id_t m_lastCompletionRequestId {};
 };
 
 static dcgmReturn_t MockPolicyPostfunc(dcgm_module_command_header_t *header, void *poster)
@@ -111,8 +114,18 @@ static dcgmReturn_t MockPolicyPostfunc(dcgm_module_command_header_t *header, voi
         }
         case DcgmCoreReqIdCMAddFieldWatch:
         case DcgmCoreReqIdCMUpdateAllFields:
-        case DcgmCoreReqIdNotifyRequestOfCompletion:
             return DCGM_ST_OK;
+        case DcgmCoreReqIdNotifyRequestOfCompletion:
+        {
+            auto *completion = reinterpret_cast<dcgmCoreNotifyRequestOfCompletion_t *>(header);
+            if (ctx)
+            {
+                ctx->m_completionCount++;
+                ctx->m_lastCompletionConnectionId = completion->request.connectionId;
+                ctx->m_lastCompletionRequestId    = completion->request.requestId;
+            }
+            return DCGM_ST_OK;
+        }
         case DcgmCoreReqIdCMGetSamples:
         {
             auto *gs               = reinterpret_cast<dcgmCoreGetSamples_t *>(header);
@@ -259,6 +272,31 @@ private:
         return cb;
     }
 };
+
+TEST_CASE_METHOD(DcgmPolicyManagerFixture, "DcgmPolicyManager field policy callback registration is unique")
+{
+    constexpr dcgm_request_id_t requestId = kReqId + 1;
+
+    dcgm_policy_msg_register_callback_t registerMsg {};
+    registerMsg.header.connectionId = kConnId;
+    registerMsg.header.requestId    = requestId;
+    registerMsg.fieldId             = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
+
+    REQUIRE(mgr.RegisterPolicyCallback(&registerMsg) == DCGM_ST_OK);
+
+    registerMsg.header.requestId = requestId + 1;
+    CHECK(mgr.RegisterPolicyCallback(&registerMsg) == DCGM_ST_DUPLICATE_KEY);
+
+    dcgm_policy_msg_unregister_callback_t unregisterMsg {};
+    unregisterMsg.header.connectionId = kConnId;
+    unregisterMsg.fieldId             = registerMsg.fieldId;
+
+    REQUIRE(mgr.UnregisterPolicyCallback(&unregisterMsg) == DCGM_ST_OK);
+    CHECK(ctx.m_completionCount == 1);
+    CHECK(ctx.m_lastCompletionConnectionId == kConnId);
+    CHECK(ctx.m_lastCompletionRequestId == requestId);
+    CHECK(mgr.UnregisterPolicyCallback(&unregisterMsg) == DCGM_ST_NO_DATA);
+}
 
 // ===========================================================================
 // Tests: fields silently ignored when GPU has no policy / not a GPU entity

@@ -16,6 +16,7 @@
 
 #include <DcgmStringHelpers.h>
 #include <Defer.hpp>
+#include <MockDcgmOps.h>
 #include <MockDynamicLibraryLoader.h>
 #include <PluginInterface.h>
 
@@ -48,7 +49,9 @@ template class TestFramework<MockPluginLib,
 #include <sys/stat.h>
 
 #include <CpuSet.h>
+#include <DcgmHandle.h>
 #include <DcgmLogging.h>
+#include <DcgmSystem.h>
 #include <EntitySet.h>
 #include <Gpu.h>
 #include <GpuSet.h>
@@ -67,7 +70,15 @@ public:
     using Base = impl::
         TestFramework<MockPluginLib, MockDynamicLibraryLoader, MockSoftwarePluginFramework, MockFileSystemOperator>;
 
-    using Base::Base;
+    MockTestFramework(DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                      NvvsCommon *nvvsCommon,
+                      DcgmHandle *dcgmHandle,
+                      DcgmSystem *dcgmSystem);
+    MockTestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySet,
+                      DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                      NvvsCommon *nvvsCommon,
+                      DcgmHandle *dcgmHandle,
+                      DcgmSystem *dcgmSystem);
     using Base::m_diagResponse;
     using Base::m_dynamicLibrary;
     using Base::m_fileSystem;
@@ -80,54 +91,140 @@ public:
 
 namespace
 {
-std::unique_ptr<GpuSet> MakeGpuSetWithFakeGpus(std::vector<unsigned int> const &gpuIds,
-                                               std::string const &driverVersion = "545.29.06")
+class DiscoverableMockPluginLib : public MockPluginLib
 {
-    auto gpuSet = std::make_unique<GpuSet>();
-    std::vector<Gpu *> gpuObjs;
-    gpuObjs.reserve(gpuIds.size());
+public:
+    using MockPluginLib::MockPluginLib;
 
-    for (auto const gpuId : gpuIds)
+    dcgmReturn_t LoadPlugin(std::string const &path, std::string const &name)
     {
-        gpuSet->AddEntityId(gpuId);
-        gpuObjs.emplace_back(new Gpu(gpuId));
-
-        dcgmDeviceAttributes_v3 attr {};
-        attr.identifiers.pciDeviceId = 1234;
-        SafeCopyTo(attr.identifiers.uuid, fmt::format("GPU-12345678-0000-0000-0000-00000000000{}", gpuId).c_str());
-        SafeCopyTo(attr.identifiers.serial, fmt::format("GPU-Serial-{}", gpuId).c_str());
-        SafeCopyTo(attr.identifiers.driverVersion, driverVersion.c_str());
-        gpuObjs.back()->SetAttributes(attr);
-    }
-
-    gpuSet->SetGpuObjs(std::move(gpuObjs));
-    return gpuSet;
-}
-
-void ReleaseEntitySets(std::vector<std::unique_ptr<EntitySet>> &entitySets)
-{
-    for (auto &entitySet : entitySets)
-    {
-        if (entitySet->GetEntityGroup() != DCGM_FE_GPU)
+        dcgmReturn_t const ret = MockPluginLib::LoadPlugin(path, name);
+        if (ret != DCGM_ST_OK)
         {
-            continue;
+            return ret;
         }
 
-        auto *gpuSet  = ToGpuSet(entitySet.get());
-        auto &gpuObjs = gpuSet->GetGpuObjs();
-        for (auto &gpu : gpuObjs)
-        {
-            delete gpu;
-        }
-        gpuSet->SetGpuObjs({});
+        dcgmDiagPluginTest_t pluginTest {};
+        SafeCopyTo(pluginTest.testName, "loaded_plugin");
+        SafeCopyTo(pluginTest.description, "Loaded plugin");
+        SafeCopyTo(pluginTest.testCategory, "test");
+        pluginTest.targetEntityGroup = DCGM_FE_GPU;
+        AddSupportedTest(pluginTest);
+        return DCGM_ST_OK;
     }
-}
+};
+
+class LibraryDiscoveryTestFramework
+    : public impl::TestFramework<DiscoverableMockPluginLib,
+                                 MockDynamicLibraryLoader,
+                                 MockSoftwarePluginFramework,
+                                 MockFileSystemOperator>
+{
+public:
+    using Base = impl::TestFramework<DiscoverableMockPluginLib,
+                                     MockDynamicLibraryLoader,
+                                     MockSoftwarePluginFramework,
+                                     MockFileSystemOperator>;
+    using Base::Base;
+    using Base::m_dynamicLibrary;
+    using Base::m_fileSystem;
+};
+
+class Cuda12DcgmSystem : public DcgmSystemBase
+{
+public:
+    unsigned int GetCudaMajorVersion() override
+    {
+        return 12;
+    }
+
+    unsigned int GetCudaMinorVersion() override
+    {
+        return 0;
+    }
+};
+
+struct TestFrameworkTestFixture
+{
+    TestFrameworkTestFixture()
+        : dcgmHandle(&dcgmOps)
+        , dcgmSystem(&dcgmOps, 0)
+    {}
+
+    DcgmNs::MockDcgmOps dcgmOps;
+    NvvsCommon nvvsCommon;
+    DcgmHandle dcgmHandle;
+    DcgmSystem dcgmSystem;
+
+    std::unique_ptr<GpuSet> MakeGpuSetWithFakeGpus(std::vector<unsigned int> const &gpuIds,
+                                                   std::string const &driverVersion = "545.29.06")
+    {
+        auto gpuSet = std::make_unique<GpuSet>();
+        std::vector<Gpu *> gpuObjs;
+        gpuObjs.reserve(gpuIds.size());
+
+        for (auto const gpuId : gpuIds)
+        {
+            gpuSet->AddEntityId(gpuId);
+            gpuObjs.emplace_back(new Gpu(gpuId, &dcgmOps, &dcgmHandle, &dcgmSystem));
+
+            dcgmDeviceAttributes_v3 attr {};
+            attr.identifiers.pciDeviceId = 1234;
+            SafeCopyTo(attr.identifiers.uuid, fmt::format("GPU-12345678-0000-0000-0000-00000000000{}", gpuId).c_str());
+            SafeCopyTo(attr.identifiers.serial, fmt::format("GPU-Serial-{}", gpuId).c_str());
+            SafeCopyTo(attr.identifiers.driverVersion, driverVersion.c_str());
+            gpuObjs.back()->SetAttributes(attr);
+        }
+
+        gpuSet->SetGpuObjs(std::move(gpuObjs));
+        return gpuSet;
+    }
+
+    void ReleaseEntitySets(std::vector<std::unique_ptr<EntitySet>> &entitySets)
+    {
+        for (auto &entitySet : entitySets)
+        {
+            if (entitySet->GetEntityGroup() != DCGM_FE_GPU)
+            {
+                continue;
+            }
+
+            auto *gpuSet  = ToGpuSet(entitySet.get());
+            auto &gpuObjs = gpuSet->GetGpuObjs();
+            for (auto &gpu : gpuObjs)
+            {
+                delete gpu;
+            }
+            gpuSet->SetGpuObjs({});
+        }
+    }
+
+    static std::vector<std::unique_ptr<EntitySet>> &EmptyEntitySets()
+    {
+        static std::vector<std::unique_ptr<EntitySet>> entitySets;
+        return entitySets;
+    }
+};
 } // namespace
 
-SCENARIO("GetPluginBaseDir returns plugin directory relative to current process's location")
+MockTestFramework::MockTestFramework(DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                                     NvvsCommon *nvvsCommon,
+                                     DcgmHandle *dcgmHandle,
+                                     DcgmSystem *dcgmSystem)
+    : Base(TestFrameworkTestFixture::EmptyEntitySets(), dcgmOps, nvvsCommon, dcgmHandle, dcgmSystem)
+{}
+
+MockTestFramework::MockTestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySet,
+                                     DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                                     NvvsCommon *nvvsCommon,
+                                     DcgmHandle *dcgmHandle,
+                                     DcgmSystem *dcgmSystem)
+    : Base(entitySet, dcgmOps, nvvsCommon, dcgmHandle, dcgmSystem)
+{}
+
+SCENARIO_METHOD(TestFrameworkTestFixture,
+                "GetPluginBaseDir returns plugin directory relative to current process's location")
 {
-    std::string const savedPluginPath = nvvsCommon.pluginPath;
-    DcgmNs::Defer restorePluginPath([&] { nvvsCommon.pluginPath = savedPluginPath; });
     nvvsCommon.pluginPath.clear();
 
     // Mock filesystem: GetPluginBaseDir uses m_fileSystem.ReadLink/Stat/Access, not the real
@@ -139,7 +236,7 @@ SCENARIO("GetPluginBaseDir returns plugin directory relative to current process'
     INFO("pluginDir: " << pluginDir);
 
     std::vector<std::unique_ptr<EntitySet>> entitySet;
-    MockTestFramework tf(entitySet);
+    MockTestFramework tf(entitySet, &dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
 
     char procExe[64];
     snprintf(procExe, sizeof(procExe), "/proc/%d/exe", getpid());
@@ -162,10 +259,8 @@ SCENARIO("GetPluginBaseDir returns plugin directory relative to current process'
     CHECK(tf.GetPluginBaseDir() == pluginDir);
 }
 
-SCENARIO("GetPluginCudalessDir returns cudaless directory in plugin directory")
+SCENARIO_METHOD(TestFrameworkTestFixture, "GetPluginCudalessDir returns cudaless directory in plugin directory")
 {
-    std::string const savedPluginPath = nvvsCommon.pluginPath;
-    DcgmNs::Defer restorePluginPath([&] { nvvsCommon.pluginPath = savedPluginPath; });
     nvvsCommon.pluginPath.clear();
 
     std::string const fakeBinary = "/fake/nvvs_exe";
@@ -173,7 +268,7 @@ SCENARIO("GetPluginCudalessDir returns cudaless directory in plugin directory")
     INFO("pluginDir: " << pluginDir);
 
     std::vector<std::unique_ptr<EntitySet>> entitySet;
-    MockTestFramework tf(entitySet);
+    MockTestFramework tf(entitySet, &dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
 
     char procExe[64];
     snprintf(procExe, sizeof(procExe), "/proc/%d/exe", getpid());
@@ -193,12 +288,10 @@ SCENARIO("GetPluginCudalessDir returns cudaless directory in plugin directory")
     CHECK(tf.GetPluginCudalessDir() == reference);
 }
 
-TEST_CASE("TestFramework::Go skips RunTest when plugin index is invalid")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go skips RunTest when plugin index is invalid")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -213,7 +306,7 @@ TEST_CASE("TestFramework::Go skips RunTest when plugin index is invalid")
 
     entitySets.push_back(std::move(gpu));
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.CreateSoftwarePluginFrameworks(entitySets);
     tf.Go(entitySets);
@@ -225,12 +318,10 @@ TEST_CASE("TestFramework::Go skips RunTest when plugin index is invalid")
     CHECK(std::string_view(diag.errors[0].msg) == "Invalid index 0 or too many tests");
 }
 
-TEST_CASE("TestFramework::Go invokes plugin RunTest when plugin index is valid")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go invokes plugin RunTest when plugin index is valid")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -245,11 +336,11 @@ TEST_CASE("TestFramework::Go invokes plugin RunTest when plugin index is valid")
 
     entitySets.push_back(std::move(gpu));
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->SetPassResult("hardware_test");
     MockPluginLib *const pluginLib = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -259,18 +350,12 @@ TEST_CASE("TestFramework::Go invokes plugin RunTest when plugin index is valid")
     CHECK(pluginLib->RunCount("hardware_test") == 1);
 }
 
-TEST_CASE("TestFramework::Go omits skipped entities from later RunTest entity lists")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go omits skipped entities from later RunTest entity lists")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer restoreChannelFd([&] { nvvsCommon.channelFd = savedChannelFd; });
-    bool const savedFailEarly = nvvsCommon.failEarly;
-    DcgmNs::Defer restoreFailEarly([&] { nvvsCommon.failEarly = savedFailEarly; });
-    nvvsCommon.channelFd       = -1;
-    nvvsCommon.failEarly       = false;
-    bool const savedConfigless = nvvsCommon.configless;
-    DcgmNs::Defer restoreConfigless([&] { nvvsCommon.configless = savedConfigless; });
+    nvvsCommon.channelFd  = -1;
+    nvvsCommon.failEarly  = false;
     nvvsCommon.configless = true;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -293,12 +378,12 @@ TEST_CASE("TestFramework::Go omits skipped entities from later RunTest entity li
     GpuSet *gpuPtr = gpu.get();
     entitySets.push_back(std::move(gpu));
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->SetFailWithSkipsFromRowRemap("skip_seed_test", { 0 });
     mock->SetPassResult("after_skip_test");
     MockPluginLib *mockPtr = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -315,18 +400,13 @@ TEST_CASE("TestFramework::Go omits skipped entities from later RunTest entity li
     CHECK_FALSE(gpuPtr->GetSkippedEntities().contains(1));
 }
 
-TEST_CASE("TestFramework::Go does not call RunTest when all entities were skipped by a prior test")
+TEST_CASE_METHOD(TestFrameworkTestFixture,
+                 "TestFramework::Go does not call RunTest when all entities were skipped by a prior test")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer restoreChannelFd([&] { nvvsCommon.channelFd = savedChannelFd; });
-    bool const savedFailEarly = nvvsCommon.failEarly;
-    DcgmNs::Defer restoreFailEarly([&] { nvvsCommon.failEarly = savedFailEarly; });
-    nvvsCommon.channelFd       = -1;
-    nvvsCommon.failEarly       = false;
-    bool const savedConfigless = nvvsCommon.configless;
-    DcgmNs::Defer restoreConfigless([&] { nvvsCommon.configless = savedConfigless; });
+    nvvsCommon.channelFd  = -1;
+    nvvsCommon.failEarly  = false;
     nvvsCommon.configless = true;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -349,12 +429,12 @@ TEST_CASE("TestFramework::Go does not call RunTest when all entities were skippe
     GpuSet *gpuPtr = gpu.get();
     entitySets.push_back(std::move(gpu));
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->SetFailWithSkipsFromRowRemap("skip_all_test", { 0, 1 });
     mock->SetPassResult("no_entities_left_test");
     MockPluginLib *mockPtr = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -367,22 +447,14 @@ TEST_CASE("TestFramework::Go does not call RunTest when all entities were skippe
     CHECK(gpuPtr->GetSkippedEntities().size() == 2);
 }
 
-TEST_CASE("TestFramework::Go runs eud when row remap failure and EUD-only is true")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go runs eud when row remap failure and EUD-only is true")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer restoreChannelFd([&] { nvvsCommon.channelFd = savedChannelFd; });
-    bool const savedFailEarly = nvvsCommon.failEarly;
-    DcgmNs::Defer restoreFailEarly([&] { nvvsCommon.failEarly = savedFailEarly; });
-    nvvsCommon.channelFd       = -1;
-    nvvsCommon.failEarly       = false;
-    bool const savedConfigless = nvvsCommon.configless;
-    DcgmNs::Defer restoreConfigless([&] { nvvsCommon.configless = savedConfigless; });
-    nvvsCommon.configless     = true;
-    bool const savedIsEudOnly = nvvsCommon.isEudOnly;
-    DcgmNs::Defer restoreIsEudOnly([&] { nvvsCommon.isEudOnly = savedIsEudOnly; });
-    nvvsCommon.isEudOnly = true;
+    nvvsCommon.channelFd  = -1;
+    nvvsCommon.failEarly  = false;
+    nvvsCommon.configless = true;
+    nvvsCommon.isEudOnly  = true;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
     DcgmNs::Defer release([&] { ReleaseEntitySets(entitySets); });
@@ -403,12 +475,12 @@ TEST_CASE("TestFramework::Go runs eud when row remap failure and EUD-only is tru
 
     entitySets.push_back(std::move(gpu));
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->SetFailWithSkipsFromRowRemap("row_remap_failure_seed", { 0, 1 }, DCGM_FE_GPU, DCGM_FR_ROW_REMAP_FAILURE);
     mock->SetPassResult(EUD_PLUGIN_NAME);
     MockPluginLib *mockPtr = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -421,22 +493,15 @@ TEST_CASE("TestFramework::Go runs eud when row remap failure and EUD-only is tru
     CHECK(mockPtr->GetRunEntityIdSnapshots(EUD_PLUGIN_NAME)[0] == std::vector<dcgm_field_eid_t> { 0, 1 });
 }
 
-TEST_CASE("TestFramework::Go does not run eud when row remap failure and EUD-only is false")
+TEST_CASE_METHOD(TestFrameworkTestFixture,
+                 "TestFramework::Go does not run eud when row remap failure and EUD-only is false")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer restoreChannelFd([&] { nvvsCommon.channelFd = savedChannelFd; });
-    bool const savedFailEarly = nvvsCommon.failEarly;
-    DcgmNs::Defer restoreFailEarly([&] { nvvsCommon.failEarly = savedFailEarly; });
-    nvvsCommon.channelFd       = -1;
-    nvvsCommon.failEarly       = false;
-    bool const savedConfigless = nvvsCommon.configless;
-    DcgmNs::Defer restoreConfigless([&] { nvvsCommon.configless = savedConfigless; });
-    nvvsCommon.configless     = true;
-    bool const savedIsEudOnly = nvvsCommon.isEudOnly;
-    DcgmNs::Defer restoreIsEudOnly([&] { nvvsCommon.isEudOnly = savedIsEudOnly; });
-    nvvsCommon.isEudOnly = false;
+    nvvsCommon.channelFd  = -1;
+    nvvsCommon.failEarly  = false;
+    nvvsCommon.configless = true;
+    nvvsCommon.isEudOnly  = false;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
     DcgmNs::Defer release([&] { ReleaseEntitySets(entitySets); });
@@ -457,12 +522,12 @@ TEST_CASE("TestFramework::Go does not run eud when row remap failure and EUD-onl
 
     entitySets.push_back(std::move(gpu));
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->SetFailWithSkipsFromRowRemap("row_remap_failure_seed", { 0, 1 }, DCGM_FE_GPU, DCGM_FR_ROW_REMAP_FAILURE);
     mock->SetPassResult(EUD_PLUGIN_NAME);
     MockPluginLib *mockPtr = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -474,22 +539,81 @@ TEST_CASE("TestFramework::Go does not run eud when row remap failure and EUD-onl
     CHECK(mockPtr->GetRunEntityIdSnapshots(EUD_PLUGIN_NAME).empty());
 }
 
-TEST_CASE("TestFramework::getTests and GetTestCategories are empty before loadPlugins")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::getTests and GetTestCategories are empty before loadPlugins")
 {
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     CHECK(tf.getTests().empty());
     CHECK(tf.GetTestCategories().empty());
 }
 
-TEST_CASE("TestFramework::loadPlugins registers tests from PushPlugin with mocked filesystem and dl loader")
+SCENARIO_METHOD(TestFrameworkTestFixture, "TestFramework: skips versioned runtime libraries during plugin discovery")
 {
-    DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
-
     std::string const savedPluginPath = nvvsCommon.pluginPath;
     DcgmNs::Defer restorePluginPath([&] { nvvsCommon.pluginPath = savedPluginPath; });
     nvvsCommon.pluginPath = "/mock/plugins";
 
-    MockTestFramework tf;
+    std::vector<std::unique_ptr<EntitySet>> entitySets;
+    Cuda12DcgmSystem cuda12DcgmSystem;
+    LibraryDiscoveryTestFramework tf(entitySets, &dcgmOps, &nvvsCommon, &dcgmHandle, &cuda12DcgmSystem);
+
+    std::string const cudalessDir = "/mock/plugins/cudaless/";
+    std::string const cuda12Dir   = "/mock/plugins/cuda12/";
+    std::vector<std::string> const libraryNames {
+        "libcublas.so.12",    "libcublas.so.12.9.2.10",
+        "libcublasLt.so.12",  "libcublasLt.so.12.9.2.10",
+        "libcurand.so.10",    "libcurand.so.10.3.10.19",
+        "libcusparseLt.so.0", "libcusparseLt.so.0.8.1.1",
+        "libcupti.so.12",     "libnccl.so.2",
+        "libnccl.so.2.30.7",  "libDiagnostic.so.4",
+    };
+
+    char procExe[64];
+    snprintf(procExe, sizeof(procExe), "/proc/%d/exe", getpid());
+    tf.m_fileSystem.MockReadLink(procExe, "/fake/nvvs");
+
+    struct stat secureFile = {};
+    secureFile.st_uid      = 0;
+    secureFile.st_gid      = 0;
+    secureFile.st_mode     = S_IFREG | 0555;
+    tf.m_fileSystem.MockStat("/fake/nvvs", secureFile);
+    for (auto const &libraryName : libraryNames)
+    {
+        tf.m_fileSystem.MockStat("./" + libraryName, secureFile);
+    }
+
+    tf.m_fileSystem.MockIsDirectory("/mock/plugins", true);
+    tf.m_fileSystem.MockListDirectory(cudalessDir, {});
+    tf.m_fileSystem.MockListDirectory(cuda12Dir, libraryNames);
+    tf.m_fileSystem.MockGetCurrentWorkingDirectory("/tmp/original");
+    tf.m_fileSystem.MockChangeDirectory("/tmp/original", 0);
+    tf.m_fileSystem.MockChangeDirectory(cudalessDir, 0);
+    tf.m_fileSystem.MockChangeDirectory(cuda12Dir, 0);
+
+    std::string const pluginCommonPath = cudalessDir + "libpluginCommon.so.4";
+    static int dummyCommonHandle;
+    tf.m_dynamicLibrary.MockOpenReturns(pluginCommonPath, &dummyCommonHandle);
+
+    WHEN("the plugin directories are scanned")
+    {
+        tf.loadPlugins(nullptr);
+
+        THEN("only the diagnostic plugin is registered")
+        {
+            auto const tests = tf.getTests();
+            REQUIRE(tests.size() == 1);
+            CHECK(tests[0]->GetPluginName() == "libDiagnostic.so.4");
+        }
+    }
+}
+
+TEST_CASE_METHOD(TestFrameworkTestFixture,
+                 "TestFramework::loadPlugins registers tests from PushPlugin with mocked filesystem and dl loader")
+{
+    DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
+
+    nvvsCommon.pluginPath = "/mock/plugins";
+
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
 
     char procExe[64];
     snprintf(procExe, sizeof(procExe), "/proc/%d/exe", getpid());
@@ -521,7 +645,7 @@ TEST_CASE("TestFramework::loadPlugins registers tests from PushPlugin with mocke
     pt.targetEntityGroup  = DCGM_FE_GPU;
     pt.numValidParameters = 0;
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->AddSupportedTest(pt);
     tf.PushPlugin(std::move(mock));
 
@@ -537,15 +661,13 @@ TEST_CASE("TestFramework::loadPlugins registers tests from PushPlugin with mocke
     CHECK(cats.at("cat_a").size() == 1);
 }
 
-TEST_CASE("TestFramework::loadPlugins registers tests from multiple PushPlugin mocks")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::loadPlugins registers tests from multiple PushPlugin mocks")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    std::string const savedPluginPath = nvvsCommon.pluginPath;
-    DcgmNs::Defer restorePluginPath([&] { nvvsCommon.pluginPath = savedPluginPath; });
     nvvsCommon.pluginPath = "/mock/plugins";
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
 
     char procExe[64];
     snprintf(procExe, sizeof(procExe), "/proc/%d/exe", getpid());
@@ -584,11 +706,11 @@ TEST_CASE("TestFramework::loadPlugins registers tests from multiple PushPlugin m
     ptB.targetEntityGroup  = DCGM_FE_GPU;
     ptB.numValidParameters = 0;
 
-    auto mockA = std::make_unique<MockPluginLib>();
+    auto mockA = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mockA->SetPluginName("alpha_plugin");
     mockA->AddSupportedTest(ptA);
 
-    auto mockB = std::make_unique<MockPluginLib>();
+    auto mockB = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mockB->SetPluginName("beta_plugin");
     mockB->AddSupportedTest(ptB);
 
@@ -627,12 +749,10 @@ TEST_CASE("TestFramework::loadPlugins registers tests from multiple PushPlugin m
     CHECK(cats.at("cat_b").size() == 1);
 }
 
-TEST_CASE("TestFramework::Go invokes the correct mock plugin by plugin index")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go invokes the correct mock plugin by plugin index")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -654,17 +774,17 @@ TEST_CASE("TestFramework::Go invokes the correct mock plugin by plugin index")
 
     entitySets.push_back(std::move(gpu));
 
-    auto mockA = std::make_unique<MockPluginLib>();
+    auto mockA = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mockA->SetPluginName("alpha_plugin");
     mockA->SetPassResult("run_on_first");
     MockPluginLib *const ptrA = mockA.get();
 
-    auto mockB = std::make_unique<MockPluginLib>();
+    auto mockB = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mockB->SetPluginName("beta_plugin");
     mockB->SetPassResult("run_on_second");
     MockPluginLib *const ptrB = mockB.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mockA));
     tf.PushPlugin(std::move(mockB));
@@ -678,12 +798,10 @@ TEST_CASE("TestFramework::Go invokes the correct mock plugin by plugin index")
     CHECK(ptrB->RunCount("run_on_first") == 0);
 }
 
-TEST_CASE("TestFramework::Go rejects plugin index past the last PushPlugin mock")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go rejects plugin index past the last PushPlugin mock")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -698,11 +816,11 @@ TEST_CASE("TestFramework::Go rejects plugin index past the last PushPlugin mock"
 
     entitySets.push_back(std::move(gpu));
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
 
-    auto mockA = std::make_unique<MockPluginLib>();
-    auto mockB = std::make_unique<MockPluginLib>();
+    auto mockA = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
+    auto mockB = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mockA->SetPluginName("alpha_plugin");
     mockB->SetPluginName("beta_plugin");
     tf.PushPlugin(std::move(mockA));
@@ -717,19 +835,20 @@ TEST_CASE("TestFramework::Go rejects plugin index past the last PushPlugin mock"
     CHECK(diag.errors[0].code == static_cast<unsigned int>(DCGM_ST_GENERIC_ERROR));
 }
 
-TEST_CASE("TestFramework::GetCompareName normalizes spaces and case")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::GetCompareName normalizes spaces and case")
 {
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     CHECK(tf.GetCompareName("My Test_Name", false) == "my_test_name");
     CHECK(tf.GetCompareName("MY_TEST_NAME", true) == "my test name");
     CHECK(tf.GetCompareName("AlreadyLower", false) == "alreadylower");
 }
 
-TEST_CASE("TestFramework::GetSubtestParameters includes software entry with common parameters")
+TEST_CASE_METHOD(TestFrameworkTestFixture,
+                 "TestFramework::GetSubtestParameters includes software entry with common parameters")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
 
     std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> const parms = tf.GetSubtestParameters();
@@ -755,42 +874,34 @@ TEST_CASE("TestFramework::GetSubtestParameters includes software entry with comm
     CHECK(foundSuiteLevel);
 }
 
-TEST_CASE("TestFramework::SetDiagResponseVersion rejects unknown version")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::SetDiagResponseVersion rejects unknown version")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     CHECK(tf.SetDiagResponseVersion(0x55665566u) == DCGM_ST_GENERIC_ERROR);
 }
 
-TEST_CASE("TestFramework::SetDiagResponseVersion cannot be set twice")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::SetDiagResponseVersion cannot be set twice")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     CHECK(tf.SetDiagResponseVersion(dcgmDiagResponse_version11) == DCGM_ST_GENERIC_ERROR);
 }
 
-TEST_CASE("TestFramework::GetCompatibleCudaMajorVersion returns zero when driver major is zero")
+TEST_CASE_METHOD(TestFrameworkTestFixture,
+                 "TestFramework::Go with empty entity sets completes without invoking hardware plugins")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    CHECK(MockTestFramework::GetCompatibleCudaMajorVersion(0, 0, 0) == 0);
-}
-
-TEST_CASE("TestFramework::Go with empty entity sets completes without invoking hardware plugins")
-{
-    DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
-
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
-    auto mock                      = std::make_unique<MockPluginLib>();
+    auto mock                      = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     MockPluginLib *const pluginLib = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -801,12 +912,11 @@ TEST_CASE("TestFramework::Go with empty entity sets completes without invoking h
     CHECK(pluginLib->TotalRunCalls() == 0);
 }
 
-TEST_CASE("TestFramework::Go runs hardware tests on CpuSet without GPU software plugin path")
+TEST_CASE_METHOD(TestFrameworkTestFixture,
+                 "TestFramework::Go runs hardware tests on CpuSet without GPU software plugin path")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -821,11 +931,11 @@ TEST_CASE("TestFramework::Go runs hardware tests on CpuSet without GPU software 
 
     entitySets.push_back(std::move(cpu));
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->SetPassResult("cpu_hw_test");
     MockPluginLib *const pluginLib = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -842,12 +952,10 @@ TEST_CASE("TestFramework::Go runs hardware tests on CpuSet without GPU software 
     }
 }
 
-TEST_CASE("TestFramework::Go runs software stack and hardware on GpuSet")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go runs software stack and hardware on GpuSet")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -862,11 +970,11 @@ TEST_CASE("TestFramework::Go runs software stack and hardware on GpuSet")
 
     entitySets.push_back(std::move(gpu));
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->SetPassResult("gpu_hw_only");
     MockPluginLib *const pluginLib = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -878,12 +986,10 @@ TEST_CASE("TestFramework::Go runs software stack and hardware on GpuSet")
     CHECK(tf.m_softwarePluginFrameworks[0]->GetRunCount() == 1);
 }
 
-TEST_CASE("TestFramework::Go runs hardware and integration tests on GpuSet")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go runs hardware and integration tests on GpuSet")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -903,12 +1009,12 @@ TEST_CASE("TestFramework::Go runs hardware and integration tests on GpuSet")
 
     entitySets.push_back(std::move(gpu));
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->SetPassResult("gpu_hw_multi");
     mock->SetPassResult("gpu_integ_multi");
     MockPluginLib *const pluginLib = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -922,12 +1028,10 @@ TEST_CASE("TestFramework::Go runs hardware and integration tests on GpuSet")
     CHECK(tf.m_softwarePluginFrameworks[0]->GetRunCount() == 1);
 }
 
-TEST_CASE("TestFramework::Go runs software on GpuSet without hardware tests")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go runs software on GpuSet without hardware tests")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -935,7 +1039,7 @@ TEST_CASE("TestFramework::Go runs software on GpuSet without hardware tests")
     auto gpu = MakeGpuSetWithFakeGpus({ 0 });
     entitySets.push_back(std::move(gpu));
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
 
     tf.CreateSoftwarePluginFrameworks(entitySets);
@@ -945,12 +1049,10 @@ TEST_CASE("TestFramework::Go runs software on GpuSet without hardware tests")
     CHECK(tf.m_softwarePluginFrameworks[0]->GetRunCount() == 1);
 }
 
-TEST_CASE("TestFramework::Go aggregates tests across CpuSet and GpuSet entity sets")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go aggregates tests across CpuSet and GpuSet entity sets")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -973,12 +1075,12 @@ TEST_CASE("TestFramework::Go aggregates tests across CpuSet and GpuSet entity se
     REQUIRE(gpu->AddTestObject(HARDWARE_TEST_OBJS, &testGpu) == 0);
     entitySets.push_back(std::move(gpu));
 
-    auto mock = std::make_unique<MockPluginLib>();
+    auto mock = std::make_unique<MockPluginLib>(&dcgmOps, &nvvsCommon);
     mock->SetPassResult("cpu_agg");
     mock->SetPassResult("gpu_agg");
     MockPluginLib *const pluginLib = mock.get();
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
     tf.PushPlugin(std::move(mock));
 
@@ -992,15 +1094,14 @@ TEST_CASE("TestFramework::Go aggregates tests across CpuSet and GpuSet entity se
     CHECK(tf.m_softwarePluginFrameworks[0]->GetRunCount() == 1);
 }
 
-TEST_CASE("TestFramework::RunSoftwarePlugin does not invoke SoftwarePluginFramework when no GPU entity sets")
+TEST_CASE_METHOD(TestFrameworkTestFixture,
+                 "TestFramework::RunSoftwarePlugin does not invoke SoftwarePluginFramework when no GPU entity sets")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -1012,15 +1113,13 @@ TEST_CASE("TestFramework::RunSoftwarePlugin does not invoke SoftwarePluginFramew
     CHECK(tf.m_softwarePluginFrameworks.empty());
 }
 
-TEST_CASE("TestFramework::RunSoftwarePlugin skips non-GPU entity sets")
+TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::RunSoftwarePlugin skips non-GPU entity sets")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -1033,15 +1132,14 @@ TEST_CASE("TestFramework::RunSoftwarePlugin skips non-GPU entity sets")
     CHECK(tf.m_softwarePluginFrameworks.empty());
 }
 
-TEST_CASE("TestFramework::RunSoftwarePlugin runs software stack once per GPU entity set")
+TEST_CASE_METHOD(TestFrameworkTestFixture,
+                 "TestFramework::RunSoftwarePlugin runs software stack once per GPU entity set")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;
@@ -1064,18 +1162,17 @@ TEST_CASE("TestFramework::RunSoftwarePlugin runs software stack once per GPU ent
     CHECK(created[1]->GetLastPluginId().value() == 99);
 }
 
-TEST_CASE("TestFramework::RunSoftwarePlugin completes when mock software stack reports errors")
+TEST_CASE_METHOD(TestFrameworkTestFixture,
+                 "TestFramework::RunSoftwarePlugin completes when mock software stack reports errors")
 {
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
-    int const savedChannelFd = nvvsCommon.channelFd;
-    DcgmNs::Defer defer([&] { nvvsCommon.channelFd = savedChannelFd; });
     nvvsCommon.channelFd = -1;
 
     dcgmDiagError_v1 err {};
     err.code = 42;
 
-    MockTestFramework tf;
+    MockTestFramework tf(&dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     REQUIRE(tf.SetDiagResponseVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
 
     std::vector<std::unique_ptr<EntitySet>> entitySets;

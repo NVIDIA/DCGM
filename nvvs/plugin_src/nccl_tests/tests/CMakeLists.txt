@@ -20,19 +20,20 @@ add_executable(ncclteststests)
 target_sources(ncclteststests
     PRIVATE
         NcclTestsPluginTests.cpp
-        ../NcclTestsPlugin.cpp
+        NcclTestsWrapperTests.cpp
 )
 
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
 target_link_libraries(ncclteststests
     PRIVATE
         Catch2::Catch2WithMain
+        test-utils
         nvvs_plugins_nccl_tests_interface
         nvvs_without_main_objects
         nvvs_plugins_common_objects
+        mock_common
+        mock_dcgm_ops
         rt
-        ${YAML_STATIC_LIBS}
+        yaml-cpp::yaml-cpp
 )
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")

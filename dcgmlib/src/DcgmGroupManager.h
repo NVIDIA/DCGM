@@ -21,6 +21,7 @@
 #define DCGMGROUPMANAGER_H
 
 #include "DcgmCacheManager.h"
+#include "DcgmCacheManagerAnyPtr.hpp"
 #include "dcgm_structs.h"
 #include "mocks/HostEngineHandler.h"
 #include <atomic>
@@ -66,7 +67,7 @@ template <typename HostEngineHandler>
 class DcgmGroupManager
 {
 public:
-    DcgmGroupManager(DcgmCacheManager *cacheManager,
+    DcgmGroupManager(DcgmCacheManagerAnyPtr cacheManager,
                      HostEngineHandler const &hostEngine,
                      bool createDefaultGroups = true);
     ~DcgmGroupManager();
@@ -324,7 +325,7 @@ private:
     unsigned int mAllGpusGroupId;
     unsigned int mAllNvSwitchesGroupId;
     GroupIdMap mGroupIdMap;
-    DcgmCacheManager *mpCacheManager;
+    DcgmCacheManagerAnyPtr mpCacheManager;
     [[no_unique_address]] HostEngineHandler m_hostEngine;
     std::vector<dcgmGroupRemoveCBEntry_t> mOnRemoveCBs;
     bool m_defaultGroupsCreated = false;
@@ -337,7 +338,7 @@ public:
     DcgmGroupInfo(dcgm_connection_id_t connectionId,
                   std::string name,
                   unsigned int groupId,
-                  DcgmCacheManager *cacheManager,
+                  DcgmCacheManagerAnyPtr cacheManager,
                   HostEngineHandler *hostEngine);
     ~DcgmGroupInfo();
 
@@ -415,7 +416,7 @@ private:
     std::string mName;
     std::vector<dcgmGroupEntityPair_t> mEntityList;
     dcgm_connection_id_t mConnectionId;
-    DcgmCacheManager *mpCacheManager;
+    DcgmCacheManagerAnyPtr mpCacheManager;
     HostEngineHandler *m_hostEngine;
 };
 } // namespace impl

@@ -29,9 +29,11 @@
 #include <errno.h>
 #include <fmt/format.h>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string.h>
 #include <unistd.h>
+#include <utility>
 
 #ifdef __x86_64__
 __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
@@ -99,9 +101,13 @@ const std::string SW_SUBTEST_INFOROM("Inforom");
 const std::string SW_SUBTEST_FABRIC_MANAGER("Fabric Manager");
 std::string const SW_SUBTEST_GPU_RECOVERY_STATE = "GPU Recovery State";
 
-Software::Software(dcgmHandle_t handle, std::unique_ptr<DcgmSystemBase> dcgmSystem)
-    : m_dcgmRecorder(handle)
-    , m_dcgmSystem(std::move(dcgmSystem))
+Software::Software(dcgmHandle_t handle,
+                   DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                   NvvsCommon *nvvsCommon,
+                   DcgmSystemBase *dcgmSystem)
+    : Plugin(dcgmOps)
+    , m_dcgmRecorder(handle, m_dcgmOps, nvvsCommon)
+    , m_dcgmSystem(dcgmSystem)
     , m_handle(handle)
     , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
@@ -117,12 +123,6 @@ Software::Software(dcgmHandle_t handle, std::unique_ptr<DcgmSystemBase> dcgmSyst
     tp.AddString(SW_STR_SKIP_DEVICE_TEST, "False");
     tp.AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = &tp;
-
-    if (!m_dcgmSystem)
-    {
-        m_dcgmSystem = std::make_unique<DcgmSystem>();
-    }
-    m_dcgmSystem->Init(handle);
 }
 
 void Software::Go(std::string const &testName,
@@ -1083,6 +1083,9 @@ void Software::checkGpuRecoveryState()
                     break;
                 case NVML_GPU_RECOVERY_ACTION_DRAIN_AND_RESET:
                     err = DCGM_FR_GPU_RECOVERY_DRAIN_RESET;
+                    break;
+                case NVML_GPU_RECOVERY_ACTION_RECOVER_IMEX_DOMAIN:
+                    err = DCGM_FR_GPU_RECOVERY_IMEX_DOMAIN;
                     break;
                 default:
                 {

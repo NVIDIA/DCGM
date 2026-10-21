@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
         libxml2 \
         build-essential \
         libboost-program-options-dev \
+        libopenmpi-dev \
+        openmpi-bin \
         numactl && \
     apt clean && \
     rm --recursive --force /var/lib/apt/lists/*
@@ -57,4 +59,3 @@ RUN --mount=type=bind,source=cuda-repo.deb,target=/mnt/host/cuda-repo.deb \
     
 ENV PATH="/usr/local/cuda/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs:${LD_LIBRARY_PATH}"
-

@@ -106,5 +106,6 @@
 /-/src_0/sdk/nvidia/nvml/dcgm_nvml.h
 /usr/lib/debug
 /usr/lib/debug/usr
-/usr/lib/debug/usr/lib64
-/usr/lib/debug/usr/lib64/libdcgmmodulemndiag.so.<SOFTWAREVERSION>-<PACKAGEVERSION>.x86_64.debug
+/usr/lib/debug/usr/libexec
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulemndiag.so.<SOFTWAREVERSION>-<PACKAGEVERSION>.x86_64.debug

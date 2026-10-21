@@ -415,7 +415,7 @@ def helper_test_dcgm_injection_summaries(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(1)
 def test_dcgm_injection_summaries_embedded(handle, gpuIds):

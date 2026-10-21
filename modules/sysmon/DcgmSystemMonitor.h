@@ -118,9 +118,7 @@ public:
         return cpuHelpers.GetModel();
     }
 
-#ifndef DCGM_SYSMON_TEST // Allow sysmon tests to peek in
-private:
-#endif
+protected:
     std::unordered_map<unsigned int, std::string> m_cpuSocketToPowerUsagePath;
     std::unordered_map<unsigned int, std::string> m_moduleSocketToPowerUsagePath;
     std::unordered_map<unsigned int, std::string> m_sysioSocketToPowerUsagePath;

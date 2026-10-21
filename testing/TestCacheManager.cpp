@@ -54,7 +54,7 @@ static void migCallback(unsigned int /* gpuId */, void * /* userData */)
     // Do nothing
 }
 
-void SubscribeForEvent(DcgmCacheManager &cacheManager)
+void SubscribeForEvent(TestDcgmCacheManager &cacheManager)
 {
     dcgmcmEventSubscription_t mig = {};
     mig.type                      = DcgmcmEventTypeMigReconfigure;
@@ -63,13 +63,13 @@ void SubscribeForEvent(DcgmCacheManager &cacheManager)
     cacheManager.SubscribeForEvent(mig);
 }
 
-void GetAllGpuInfo(DcgmCacheManager &cacheManager)
+void GetAllGpuInfo(TestDcgmCacheManager &cacheManager)
 {
     std::vector<dcgmcm_gpu_info_cached_t> gpuInfo;
     cacheManager.GetAllGpuInfo(gpuInfo);
 }
 
-void GetGpuCount(DcgmCacheManager &cacheManager)
+void GetGpuCount(TestDcgmCacheManager &cacheManager)
 {
     int activeOnly = 0;
     cacheManager.GetGpuCount(activeOnly);
@@ -77,7 +77,7 @@ void GetGpuCount(DcgmCacheManager &cacheManager)
     cacheManager.GetGpuCount(activeOnly);
 }
 
-void GetGpuIds(DcgmCacheManager &cacheManager)
+void GetGpuIds(TestDcgmCacheManager &cacheManager)
 {
     std::vector<unsigned int> gpuIds;
     int activeOnly = 1;
@@ -87,7 +87,8 @@ void GetGpuIds(DcgmCacheManager &cacheManager)
     cacheManager.GetGpuIds(activeOnly, gpuIds);
 }
 
-void GetWorkloadPowerProfilesInfo(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetWorkloadPowerProfilesInfo(TestDcgmCacheManager &cacheManager,
+                                  std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     dcgmWorkloadPowerProfileProfilesInfo_v1 profilesInfo;
     dcgmDeviceWorkloadPowerProfilesStatus_v1 profilesStatus;
@@ -97,14 +98,14 @@ void GetWorkloadPowerProfilesInfo(DcgmCacheManager &cacheManager, std::vector<dc
     }
 }
 
-void GetAllEntitiesOfEntityGroup(DcgmCacheManager &cacheManager)
+void GetAllEntitiesOfEntityGroup(TestDcgmCacheManager &cacheManager)
 {
     std::vector<dcgmGroupEntityPair_t> entities;
     cacheManager.GetAllEntitiesOfEntityGroup(0, DCGM_FE_GPU, entities);
     cacheManager.GetAllEntitiesOfEntityGroup(1, DCGM_FE_GPU, entities);
 }
 
-void GetEntityStatus(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetEntityStatus(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -112,7 +113,7 @@ void GetEntityStatus(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntity
     }
 }
 
-void GetGpuStatus(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetGpuStatus(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -120,7 +121,7 @@ void GetGpuStatus(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPai
     }
 }
 
-void GetGpuBrand(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetGpuBrand(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -128,7 +129,7 @@ void GetGpuBrand(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair
     }
 }
 
-void GetGpuArch(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetGpuArch(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -137,20 +138,20 @@ void GetGpuArch(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_
     }
 }
 
-void GetGpuExcludeList(DcgmCacheManager &cacheManager)
+void GetGpuExcludeList(TestDcgmCacheManager &cacheManager)
 {
     std::vector<nvmlExcludedDeviceInfo_t> excludeList;
     cacheManager.GetGpuExcludeList(excludeList);
 }
 
 // We must call pause and resume in the same function to have the state back to normal after this function returns.
-void PauseResume(DcgmCacheManager &cacheManager)
+void PauseResume(TestDcgmCacheManager &cacheManager)
 {
     cacheManager.Pause();
     cacheManager.Resume();
 }
 
-void AddFieldWatch(DcgmCacheManager &cacheManager,
+void AddFieldWatch(TestDcgmCacheManager &cacheManager,
                    std::vector<dcgmGroupEntityPair_t> const &entities,
                    std::vector<unsigned short> const &fieldIds,
                    DcgmWatcher watcher)
@@ -190,7 +191,7 @@ void AddFieldWatch(DcgmCacheManager &cacheManager,
     }
 }
 
-void EmptyCache(DcgmCacheManager &cacheManager,
+void EmptyCache(TestDcgmCacheManager &cacheManager,
                 std::vector<dcgmGroupEntityPair_t> const &entities,
                 std::vector<unsigned short> const &fieldIds,
                 DcgmWatcher watcher)
@@ -199,7 +200,7 @@ void EmptyCache(DcgmCacheManager &cacheManager,
     AddFieldWatch(cacheManager, entities, fieldIds, watcher);
 }
 
-void UpdateFieldWatch(DcgmCacheManager &cacheManager,
+void UpdateFieldWatch(TestDcgmCacheManager &cacheManager,
                       std::vector<dcgmGroupEntityPair_t> const &entities,
                       std::vector<unsigned short> const &fieldIds,
                       DcgmWatcher watcher)
@@ -235,7 +236,7 @@ void UpdateFieldWatch(DcgmCacheManager &cacheManager,
     }
 }
 
-void RemoveFieldWatch(DcgmCacheManager &cacheManager,
+void RemoveFieldWatch(TestDcgmCacheManager &cacheManager,
                       std::vector<dcgmGroupEntityPair_t> const &entities,
                       std::vector<unsigned short> const &fieldIds,
                       DcgmWatcher watcher)
@@ -278,7 +279,7 @@ void RemoveFieldWatch(DcgmCacheManager &cacheManager,
     }
 }
 
-void GetLatestProcessInfo(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetLatestProcessInfo(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     dcgmDevicePidAccountingStats_t pidInfo;
     for (auto const &entity : entities)
@@ -288,7 +289,7 @@ void GetLatestProcessInfo(DcgmCacheManager &cacheManager, std::vector<dcgmGroupE
     }
 }
 
-void GetUniquePidLists(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetUniquePidLists(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     dcgmProcessUtilInfo_t computePidInfo[DCGM_MAX_PID_INFO_NUM];
     unsigned int otherGraphicsPids[DCGM_MAX_PID_INFO_NUM];
@@ -306,7 +307,7 @@ void GetUniquePidLists(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEnti
     }
 }
 
-void GetUniquePidUtilLists(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetUniquePidUtilLists(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     dcgmProcessUtilSample_t smUtil[DCGM_MAX_PID_INFO_NUM];
 
@@ -321,7 +322,7 @@ void GetUniquePidUtilLists(DcgmCacheManager &cacheManager, std::vector<dcgmGroup
     }
 }
 
-void GetInt64SummaryData(DcgmCacheManager &cacheManager,
+void GetInt64SummaryData(TestDcgmCacheManager &cacheManager,
                          std::vector<dcgmGroupEntityPair_t> const &entities,
                          std::vector<unsigned short> const &fieldIds)
 {
@@ -350,7 +351,7 @@ void GetInt64SummaryData(DcgmCacheManager &cacheManager,
     }
 }
 
-void GetFp64SummaryData(DcgmCacheManager &cacheManager,
+void GetFp64SummaryData(TestDcgmCacheManager &cacheManager,
                         std::vector<dcgmGroupEntityPair_t> const &entities,
                         std::vector<unsigned short> const &fieldIds)
 {
@@ -379,7 +380,7 @@ void GetFp64SummaryData(DcgmCacheManager &cacheManager,
     }
 }
 
-void GetSamples(DcgmCacheManager &cacheManager,
+void GetSamples(TestDcgmCacheManager &cacheManager,
                 std::vector<dcgmGroupEntityPair_t> const &entities,
                 std::vector<unsigned short> const &fieldIds)
 {
@@ -415,7 +416,7 @@ void GetSamples(DcgmCacheManager &cacheManager,
     }
 }
 
-void GetLatestSample(DcgmCacheManager &cacheManager,
+void GetLatestSample(TestDcgmCacheManager &cacheManager,
                      std::vector<dcgmGroupEntityPair_t> const &entities,
                      std::vector<unsigned short> const &fieldIds)
 {
@@ -433,7 +434,7 @@ void GetLatestSample(DcgmCacheManager &cacheManager,
     }
 }
 
-void GetMultipleLatestSamples(DcgmCacheManager &cacheManager,
+void GetMultipleLatestSamples(TestDcgmCacheManager &cacheManager,
                               std::vector<dcgmGroupEntityPair_t> &entities,
                               std::vector<unsigned short> &fieldIds)
 {
@@ -441,7 +442,7 @@ void GetMultipleLatestSamples(DcgmCacheManager &cacheManager,
     cacheManager.GetMultipleLatestSamples(entities, fieldIds, &fvBuffer);
 }
 
-void AppendSamples(DcgmCacheManager &cacheManager,
+void AppendSamples(TestDcgmCacheManager &cacheManager,
                    std::vector<dcgmGroupEntityPair_t> &entities,
                    std::vector<unsigned short> &fieldIds)
 {
@@ -484,7 +485,7 @@ void AppendSamples(DcgmCacheManager &cacheManager,
     }
 }
 
-void GetCacheManagerFieldInfo(DcgmCacheManager &cacheManager, std::vector<unsigned short> const &fieldIds)
+void GetCacheManagerFieldInfo(TestDcgmCacheManager &cacheManager, std::vector<unsigned short> const &fieldIds)
 {
     for (auto const &fieldId : fieldIds)
     {
@@ -495,19 +496,19 @@ void GetCacheManagerFieldInfo(DcgmCacheManager &cacheManager, std::vector<unsign
     }
 }
 
-void PopulateNvLinkLinkStatus(DcgmCacheManager &cacheManager)
+void PopulateNvLinkLinkStatus(TestDcgmCacheManager &cacheManager)
 {
     dcgmNvLinkStatus_v5 nvLinkStatus {};
     cacheManager.PopulateNvLinkLinkStatus(nvLinkStatus);
 }
 
-void PopulateMigHierarchy(DcgmCacheManager &cacheManager)
+void PopulateMigHierarchy(TestDcgmCacheManager &cacheManager)
 {
     dcgmMigHierarchy_v2 migHierarchy {};
     cacheManager.PopulateMigHierarchy(migHierarchy);
 }
 
-void GetEntityNvLinkLinkStatus(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetEntityNvLinkLinkStatus(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -516,7 +517,7 @@ void GetEntityNvLinkLinkStatus(DcgmCacheManager &cacheManager, std::vector<dcgmG
     }
 }
 
-void GpuIdToNvmlIndex(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GpuIdToNvmlIndex(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -524,7 +525,7 @@ void GpuIdToNvmlIndex(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntit
     }
 }
 
-void NvmlIndexToGpuId(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void NvmlIndexToGpuId(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -532,7 +533,7 @@ void NvmlIndexToGpuId(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntit
     }
 }
 
-void IsGpuAllowlisted(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void IsGpuAllowlisted(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -540,7 +541,7 @@ void IsGpuAllowlisted(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntit
     }
 }
 
-void GetIsValidEntityId(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetIsValidEntityId(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -548,7 +549,7 @@ void GetIsValidEntityId(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEnt
     }
 }
 
-void SetGpuNvLinkLinkState(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void SetGpuNvLinkLinkState(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -559,7 +560,7 @@ void SetGpuNvLinkLinkState(DcgmCacheManager &cacheManager, std::vector<dcgmGroup
     }
 }
 
-void SetEntityNvLinkLinkState(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void SetEntityNvLinkLinkState(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -570,7 +571,7 @@ void SetEntityNvLinkLinkState(DcgmCacheManager &cacheManager, std::vector<dcgmGr
     }
 }
 
-void AreAllGpuIdsSameSku(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void AreAllGpuIdsSameSku(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     std::vector<unsigned int> gpuIds;
     for (auto const &entity : entities)
@@ -580,13 +581,13 @@ void AreAllGpuIdsSameSku(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEn
     cacheManager.AreAllGpuIdsSameSku(gpuIds);
 }
 
-void GetRuntimeStats(DcgmCacheManager &cacheManager)
+void GetRuntimeStats(TestDcgmCacheManager &cacheManager)
 {
     dcgmcm_runtime_stats_t stats;
     cacheManager.GetRuntimeStats(&stats);
 }
 
-void SelectGpusByTopology(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void SelectGpusByTopology(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     std::vector<unsigned int> gpuIds;
     for (auto const &entity : entities)
@@ -597,7 +598,7 @@ void SelectGpusByTopology(DcgmCacheManager &cacheManager, std::vector<dcgmGroupE
     cacheManager.SelectGpusByTopology(gpuIds, gpuIds.size(), outputGpus);
 }
 
-void OnConnectionRemove(DcgmCacheManager &cacheManager,
+void OnConnectionRemove(TestDcgmCacheManager &cacheManager,
                         std::vector<dcgmGroupEntityPair_t> &entities,
                         std::vector<unsigned short> &fieldIds)
 {
@@ -628,7 +629,7 @@ void OnConnectionRemove(DcgmCacheManager &cacheManager,
     cacheManager.OnConnectionRemove(connectionId);
 }
 
-void GetComputeInstanceEntityId(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+void GetComputeInstanceEntityId(TestDcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
 {
     for (unsigned int i = 0; i < migHierarchy.count; i++)
     {
@@ -639,7 +640,7 @@ void GetComputeInstanceEntityId(DcgmCacheManager &cacheManager, dcgmMigHierarchy
     }
 }
 
-void GetInstanceEntityId(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+void GetInstanceEntityId(TestDcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
 {
     for (unsigned int i = 0; i < migHierarchy.count; i++)
     {
@@ -649,7 +650,7 @@ void GetInstanceEntityId(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &mi
     }
 }
 
-void GetInstanceProfile(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+void GetInstanceProfile(TestDcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
 {
     for (unsigned int i = 0; i < migHierarchy.count; i++)
     {
@@ -659,7 +660,7 @@ void GetInstanceProfile(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &mig
     }
 }
 
-void GetMigGpuPopulation(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetMigGpuPopulation(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -669,7 +670,7 @@ void GetMigGpuPopulation(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEn
     }
 }
 
-void GetMigInstancePopulation(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+void GetMigInstancePopulation(TestDcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
 {
     for (unsigned int i = 0; i < migHierarchy.count; i++)
     {
@@ -683,7 +684,7 @@ void GetMigInstancePopulation(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v
     }
 }
 
-void GetMigComputeInstancePopulation(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+void GetMigComputeInstancePopulation(TestDcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
 {
     for (unsigned int i = 0; i < migHierarchy.count; i++)
     {
@@ -698,7 +699,7 @@ void GetMigComputeInstancePopulation(DcgmCacheManager &cacheManager, dcgmMigHier
     }
 }
 
-void GetGpuIdForEntity(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetGpuIdForEntity(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -706,7 +707,7 @@ void GetGpuIdForEntity(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEnti
     }
 }
 
-void GetMigIndicesForEntity(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetMigIndicesForEntity(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -717,13 +718,14 @@ void GetMigIndicesForEntity(DcgmCacheManager &cacheManager, std::vector<dcgmGrou
     }
 }
 
-void GetProfModuleServicedEntities(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void GetProfModuleServicedEntities(TestDcgmCacheManager &cacheManager,
+                                   std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     auto copiedEntities = entities;
     cacheManager.GetProfModuleServicedEntities(copiedEntities);
 }
 
-void EntityPairSupportsGpm(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void EntityPairSupportsGpm(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
     {
@@ -731,7 +733,7 @@ void EntityPairSupportsGpm(DcgmCacheManager &cacheManager, std::vector<dcgmGroup
     }
 }
 
-void EntityKeySupportsGpm(DcgmCacheManager &cacheManager,
+void EntityKeySupportsGpm(TestDcgmCacheManager &cacheManager,
                           std::vector<dcgmGroupEntityPair_t> &entities,
                           std::vector<unsigned short> &fieldIds)
 {
@@ -748,7 +750,7 @@ void EntityKeySupportsGpm(DcgmCacheManager &cacheManager,
     }
 }
 
-void AppendEntity(DcgmCacheManager &cacheManager,
+void AppendEntity(TestDcgmCacheManager &cacheManager,
                   std::vector<dcgmGroupEntityPair_t> &entities,
                   std::vector<unsigned short> &fieldIds)
 {
@@ -789,35 +791,35 @@ void AppendEntity(DcgmCacheManager &cacheManager,
     }
 }
 
-void FilterActiveEntities(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+void FilterActiveEntities(TestDcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     auto _ = cacheManager.FilterActiveEntities(entities);
 }
 
-void CreateAllNvlinksP2PStatus(DcgmCacheManager &cacheManager)
+void CreateAllNvlinksP2PStatus(TestDcgmCacheManager &cacheManager)
 {
     dcgmNvLinkP2PStatus_t status;
     status.numGpus = 0;
     cacheManager.CreateAllNvlinksP2PStatus(status);
 }
 
-void GetDriverVersion(DcgmCacheManager &cacheManager)
+void GetDriverVersion(TestDcgmCacheManager &cacheManager)
 {
     cacheManager.GetDriverVersion();
 }
 
-void GetCudaVersion(DcgmCacheManager &cacheManager)
+void GetCudaVersion(TestDcgmCacheManager &cacheManager)
 {
     int cudaVersion;
     cacheManager.GetCudaVersion(cudaVersion);
 }
 
-void ShouldSkipDriverCalls(DcgmCacheManager &cacheManager)
+void ShouldSkipDriverCalls(TestDcgmCacheManager &cacheManager)
 {
     cacheManager.ShouldSkipDriverCalls();
 }
 
-void AddMetaGroupWatchedField(DcgmCacheManager &cacheManager,
+void AddMetaGroupWatchedField(TestDcgmCacheManager &cacheManager,
                               std::vector<unsigned short> &fieldIds,
                               DcgmWatcher &watcher)
 {
@@ -826,7 +828,7 @@ void AddMetaGroupWatchedField(DcgmCacheManager &cacheManager,
         cacheManager.AddMetaGroupWatchedField(DCGM_GROUP_ALL_GPUS, field, 1000000, 86400.0, 0, watcher);
     }
 }
-void RemoveMetaGroupWatchedField(DcgmCacheManager &cacheManager,
+void RemoveMetaGroupWatchedField(TestDcgmCacheManager &cacheManager,
                                  std::vector<unsigned short> &fieldIds,
                                  DcgmWatcher &watcher)
 {
@@ -836,7 +838,7 @@ void RemoveMetaGroupWatchedField(DcgmCacheManager &cacheManager,
     }
 }
 
-void RecordBindUnbindEvent(DcgmCacheManager &cacheManager)
+void RecordBindUnbindEvent(TestDcgmCacheManager &cacheManager)
 {
     cacheManager.RecordBindUnbindEvent(DcgmBUEventStateSystemReinitializing);
     cacheManager.RecordBindUnbindEvent(DcgmBUEventStateSystemReinitializationCompleted);
@@ -887,14 +889,14 @@ int TestCacheManager::Cleanup()
 }
 
 /*****************************************************************************/
-static std::unique_ptr<DcgmCacheManager> createCacheManager(int pollInLockStep)
+static std::unique_ptr<TestDcgmCacheManager> createCacheManager(int pollInLockStep)
 {
     int st;
-    std::unique_ptr<DcgmCacheManager> cacheManager;
+    std::unique_ptr<TestDcgmCacheManager> cacheManager;
 
     try
     {
-        cacheManager = std::make_unique<DcgmCacheManager>();
+        cacheManager = std::make_unique<TestDcgmCacheManager>();
     }
     catch (const std::exception &e)
     {
@@ -920,7 +922,7 @@ static std::unique_ptr<DcgmCacheManager> createCacheManager(int pollInLockStep)
 }
 
 /*****************************************************************************/
-int TestCacheManager::AddPowerUsageWatchAllGpusHelper(DcgmCacheManager *cacheManager)
+int TestCacheManager::AddPowerUsageWatchAllGpusHelper(TestDcgmCacheManager *cacheManager)
 {
     int st;
     DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
@@ -954,7 +956,7 @@ int TestCacheManager::TestRecording()
     int st = 0;
     int i, Msamples;
     dcgmcm_sample_t sample;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -1012,7 +1014,7 @@ int TestCacheManager::TestRecordingGlobal()
 {
     int st, retSt = 0;
     int Msamples;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -1075,7 +1077,7 @@ CLEANUP:
 int TestCacheManager::TestEmpty()
 {
     int st, retSt = 0;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -1240,7 +1242,7 @@ int TestCacheManager::TestFieldValueConversion()
 /*****************************************************************************/
 int TestCacheManager::TestWatchesVisited()
 {
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         fmt::print(stderr, "Failed to create cache manager\n");
@@ -1452,7 +1454,7 @@ int TestCacheManager::TestWatchesVisited()
 int TestCacheManager::TestManageVgpuList()
 {
     int st, retSt = 0;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -1645,7 +1647,7 @@ int TestCacheManager::TestInjection()
 {
     int st, retSt = 0;
     int fieldIndex;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -1743,7 +1745,7 @@ int TestCacheManager::TestSummary()
 {
     int st, retSt = 0;
     int fieldIndex;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -1852,7 +1854,7 @@ CLEANUP:
 
 
 /*****************************************************************************/
-int TestCacheManager::InjectSampleHelper(DcgmCacheManager *cacheManager,
+int TestCacheManager::InjectSampleHelper(TestDcgmCacheManager *cacheManager,
                                          dcgm_field_meta_p fieldMeta,
                                          dcgm_field_entity_group_t entityGroupId,
                                          dcgm_field_eid_t entityId,
@@ -1914,7 +1916,7 @@ int TestCacheManager::InjectSampleHelper(DcgmCacheManager *cacheManager,
 
 
 /*****************************************************************************/
-int TestCacheManager::InjectUserProvidedSampleHelper(DcgmCacheManager *cacheManager,
+int TestCacheManager::InjectUserProvidedSampleHelper(TestDcgmCacheManager *cacheManager,
                                                      dcgmcm_sample_t sample,
                                                      dcgm_field_meta_p fieldMeta,
                                                      unsigned int gpuId)
@@ -1963,7 +1965,7 @@ timelib64_t TestCacheManager::GetAverageSampleFrequency(dcgmcm_sample_t *samples
 int TestCacheManager::TestRecordTiming()
 {
     int i, st, retSt = 0;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(0);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(0);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -2071,7 +2073,7 @@ CLEANUP:
 int TestCacheManager::TestTimeBasedQuota()
 {
     int st, retSt = 0;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -2182,7 +2184,7 @@ CLEANUP:
 int TestCacheManager::TestCountBasedQuota()
 {
     int st, retSt = 0;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -2295,7 +2297,7 @@ int TestCacheManager::TestTimedModeAwakeTime()
     }
 
 
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(0);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(0);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -2365,7 +2367,7 @@ int TestCacheManager::TestLockstepModeAwakeTime()
         return 0;
     }
 
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -2446,7 +2448,7 @@ int TestCacheManager::TestUpdatePerf()
         return 0;
     }
 
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -2516,7 +2518,7 @@ int TestCacheManager::TestAreAllGpuIdsSameSku()
     std::vector<unsigned int> gpuIds;
     int errorCount = 0;
 
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
@@ -2586,16 +2588,8 @@ int TestCacheManager::TestMultipleWatchersMaxAge(void)
     bool updateOnFirstWatch { false };
     bool wereFirstWatcher { false };
 
-    dcgmReturn_t st = dcm->AddFieldWatch(DCGM_FE_GPU,
-                                         0,
-                                         DCGM_FI_DEV_GPU_UTIL_RATIO,
-                                         1000,
-                                         5000,
-                                         0,
-                                         watcher,
-                                         false,
-                                         updateOnFirstWatch,
-                                         wereFirstWatcher);
+    dcgmReturn_t st = dcm->AddFieldWatch(
+        DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_UTIL, 1000, 5000, 0, watcher, false, updateOnFirstWatch, wereFirstWatcher);
 
     if (st)
     {
@@ -2607,16 +2601,8 @@ int TestCacheManager::TestMultipleWatchersMaxAge(void)
     updateOnFirstWatch = false;
     wereFirstWatcher   = false;
 
-    st = dcm->AddFieldWatch(DCGM_FE_GPU,
-                            0,
-                            DCGM_FI_DEV_GPU_UTIL_RATIO,
-                            500,
-                            3000,
-                            0,
-                            watcher2,
-                            false,
-                            updateOnFirstWatch,
-                            wereFirstWatcher);
+    st = dcm->AddFieldWatch(
+        DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_UTIL, 500, 3000, 0, watcher2, false, updateOnFirstWatch, wereFirstWatcher);
     if (st)
     {
         fprintf(stderr, "AddFieldWatch returned %d\n", st);
@@ -2627,7 +2613,7 @@ int TestCacheManager::TestMultipleWatchersMaxAge(void)
 
     watchInfo.watchKey.entityGroupId = DCGM_FE_GPU;
     watchInfo.watchKey.entityId      = 0;
-    watchInfo.watchKey.fieldId       = DCGM_FI_DEV_GPU_UTIL_RATIO;
+    watchInfo.watchKey.fieldId       = DCGM_FI_DEV_GPU_UTIL;
 
     dcgm_watch_watcher_info_t w1;
     w1.monitorIntervalUsec = 1000;
@@ -2669,7 +2655,7 @@ int TestCacheManager::TestMultipleWatchersMaxAge(void)
 /*****************************************************************************/
 int TestCacheManager::TestGetLatestSampleNoData()
 {
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         fprintf(stderr, "Failed to create DcgmCacheManager\n");
@@ -2677,7 +2663,7 @@ int TestCacheManager::TestGetLatestSampleNoData()
     }
 
     std::vector<unsigned short> const testFields { DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
-                                                   DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+                                                   DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SINCE_LAST_SECONDS,
                                                    DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT,
                                                    DCGM_FI_DEV_CONNECTX_HEALTH,
                                                    DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS };
@@ -2699,7 +2685,7 @@ int TestCacheManager::TestGetLatestSampleNoData()
 /*****************************************************************************/
 int TestCacheManager::TestGetLatestSampleNoDataFvBuffer()
 {
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         fprintf(stderr, "Failed to create DcgmCacheManager\n");
@@ -2707,7 +2693,7 @@ int TestCacheManager::TestGetLatestSampleNoDataFvBuffer()
     }
 
     std::vector<unsigned short> const testFields { DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
-                                                   DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+                                                   DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SINCE_LAST_SECONDS,
                                                    DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT,
                                                    DCGM_FI_DEV_CONNECTX_HEALTH,
                                                    DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS };
@@ -2751,7 +2737,7 @@ std::vector<dcgmGroupEntityPair_t> TestCacheManager::GetRandomGpuEntities(int nu
     return PickN(entities, pickSize);
 }
 
-int TestCacheManager::CheckAllEntityStatusesAreOk(DcgmCacheManager &cacheManager,
+int TestCacheManager::CheckAllEntityStatusesAreOk(TestDcgmCacheManager &cacheManager,
                                                   std::vector<dcgmGroupEntityPair_t> const &entities)
 {
     for (auto const &entity : entities)
@@ -2766,7 +2752,7 @@ int TestCacheManager::CheckAllEntityStatusesAreOk(DcgmCacheManager &cacheManager
     return 0;
 }
 
-int TestCacheManager::CheckFieldsAreWatched(DcgmCacheManager &cacheManager,
+int TestCacheManager::CheckFieldsAreWatched(TestDcgmCacheManager &cacheManager,
                                             std::vector<unsigned short> const &fieldIds,
                                             std::vector<bool> const &watchedFields)
 {
@@ -2788,7 +2774,7 @@ int TestCacheManager::CheckFieldsAreWatched(DcgmCacheManager &cacheManager,
 
 int TestCacheManager::TestPublicMethodRaceAndDeadlock()
 {
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    std::unique_ptr<TestDcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         fprintf(stderr, "Failed to create DcgmCacheManager\n");
@@ -2857,7 +2843,7 @@ int TestCacheManager::TestPublicMethodRaceAndDeadlock()
         // Start (Skip start, this will not be called in multiple threads)
         std::bind(&SubscribeForEvent, std::ref(*cacheManager)),
         std::bind(&GetAllGpuInfo, std::ref(*cacheManager)),
-        std::bind(&DcgmCacheManager::AreAnyGpusInHostVGPUMode, std::ref(*cacheManager)),
+        std::bind(&TestDcgmCacheManager::AreAnyGpusInHostVGPUMode, std::ref(*cacheManager)),
         std::bind(&GetGpuCount, std::ref(*cacheManager)),
         std::bind(&GetGpuIds, std::ref(*cacheManager)),
         std::bind(&GetWorkloadPowerProfilesInfo, std::ref(*cacheManager), std::ref(entities)),
@@ -3032,7 +3018,7 @@ int TestCacheManager::TestPublicMethodRaceAndDeadlock()
 }
 
 /*****************************************************************************/
-int TestCacheManager::TestSingleFieldNoDataSample(unsigned short fieldId, DcgmCacheManager &cacheManager)
+int TestCacheManager::TestSingleFieldNoDataSample(unsigned short fieldId, TestDcgmCacheManager &cacheManager)
 {
     int st;
     dcgm_field_meta_p fieldMeta = 0;
@@ -3118,7 +3104,7 @@ int TestCacheManager::TestSingleFieldNoDataSample(unsigned short fieldId, DcgmCa
 }
 
 /*****************************************************************************/
-int TestCacheManager::TestSingleFieldNoDataFvBuffer(unsigned short fieldId, DcgmCacheManager &cacheManager)
+int TestCacheManager::TestSingleFieldNoDataFvBuffer(unsigned short fieldId, TestDcgmCacheManager &cacheManager)
 {
     int st;
     dcgm_field_meta_p fieldMeta = 0;

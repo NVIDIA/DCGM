@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@
 #include <DcgmChildProcessManager.hpp>
 #include <DcgmLogging.h>
 #include <SSHTunnelManager.hpp>
+#include <ScopedWorkingDirectory.hpp>
+#include <TempDir.hpp>
 
 #include <catch2/catch_all.hpp>
-#include <iostream>
 
 using namespace DcgmNs::Common::RemoteConn::detail;
 using ChildProcess = DcgmNs::Common::Subprocess::ChildProcess;
@@ -69,29 +70,8 @@ public:
 
     TestUdsSSHTunnelManager()
     {
-        try
-        {
-            boost::filesystem::create_directories(GetPrimaryPath());
-            boost::filesystem::create_directories(GetSecondaryPath());
-        }
-        catch (const boost::filesystem::filesystem_error &e)
-        {
-            std::cerr << "Failed to create test directories: " << e.what() << '\n';
-            throw;
-        }
-    }
-
-    ~TestUdsSSHTunnelManager()
-    {
-        try
-        {
-            boost::filesystem::remove_all(GetPrimaryPath());
-            boost::filesystem::remove_all(GetSecondaryPath());
-        }
-        catch (const boost::filesystem::filesystem_error &e)
-        {
-            std::cerr << "Failed to cleanup test directories: " << e.what() << '\n';
-        }
+        boost::filesystem::create_directories(GetPrimaryPath());
+        boost::filesystem::create_directories(GetSecondaryPath());
     }
 };
 
@@ -100,8 +80,10 @@ public:
 TEST_CASE("UdsSSHTunnelManager tests")
 {
     // Common setup for all sections
-    TestUdsSSHTunnelManager manager;
+    auto workingRoot = TempDir::Random("remoteconn-uds-");
+    ScopedWorkingDirectory workingDirectory { workingRoot.Path() };
     DcgmChildProcessManager childProcessManager;
+    TestUdsSSHTunnelManager manager;
     SetChildProcessFuncs(manager, childProcessManager);
     constexpr uid_t ROOT_UID = TestUdsSSHTunnelManager::ROOT_UID;
     auto uid                 = geteuid();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,15 @@
 #ifndef _NVVS_NVVS_BusGrind_H_
 #define _NVVS_NVVS_BusGrind_H_
 
+#include "DcgmRecorder.h"
 #include "Plugin.h"
 #include "PluginDevice.h"
 
-#include <cublas_proxy.hpp>
+#include <CublasOpsAnyUniquePtr.hpp>
+#include <CudaCommonAnyUniquePtr.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <dcgm_structs.h>
 
 #include <memory>
@@ -32,21 +37,29 @@
 class SmPerfDevice : public PluginDevice
 {
 public:
+    CublasOpsAnyPtr cublasOps;
     int allocatedCublasHandle;   /* Have we allocated cublasHandle yet? */
     cublasHandle_t cublasHandle; /* Handle to cuBlas */
-
     /* Device pointers */
     void *deviceA;
     void *deviceB;
     void *deviceC;
 
-    /* Arrays for cublasDgemm. Allocated at MAX_DIMENSION^2 * sizeof(double) */
+    /* Arrays for cublasDgemm_v2. Allocated at MAX_DIMENSION^2 * sizeof(double) */
     void *hostA;
     void *hostB;
     void *hostC;
 
-    SmPerfDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(testName, ndi, pciBusId, p)
+    SmPerfDevice(std::string const &testName,
+                 unsigned int ndi,
+                 const char *pciBusId,
+                 Plugin *p,
+                 DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                 dcgmHandle_t handle,
+                 CudaOpsAnyPtr cudaOps,
+                 CublasOpsAnyPtr cublasOps)
+        : PluginDevice(testName, ndi, pciBusId, p, dcgmOps, handle, cudaOps)
+        , cublasOps(cublasOps)
         , allocatedCublasHandle(0)
         , cublasHandle(0)
         , deviceA(0)
@@ -59,30 +72,29 @@ public:
 
     ~SmPerfDevice()
     {
-        using namespace Dcgm;
         if (allocatedCublasHandle != 0)
         {
-            log_debug("cublasDestroy cudaDeviceIdx {}, handle {}", cudaDeviceIdx, (void *)cublasHandle);
-            CublasProxy::CublasDestroy(cublasHandle);
+            log_debug("cublasDestroy_v2 cudaDeviceIdx {}, handle {}", cudaDeviceIdx, (void *)cublasHandle);
+            cublasOps->cublasDestroy_v2(cublasHandle);
             cublasHandle          = 0;
             allocatedCublasHandle = 0;
         }
 
         if (hostA)
         {
-            cudaFreeHost(hostA);
+            cudaOps->cudaFreeHost(hostA);
             hostA = 0;
         }
 
         if (hostB)
         {
-            cudaFreeHost(hostB);
+            cudaOps->cudaFreeHost(hostB);
             hostB = 0;
         }
 
         if (hostC)
         {
-            cudaFreeHost(hostC);
+            cudaOps->cudaFreeHost(hostC);
             hostC = 0;
         }
     }
@@ -99,12 +111,17 @@ constexpr double PCIE_HOPPER_AND_BEFORE_DEFAULT_BROKEN_P2P_SIZE = 4096.0;
 constexpr unsigned int PCIE_DEFAULT_ITERATIONS = 50;
 } //namespace
 
-class BusGrindTest;
+class TestBusGrind;
 
 class BusGrind : public Plugin
 {
 public:
-    BusGrind(dcgmHandle_t handle);
+    BusGrind(dcgmHandle_t handle,
+             DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+             CudaOpsAnyUniquePtr cudaOps,
+             CublasOpsAnyUniquePtr cublasOps,
+             CudaCommonAnyUniquePtr cudaCommon,
+             NvvsCommon *nvvsCommon);
     virtual ~BusGrind();
 
     /* Cached parameters */
@@ -131,10 +148,14 @@ public:
     bool test_13;
     bool test_14;
 
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique; /* Owned DCGM API interface */
     bool m_dcgmCommErrorOccurred;
     bool m_printedConcurrentGpuErrorMessage;
 
     std::unique_ptr<TestParameters> m_testParameters; /* Parameters passed in from the framework */
+    CudaOpsAnyUniquePtr m_cudaOps;                    //!< CUDA API interface.
+    CublasOpsAnyUniquePtr m_cublasOps;                //!< cuBLAS API interface.
+    CudaCommonAnyUniquePtr m_cudaCommon;
     DcgmRecorder m_dcgmRecorder;
 
     double m_testDuration; /* Test duration in seconds */
@@ -148,8 +169,6 @@ public:
             dcgmDiagPluginEntityList_v1 const *entityInfo,
             unsigned int numParameters,
             dcgmDiagPluginTestParameter_t const *testParameters) override;
-
-    dcgmHandle_t GetHandle();
 
     /*************************************************************************/
     /*
@@ -183,6 +202,24 @@ public:
     {
         m_dcgmRecorderPtr = std::unique_ptr<DcgmRecorderBase, std::function<void(DcgmRecorderBase *)>>(
             dcgmRecorder.release(), std::function<void(DcgmRecorderBase *)>([](DcgmRecorderBase *p) { delete p; }));
+    }
+
+    /*************************************************************************/
+    /**
+     * Whole minutes elapsed between two timestamps.
+     *
+     * @param[in] startTime  Start timestamp.
+     * @param[in] endTime    End timestamp.
+     * @return Whole minutes between startTime and endTime, or 0 if endTime is
+     *         before startTime.
+     */
+    static unsigned int ElapsedMinutes(std::chrono::microseconds startTime, std::chrono::microseconds endTime)
+    {
+        if (endTime < startTime)
+        {
+            return 0;
+        }
+        return std::chrono::duration_cast<std::chrono::minutes>(endTime - startTime).count();
     }
 
 private:
@@ -260,7 +297,7 @@ private:
 
     TestParameters m_defaultTestParameters;
 
-    friend class BusGrindTest;
+    friend class TestBusGrind;
     friend int bg_check_pci_link(BusGrind &bg, std::string subTest);
 };
 

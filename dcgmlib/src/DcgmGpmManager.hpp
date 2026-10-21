@@ -22,6 +22,7 @@
 #include "DcgmEntityTypes.hpp"
 #include "DcgmGpuInstance.h"
 #include "NvmlTaskRunner.hpp"
+#include <DcgmGroupEntityPairHelpers.h>
 #include <DcgmLogging.h>
 #include <DcgmUtilities.h>
 #include <DcgmWatchTable.h>
@@ -30,28 +31,6 @@
 #include <dcgm_fields_internal.hpp>
 #include <dcgm_nvml.h>
 #include <dcgm_structs.h>
-
-/* Define the hash function for dcgm_entity_key_t. Doing here since this header is internal. dcgm_structs.h
-   needs to remain C-only */
-namespace std
-{
-template <>
-struct hash<dcgmGroupEntityPair_t>
-{
-    std::size_t operator()(const dcgmGroupEntityPair_t &k) const
-    {
-        return DcgmNs::Utils::Hash::CompoundHash(k.entityId, k.entityGroupId);
-    }
-};
-template <>
-struct equal_to<dcgmGroupEntityPair_t>
-{
-    inline bool operator()(const dcgmGroupEntityPair_t &a, const dcgmGroupEntityPair_t &b) const
-    {
-        return (a.entityGroupId == b.entityGroupId) && (a.entityId == b.entityId);
-    }
-};
-} // namespace std
 
 /* Container class for DcgmGpmSamples */
 class DcgmGpmSample
@@ -156,10 +135,7 @@ public:
                                  unsigned int fieldId,
                                  timelib64_t now);
 
-#ifndef DCGM_GPM_TESTS
-private:
-#endif // #ifndef DCGM_GPM_TESTS
-
+protected:
     /*************************************************************************/
     /*
      * Get a previously pruned GPM sample if we have one available; otherwise

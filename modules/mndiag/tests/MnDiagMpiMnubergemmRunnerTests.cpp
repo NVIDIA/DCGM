@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,23 @@
  * limitations under the License.
  */
 
+#include <CommandLineArgUtils.hpp>
 #include <DcgmStringHelpers.h>
-#include <Defer.hpp>
 #include <MnDiagMpiMnubergemmRunner.h>
 #include <MnDiagMpiRunner.h>
 #include <MnDiagProcessUtils.h>
+#include <ScopedEnvVars.hpp>
+#include <ScopedFd.hpp>
+#include <TempDir.hpp>
+#include <TempFile.hpp>
 #include <UniquePtrUtil.h>
 #include <catch2/catch_all.hpp>
 #include <cstdlib>
 #include <dcgm_errors.h>
 #include <dcgm_structs.h>
 #include <fmt/format.h>
+#include <fstream>
 #include <optional>
-#include <ranges>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -34,7 +38,7 @@
 
 // Force a UID of 0, corresponding to the root user. This is so that there will
 // always be a username associated with the UID
-static constexpr uid_t EFFECTIVE_UID = 0;
+static constexpr uid_t MNUBERGEMM_EFFECTIVE_UID = 0;
 
 // Forward-declare the internal helpers so tests can call them directly
 // without a separate header file.
@@ -47,9 +51,9 @@ std::string GetRoutingInterfacesForHosts(std::vector<std::string> const &hostLis
                                          DcgmNs::Common::ProcessUtils::CommandExecutor *executor = nullptr,
                                          std::string const &ipCommandPath                        = {});
 
-bool IsInterfaceDetectionEnabled(dcgmRunMnDiag_v1 const &drmnd);
+bool IsInterfaceDetectionEnabled(dcgmRunMnDiag_v2 const &drmnd);
 void LogMpiInterfaceEnvVars();
-std::vector<std::string> ResolveMpiInterfaceArgs(dcgmRunMnDiag_v1 const &drmnd,
+std::vector<std::string> ResolveMpiInterfaceArgs(dcgmRunMnDiag_v2 const &drmnd,
                                                  std::vector<std::string> const &hostList,
                                                  MnDiagMpiRunner::RoutingInterfaceResolver const &interfaceResolver);
 } // namespace MnDiagMpiRunnerInternal
@@ -62,7 +66,7 @@ namespace
  *        `ip route get <host>` commands, used to unit test routing interface
  *        detection without requiring actual network access.
  */
-class MockCommandExecutor : public DcgmNs::Common::ProcessUtils::CommandExecutor
+class MnubergemmMockCommandExecutor : public DcgmNs::Common::ProcessUtils::CommandExecutor
 {
 public:
     /**
@@ -91,33 +95,25 @@ private:
 /**
  * @brief Helper function to create a memory-backed file descriptor from a string.
  * @param data The string to write to the file descriptor.
- * @return The file descriptor, or -1 if creation failed.
+ * @return The file descriptor.
  */
-int CreateMemFdFromString(std::string const &data)
+ScopedFd CreateMemFdFromString(std::string const &data)
 {
-    int fd = memfd_create("test_data", 0);
-    if (fd < 0)
-    {
-        return -1;
-    }
-    if (write(fd, data.data(), data.size()) != static_cast<ssize_t>(data.size()))
-    {
-        close(fd);
-        return -1;
-    }
-    lseek(fd, 0, SEEK_SET);
+    ScopedFd fd(memfd_create("test_data", 0));
+    REQUIRE(write(fd.Get(), data.data(), data.size()) == static_cast<ssize_t>(data.size()));
+    REQUIRE(lseek(fd.Get(), 0, SEEK_SET) != -1);
     return fd;
 }
 
 /**
- * Helper function to create a populated dcgmRunMnDiag_v1 struct for testing
+ * Helper function to create a populated dcgmRunMnDiag_v2 struct for testing
  */
-dcgmRunMnDiag_v1 CreateTestDiagStruct()
+dcgmRunMnDiag_v2 CreateTestDiagStruct()
 {
-    dcgmRunMnDiag_v1 diagStruct = {};
+    dcgmRunMnDiag_v2 diagStruct = {};
 
     // Set version
-    diagStruct.version = dcgmRunMnDiag_version1;
+    diagStruct.version = dcgmRunMnDiag_version2;
 
     // Add some test hosts
     SafeCopyTo(diagStruct.hostList[0], "host1");
@@ -149,12 +145,12 @@ std::string FindMcaValue(std::vector<std::string> const &cmdArgs, std::string co
 }
 
 /**
- * Helper function to create a populated dcgmMnDiagResponse_v1 struct for testing
+ * Helper function to create a populated dcgmMnDiagResponse_v2 struct for testing
  */
-std::unique_ptr<dcgmMnDiagResponse_v1> CreateTestResponseStruct()
+std::unique_ptr<dcgmMnDiagResponse_v2> CreateTestResponseStruct()
 {
-    auto responseUptr     = MakeUniqueZero<dcgmMnDiagResponse_v1>();
-    responseUptr->version = dcgmMnDiagResponse_version1;
+    auto responseUptr     = MakeUniqueZero<dcgmMnDiagResponse_v2>();
+    responseUptr->version = dcgmMnDiagResponse_version2;
     return responseUptr;
 }
 
@@ -344,7 +340,7 @@ MNUB [E] G: 7 b07-p1-dgx-07-c18 L: 1  T:N IMEX Error : status is DOWN
 class MnDiagMpiMnubergemmRunnerTests
 {
 public:
-    explicit MnDiagMpiMnubergemmRunnerTests(uid_t uid = EFFECTIVE_UID)
+    explicit MnDiagMpiMnubergemmRunnerTests(uid_t uid = MNUBERGEMM_EFFECTIVE_UID)
         : m_mockCoreProxy(std::make_unique<MockDcgmCoreProxy>())
         , m_runner(*m_mockCoreProxy, uid)
     {
@@ -358,14 +354,14 @@ public:
         return m_runner.MnDiagOutputCallback(fd, responseStruct, nodeInfo);
     }
 
-    void ConstructMpiCommand(void const *params)
+    std::expected<void, dcgmReturn_t> ConstructMpiCommand(void const *params)
     {
-        m_runner.ConstructMpiCommand(params);
+        return m_runner.ConstructMpiCommand(params);
     }
 
-    void ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drmnd)
+    void ParseDcgmMnDiagToMpiCommand(dcgmRunMnDiag_v2 const &drmnd)
     {
-        m_runner.ParseDcgmMnDiagToMpiCommand_v1(drmnd);
+        m_runner.ParseDcgmMnDiagToMpiCommand(drmnd);
     }
 
     std::string GetMpiBinPath() const
@@ -425,29 +421,26 @@ TEST_CASE("MnDiagMpiRunner command construction")
         auto diagStruct = CreateTestDiagStruct();
 
         // Set environment variable for mpirun path
-        setenv("DCGM_MNDIAG_MPIRUN_PATH", "/usr/bin/test_mpirun", 1);
+        ScopedEnvVars envVars("DCGM_MNDIAG_MPIRUN_PATH", "/usr/bin/test_mpirun");
 
         // Construct the command
         mpiRunner.ConstructMpiCommand(&diagStruct);
 
-        // Get the generated command as a string
-        std::string commandStr = mpiRunner.GetLastCommand();
+        // Get the generated command args
+        auto cmdArgs = mpiRunner.GetLastCommandArgs();
 
         // Verify the command is not empty
-        REQUIRE_FALSE(commandStr.empty());
+        REQUIRE_FALSE(cmdArgs.empty());
 
-        // Verify expected parts are present in the command string
-        REQUIRE(commandStr.find("host1,host2,host3") != std::string::npos);
-        REQUIRE(commandStr.find("-np 9") != std::string::npos);
-        REQUIRE(commandStr.find("--map-by ppr:3:node") != std::string::npos);
-        REQUIRE(commandStr.find("--time_to_run 300") != std::string::npos);
-        REQUIRE(commandStr.find("--workload GN") != std::string::npos);
-        REQUIRE(commandStr.find("--dynamic_adj") != std::string::npos);
+        // Verify expected parts are present in the command arguments
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--hostfile"));
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "-np") == "9");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--map-by") == "ppr:3:node");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--time_to_run") == "300");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--workload") == "GN");
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--dynamic_adj"));
         // With 9 processes (odd), NET_link_order should be set to snake
-        REQUIRE(commandStr.find("--NET_link_order snake") != std::string::npos);
-
-        // Clean up environment
-        unsetenv("DCGM_MNDIAG_MPIRUN_PATH");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--NET_link_order") == "snake");
     }
 
     SECTION("ConstructMpiCommand with null parameters")
@@ -477,6 +470,20 @@ TEST_CASE("MnDiagMpiRunner command construction")
         auto const &command = mpiRunner.GetLastCommand();
         REQUIRE(command.empty());
     }
+
+    SECTION("ConstructMpiCommand with an invalid parameter prefix produces no command")
+    {
+        MnDiagMpiMnubergemmRunnerTests mpiRunner;
+        auto diagStruct = CreateTestDiagStruct();
+        SafeCopyTo(diagStruct.testParms[0], "nvloom.time_to_run=300");
+
+        ScopedEnvVars envVars("DCGM_MNDIAG_MPIRUN_PATH", "/usr/bin/test_mpirun");
+        auto result = mpiRunner.ConstructMpiCommand(&diagStruct);
+
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error() == DCGM_ST_BADPARAM);
+        CHECK(mpiRunner.GetLastCommand().empty());
+    }
 }
 
 TEST_CASE("MnDiagMpiRunner binary paths")
@@ -487,8 +494,7 @@ TEST_CASE("MnDiagMpiRunner binary paths")
     SECTION("GetMpiBinPath with custom environment")
     {
         // Set environment variable
-        setenv(MnDiagConstants::ENV_MPIRUN_PATH.data(), customMpirunPath.c_str(), 1);
-        DcgmNs::Defer cleanup([] { unsetenv(MnDiagConstants::ENV_MPIRUN_PATH.data()); });
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MPIRUN_PATH.data(), customMpirunPath);
 
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
         auto mpiPath = mpiRunner.GetMpiBinPath();
@@ -499,7 +505,7 @@ TEST_CASE("MnDiagMpiRunner binary paths")
     SECTION("GetMpiBinPath with default environment")
     {
         // Ensure the environment variable is not set
-        unsetenv(MnDiagConstants::ENV_MPIRUN_PATH.data());
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MPIRUN_PATH.data(), std::nullopt);
 
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
         auto mpiPath = mpiRunner.GetMpiBinPath();
@@ -509,7 +515,7 @@ TEST_CASE("MnDiagMpiRunner binary paths")
 
     SECTION("Custom mnubergemm path affects command construction")
     {
-        DcgmNs::Defer cleanup([] { unsetenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data()); });
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), std::nullopt);
 
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
         auto diagStruct = CreateTestDiagStruct();
@@ -535,10 +541,8 @@ TEST_CASE("MnDiagMpiRunner output parsing")
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
 
         // This should not crash
-        int dataFd = CreateMemFdFromString("test output");
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
-        mpiRunner.MnDiagOutputCallback(dataFd, nullptr, nodeInfoMap_t());
+        auto dataFd = CreateMemFdFromString("test output");
+        mpiRunner.MnDiagOutputCallback(dataFd.Get(), nullptr, nodeInfoMap_t());
     }
 
     SECTION("MnDiagOutputCallback with stdout output")
@@ -547,13 +551,11 @@ TEST_CASE("MnDiagMpiRunner output parsing")
         auto responseStruct = CreateTestResponseStruct();
 
         // Call the callback with sample output
-        int dataFd = CreateMemFdFromString("Sample mnubergemm output");
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
-        mpiRunner.MnDiagOutputCallback(dataFd, responseStruct.get(), nodeInfoMap_t());
+        auto dataFd = CreateMemFdFromString("Sample mnubergemm output");
+        mpiRunner.MnDiagOutputCallback(dataFd.Get(), responseStruct.get(), nodeInfoMap_t());
 
         // Version should be maintained
-        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version1);
+        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version2);
     }
 
     SECTION("MnDiagOutputCallback with invalid version")
@@ -565,122 +567,83 @@ TEST_CASE("MnDiagMpiRunner output parsing")
         responseStruct->version = 9999;
 
         // This should not crash
-        int dataFd = CreateMemFdFromString("test output");
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
-        mpiRunner.MnDiagOutputCallback(dataFd, responseStruct.get(), nodeInfoMap_t());
+        auto dataFd = CreateMemFdFromString("test output");
+        mpiRunner.MnDiagOutputCallback(dataFd.Get(), responseStruct.get(), nodeInfoMap_t());
 
         // Version should be maintained
         REQUIRE(responseStruct->version == 9999);
     }
 }
 
-TEST_CASE("MnDiagMpiRunner ParseDcgmMnDiagToMpiCommand_v1")
+TEST_CASE("MnDiagMpiRunner ParseDcgmMnDiagToMpiCommand")
 {
-    SECTION("Parse dcgmRunMnDiag_v1 with standard parameters")
+    SECTION("Parse dcgmRunMnDiag_v2 with standard parameters")
     {
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
         auto diagStruct = CreateTestDiagStruct();
 
         // Set mpirun path environment variable
-        setenv("DCGM_MNDIAG_MPIRUN_PATH", "/usr/bin/test_mpirun", 1);
-        DcgmNs::Defer cleanup([] { unsetenv("DCGM_MNDIAG_MPIRUN_PATH"); });
+        ScopedEnvVars envVars("DCGM_MNDIAG_MPIRUN_PATH", "/usr/bin/test_mpirun");
 
         // Call the parse function directly
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         // Get the generated command args
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
 
-        // Verify the host list
-        unsigned int hostIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "--host") - cmdArgs.begin();
-        REQUIRE(hostIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[hostIdx + 1] == "host1,host2,host3");
+        // Verify the hostfile argument is present and points to a readable file
+        {
+            std::ifstream hf(CommandLineArgUtils::ArgAfter(cmdArgs, "--hostfile"));
+            REQUIRE(hf.is_open());
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(hf, line))
+            {
+                lines.push_back(line);
+            }
+            REQUIRE(lines.size() == 3);
+            CHECK(lines[0] == "host1");
+            CHECK(lines[1] == "host2");
+            CHECK(lines[2] == "host3");
+        }
 
         // Verify process count (should be hosts * gpus per node, which is 3*3=9)
-        unsigned int npIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "-np") - cmdArgs.begin();
-        REQUIRE(npIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[npIdx + 1] == "9"); // 3 hosts * 3 GPUs per node
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "-np") == "9"); // 3 hosts * 3 GPUs per node
 
         // Verify --map-by is present and configured correctly
-        unsigned int mapByIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "--map-by") - cmdArgs.begin();
-        REQUIRE(mapByIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[mapByIdx + 1] == "ppr:3:node"); // 3 GPUs per node
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--map-by") == "ppr:3:node"); // 3 GPUs per node
 
         // Verify workload parameter
-        bool foundWorkload = false;
-        for (size_t i = 0; i < cmdArgs.size(); i++)
-        {
-            if (cmdArgs[i] == "--workload" && i + 1 < cmdArgs.size())
-            {
-                REQUIRE(cmdArgs[i + 1] == "GN");
-                foundWorkload = true;
-                break;
-            }
-        }
-        REQUIRE(foundWorkload);
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--workload") == "GN");
 
         // Verify time_to_run parameter
-        bool foundTimeToRun = false;
-        for (size_t i = 0; i < cmdArgs.size(); i++)
-        {
-            if (cmdArgs[i] == "--time_to_run" && i + 1 < cmdArgs.size())
-            {
-                REQUIRE(cmdArgs[i + 1] == "300");
-                foundTimeToRun = true;
-                break;
-            }
-        }
-        REQUIRE(foundTimeToRun);
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--time_to_run") == "300");
 
         // Verify dynamic_adj flag is present
-        bool foundDynamicAdj = false;
-        for (auto const &arg : cmdArgs)
-        {
-            if (arg == "--dynamic_adj")
-            {
-                foundDynamicAdj = true;
-                break;
-            }
-        }
-        REQUIRE(foundDynamicAdj);
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--dynamic_adj"));
 
-        REQUIRE(std::ranges::contains(cmdArgs, "--oversubscribe"));
-        REQUIRE(std::ranges::contains(cmdArgs, "--timestamp-output"));
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--oversubscribe"));
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--timestamp-output"));
     }
 
-    SECTION("Parse dcgmRunMnDiag_v1 with empty host list")
+    SECTION("Parse dcgmRunMnDiag_v2 with empty host list produces no command")
     {
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
         auto diagStruct = CreateTestDiagStruct();
 
         // Clear host list
-        for (int i = 0; i < DCGM_MAX_NUM_HOSTS; i++)
+        for (int i = 0; i < DCGM_MNDIAG_MAX_NUM_HOSTS; i++)
         {
             diagStruct.hostList[i][0] = '\0';
         }
 
-        // Call the parse function
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
-        // The command should be created but with 0 hosts
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
-
-        // Verify process count is 0
-        unsigned int npIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "-np") - cmdArgs.begin();
-        REQUIRE(npIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[npIdx + 1] == "0");
-
-        // Verify --map-by is present
-        unsigned int mapByIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "--map-by") - cmdArgs.begin();
-        REQUIRE(mapByIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[mapByIdx + 1] == "ppr:3:node"); // 3 GPUs per node based on MockDcgmCoreProxy
-
-        REQUIRE(std::ranges::contains(cmdArgs, "--oversubscribe"));
-        REQUIRE(std::ranges::contains(cmdArgs, "--timestamp-output"));
+        CHECK(cmdArgs.empty());
     }
 
-    SECTION("Parse dcgmRunMnDiag_v1 with hosts containing port numbers")
+    SECTION("Parse dcgmRunMnDiag_v2 with hosts containing port numbers")
     {
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
         auto diagStruct = CreateTestDiagStruct();
@@ -691,28 +654,35 @@ TEST_CASE("MnDiagMpiRunner ParseDcgmMnDiagToMpiCommand_v1")
         SafeCopyTo(diagStruct.hostList[2], "host3:7777");
 
         // Call the parse function
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         // Get the generated command args
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
 
-        // Verify the host list (ports should be stripped)
-        unsigned int hostIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "--host") - cmdArgs.begin();
-        REQUIRE(hostIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[hostIdx + 1] == "host1,host2,host3");
+        // Verify the hostfile argument is present and contains stripped hostnames
+        {
+            std::ifstream hf(CommandLineArgUtils::ArgAfter(cmdArgs, "--hostfile"));
+            REQUIRE(hf.is_open());
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(hf, line))
+            {
+                lines.push_back(line);
+            }
+            REQUIRE(lines.size() == 3);
+            CHECK(lines[0] == "host1");
+            CHECK(lines[1] == "host2");
+            CHECK(lines[2] == "host3");
+        }
 
         // Verify process count is hosts * gpus per node (3*3=9)
-        unsigned int npIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "-np") - cmdArgs.begin();
-        REQUIRE(npIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[npIdx + 1] == "9");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "-np") == "9");
 
         // Verify --map-by is present with correct format
-        unsigned int mapByIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "--map-by") - cmdArgs.begin();
-        REQUIRE(mapByIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[mapByIdx + 1] == "ppr:3:node");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--map-by") == "ppr:3:node");
 
-        REQUIRE(std::ranges::contains(cmdArgs, "--oversubscribe"));
-        REQUIRE(std::ranges::contains(cmdArgs, "--timestamp-output"));
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--oversubscribe"));
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--timestamp-output"));
     }
 
     SECTION("Verify default parameters when not specified")
@@ -727,52 +697,31 @@ TEST_CASE("MnDiagMpiRunner ParseDcgmMnDiagToMpiCommand_v1")
         }
 
         // Call the parse function
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         // Get the generated command args
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
 
-        REQUIRE(std::ranges::contains(cmdArgs, "--oversubscribe"));
-        REQUIRE(std::ranges::contains(cmdArgs, "--timestamp-output"));
-
-        // Define a helper lambda to check for a parameter and its value
-        auto checkParam = [&cmdArgs](const std::string &param, const std::string &expectedValue) -> bool {
-            for (size_t i = 0; i < cmdArgs.size(); i++)
-            {
-                if (cmdArgs[i] == ("--" + param) && i + 1 < cmdArgs.size())
-                {
-                    REQUIRE(cmdArgs[i + 1] == expectedValue);
-                    return true;
-                }
-            }
-            return false;
-        };
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--oversubscribe"));
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--timestamp-output"));
 
         // Check all default parameters from GetDefaultMnuberGemmParametersMap_v1
         // Updated for 10kHz FP32 pulse configuration
-        REQUIRE(checkParam("workload", "GC"));
-        REQUIRE(checkParam("time_to_run", "3600"));
-        REQUIRE(checkParam("max_workload", "65536"));
-        REQUIRE(checkParam("MM_max_workload", "65536"));
-        REQUIRE(checkParam("MM_sm_count", "144"));
-        REQUIRE(checkParam("CE_type", "H"));
-        REQUIRE(checkParam("MM_N", "0"));
-        REQUIRE(checkParam("CE_size", "200000"));
-        REQUIRE(checkParam("MM_type", "ST_ST_SSS"));
-        REQUIRE(checkParam("MM_M_per_sm", "32"));
-        REQUIRE(checkParam("freq", "10000"));
-        REQUIRE(checkParam("duty", "0.5"));
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--workload") == "GC");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--time_to_run") == "3600");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--max_workload") == "65536");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--MM_max_workload") == "65536");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--MM_sm_count") == "144");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--CE_type") == "H");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--MM_N") == "0");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--CE_size") == "200000");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--MM_type") == "ST_ST_SSS");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--MM_M_per_sm") == "32");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--freq") == "10000");
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--duty") == "0.5");
 
         // Check flags (parameters with no values)
-        bool foundDynamicAdj = false;
-        for (const auto &arg : cmdArgs)
-        {
-            if (arg == "--dynamic_adj")
-            {
-                foundDynamicAdj = true;
-            }
-        }
-        REQUIRE(foundDynamicAdj);
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--dynamic_adj"));
     }
 
     SECTION("Verify NET_link_order set to snake with odd number of processes")
@@ -783,7 +732,7 @@ TEST_CASE("MnDiagMpiRunner ParseDcgmMnDiagToMpiCommand_v1")
         // With 3 GPUs per node from MockDcgmCoreProxy, we can create an odd process count easily
 
         // Clear host list first
-        for (int i = 0; i < DCGM_MAX_NUM_HOSTS; i++)
+        for (int i = 0; i < DCGM_MNDIAG_MAX_NUM_HOSTS; i++)
         {
             diagStruct.hostList[i][0] = '\0';
         }
@@ -795,31 +744,19 @@ TEST_CASE("MnDiagMpiRunner ParseDcgmMnDiagToMpiCommand_v1")
         SafeCopyTo(diagStruct.testParms[3], "mnubergemm.NET_link_order=pair");
 
         // Call the parse function
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         // Get the generated command args
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
 
         // Verify we have 3 processes total (odd number)
-        unsigned int npIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "-np") - cmdArgs.begin();
-        REQUIRE(npIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[npIdx + 1] == "3"); // 1 host * 3 GPUs = 3 processes
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "-np") == "3"); // 1 host * 3 GPUs = 3 processes
 
         // Verify NET_link_order is set to snake for odd number of processes
-        bool foundNetLinkOrderSnake = false;
-        for (size_t i = 0; i < cmdArgs.size(); i++)
-        {
-            if (cmdArgs[i] == "--NET_link_order" && i + 1 < cmdArgs.size())
-            {
-                REQUIRE(cmdArgs[i + 1] == "snake"); // Should be overridden to snake
-                foundNetLinkOrderSnake = true;
-                break;
-            }
-        }
-        REQUIRE(foundNetLinkOrderSnake);
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--NET_link_order") == "snake"); // Should be overridden to snake
 
-        REQUIRE(std::ranges::contains(cmdArgs, "--oversubscribe"));
-        REQUIRE(std::ranges::contains(cmdArgs, "--timestamp-output"));
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--oversubscribe"));
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--timestamp-output"));
     }
 
     SECTION("Verify NET_link_order stays pair with even number of processes")
@@ -830,7 +767,7 @@ TEST_CASE("MnDiagMpiRunner ParseDcgmMnDiagToMpiCommand_v1")
         // With 3 GPUs per node from MockDcgmCoreProxy, we need 2 hosts to get 6 processes (even)
 
         // Clear host list first
-        for (int i = 0; i < DCGM_MAX_NUM_HOSTS; i++)
+        for (int i = 0; i < DCGM_MNDIAG_MAX_NUM_HOSTS; i++)
         {
             diagStruct.hostList[i][0] = '\0';
         }
@@ -843,31 +780,19 @@ TEST_CASE("MnDiagMpiRunner ParseDcgmMnDiagToMpiCommand_v1")
         SafeCopyTo(diagStruct.testParms[3], "mnubergemm.NET_link_order=pair");
 
         // Call the parse function
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         // Get the generated command args
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
 
         // Verify we have 6 processes total (even number)
-        unsigned int npIdx = std::find(cmdArgs.begin(), cmdArgs.end(), "-np") - cmdArgs.begin();
-        REQUIRE(npIdx < cmdArgs.size());
-        REQUIRE(cmdArgs[npIdx + 1] == "6"); // 2 hosts * 3 GPUs = 6 processes
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "-np") == "6"); // 2 hosts * 3 GPUs = 6 processes
 
         // Verify NET_link_order remains pair for even number of processes
-        bool foundNetLinkOrderPair = false;
-        for (size_t i = 0; i < cmdArgs.size(); i++)
-        {
-            if (cmdArgs[i] == "--NET_link_order" && i + 1 < cmdArgs.size())
-            {
-                REQUIRE(cmdArgs[i + 1] == "pair"); // Should not be changed
-                foundNetLinkOrderPair = true;
-                break;
-            }
-        }
-        REQUIRE(foundNetLinkOrderPair);
+        REQUIRE(CommandLineArgUtils::ArgAfter(cmdArgs, "--NET_link_order") == "pair"); // Should not be changed
 
-        REQUIRE(std::ranges::contains(cmdArgs, "--oversubscribe"));
-        REQUIRE(std::ranges::contains(cmdArgs, "--timestamp-output"));
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--oversubscribe"));
+        REQUIRE(CommandLineArgUtils::ContainsArg(cmdArgs, "--timestamp-output"));
     }
 }
 
@@ -878,13 +803,12 @@ TEST_CASE("MnDiagMpiRunner user info via constructor")
         MnDiagMpiMnubergemmRunnerTests mpiRunner(1000);
         auto diagStruct = CreateTestDiagStruct();
 
-        setenv(MnDiagConstants::ENV_ALLOW_RUN_AS_ROOT.data(), "1", 1);
-        DcgmNs::Defer cleanup([] { unsetenv(MnDiagConstants::ENV_ALLOW_RUN_AS_ROOT.data()); });
+        ScopedEnvVars envVars(MnDiagConstants::ENV_ALLOW_RUN_AS_ROOT.data(), "1");
         mpiRunner.ConstructMpiCommand(&diagStruct);
         auto args = mpiRunner.GetLastCommandArgs();
 
         REQUIRE_FALSE(args.empty());
-        REQUIRE(std::find(args.begin(), args.end(), "--allow-run-as-root") == args.end());
+        REQUIRE_FALSE(CommandLineArgUtils::ContainsArg(args, "--allow-run-as-root"));
     }
 
     SECTION("Root uid without env var does not add --allow-run-as-root")
@@ -892,12 +816,12 @@ TEST_CASE("MnDiagMpiRunner user info via constructor")
         MnDiagMpiMnubergemmRunnerTests mpiRunner(0);
         auto diagStruct = CreateTestDiagStruct();
 
-        unsetenv(MnDiagConstants::ENV_ALLOW_RUN_AS_ROOT.data());
+        ScopedEnvVars envVars(MnDiagConstants::ENV_ALLOW_RUN_AS_ROOT.data(), std::nullopt);
         mpiRunner.ConstructMpiCommand(&diagStruct);
         auto args = mpiRunner.GetLastCommandArgs();
 
         REQUIRE_FALSE(args.empty());
-        REQUIRE(std::find(args.begin(), args.end(), "--allow-run-as-root") == args.end());
+        REQUIRE_FALSE(CommandLineArgUtils::ContainsArg(args, "--allow-run-as-root"));
     }
 
     SECTION("Root uid with env var adds --allow-run-as-root")
@@ -905,13 +829,12 @@ TEST_CASE("MnDiagMpiRunner user info via constructor")
         MnDiagMpiMnubergemmRunnerTests mpiRunner(0);
         auto diagStruct = CreateTestDiagStruct();
 
-        setenv(MnDiagConstants::ENV_ALLOW_RUN_AS_ROOT.data(), "1", 1);
-        DcgmNs::Defer cleanup([] { unsetenv(MnDiagConstants::ENV_ALLOW_RUN_AS_ROOT.data()); });
+        ScopedEnvVars envVars(MnDiagConstants::ENV_ALLOW_RUN_AS_ROOT.data(), "1");
         mpiRunner.ConstructMpiCommand(&diagStruct);
         auto args = mpiRunner.GetLastCommandArgs();
 
         REQUIRE_FALSE(args.empty());
-        REQUIRE(std::find(args.begin(), args.end(), "--allow-run-as-root") != args.end());
+        REQUIRE(CommandLineArgUtils::ContainsArg(args, "--allow-run-as-root"));
     }
 }
 
@@ -923,9 +846,7 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
         auto responseStruct = CreateTestResponseStruct();
 
         // Create input stream from the test_string
-        int dataFd = CreateMemFdFromString(test_string);
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
+        auto dataFd = CreateMemFdFromString(test_string);
 
         // Call the parser
         std::array<std::string, 4> hostnames
@@ -938,11 +859,11 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
             nodeInfo[hostnames[i]].dcgmVersion   = dcgmVersions[i];
             nodeInfo[hostnames[i]].driverVersion = driverVersions[i];
         }
-        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd, responseStruct.get(), nodeInfo);
+        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd.Get(), responseStruct.get(), nodeInfo);
 
         // Verify the call succeeded
         REQUIRE(result == DCGM_ST_OK);
-        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version1);
+        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version2);
 
         // Verify test information
         REQUIRE(responseStruct->numTests == 1);
@@ -1093,11 +1014,13 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
             REQUIRE(host.dcgmVersion == dcgmVersions[i]);
             REQUIRE(host.driverVersion == driverVersions[i]);
 
-            // Verify entity indices match what we found in results
+            // Verify entity indices are valid global indices into entities[]
+            // and that the referenced entity belongs to this host
             std::string hostname = host.hostname;
             for (unsigned int j = 0; j < host.numEntities; j++)
             {
-                REQUIRE(hostToEntities[hostname].count(host.entityIndices[j]) == 1);
+                REQUIRE(host.entityIndices[j] < responseStruct->numEntities);
+                REQUIRE(responseStruct->entities[host.entityIndices[j]].hostId == i);
             }
         }
     }
@@ -1108,16 +1031,14 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
         auto responseStruct = CreateTestResponseStruct();
 
         // Create empty input stream
-        int dataFd = CreateMemFdFromString("");
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
+        auto dataFd = CreateMemFdFromString("");
 
         // Call the parser
-        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd, responseStruct.get(), nodeInfoMap_t());
+        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd.Get(), responseStruct.get(), nodeInfoMap_t());
 
         // Verify the call succeeded
         REQUIRE(result == DCGM_ST_OK);
-        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version1);
+        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version2);
 
         // With no output, should have default test setup but no entities or errors
         REQUIRE(responseStruct->numTests == 1);
@@ -1142,15 +1063,13 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
         auto responseStruct = CreateTestResponseStruct();
 
-        int dataFd = CreateMemFdFromString("");
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
+        auto dataFd = CreateMemFdFromString("");
 
         nodeInfoMap_t nodeInfo;
         nodeInfo["expected-host-1"] = { .dcgmVersion = "3.1.1", .driverVersion = "570.15" };
         nodeInfo["expected-host-2"] = { .dcgmVersion = "3.1.2", .driverVersion = "570.16" };
 
-        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd, responseStruct.get(), nodeInfo);
+        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd.Get(), responseStruct.get(), nodeInfo);
 
         REQUIRE(result == DCGM_ST_OK);
         REQUIRE(responseStruct->tests[0].result == DCGM_DIAG_RESULT_FAIL);
@@ -1167,16 +1086,14 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
         auto responseStruct = CreateTestResponseStruct();
 
         // OCL errors without valid host data - simulates real-world early failure
-        int dataFd = CreateMemFdFromString(
+        auto dataFd = CreateMemFdFromString(
             "[2025-11-13 05:12:34.274] MNUB [E] OCL failed <-clGetPlatformIDs_dl(0, nullptr, &num_plt)\n"
             "[2025-11-13 05:12:34.374] MNUB [E] OCL failed <-clGetPlatformIDs_dl(0, nullptr, &num_plt)\n");
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
 
         nodeInfoMap_t nodeInfo;
         nodeInfo["expected-host"] = { .dcgmVersion = "3.1.1", .driverVersion = "570.15" };
 
-        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd, responseStruct.get(), nodeInfo);
+        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd.Get(), responseStruct.get(), nodeInfo);
 
         REQUIRE(result == DCGM_ST_OK);
         REQUIRE(responseStruct->tests[0].result == DCGM_DIAG_RESULT_FAIL);
@@ -1196,9 +1113,7 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
                                      "MNUB [I] G: 1 test-host L: 1  INFO  hosthash=123456789 B0I=632386610\n"
                                      "MNUB [I] G: 0 test-host L: 0  T:G FINAL values L:14057 IDLE:31878952\n"
                                      "MNUB [I] G: 1 test-host L: 1  T:N FINISHED\n";
-        int dataFd                 = CreateMemFdFromString(infoOnlyString);
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
+        auto dataFd                = CreateMemFdFromString(infoOnlyString);
 
         // Call the parser
         nodeInfoMap_t nodeInfo;
@@ -1207,11 +1122,11 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
         std::string driverVersion        = "570.15";
         nodeInfo[hostname].dcgmVersion   = dcgmVersion;
         nodeInfo[hostname].driverVersion = driverVersion;
-        dcgmReturn_t result              = mpiRunner.MnDiagOutputCallback(dataFd, responseStruct.get(), nodeInfo);
+        dcgmReturn_t result              = mpiRunner.MnDiagOutputCallback(dataFd.Get(), responseStruct.get(), nodeInfo);
 
         // Verify the call succeeded
         REQUIRE(result == DCGM_ST_OK);
-        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version1);
+        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version2);
 
         // Should have one host with two entities, no errors
         REQUIRE(responseStruct->tests[0].result == DCGM_DIAG_RESULT_PASS);
@@ -1278,9 +1193,7 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
             // ANSI escape codes with prefix
             "\x1B[31m[2025-01-15 10:30:45.999] MNUB [E] G: 6 host4 L: 0  T:N colored error\x1B[0m\n";
 
-        int dataFd = CreateMemFdFromString(prefixEdgeCases);
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
+        auto dataFd = CreateMemFdFromString(prefixEdgeCases);
 
         // Set up node info for all hosts
         nodeInfoMap_t nodeInfo;
@@ -1291,11 +1204,11 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
             nodeInfo[hostname].driverVersion = "570.15";
         }
 
-        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd, responseStruct.get(), nodeInfo);
+        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd.Get(), responseStruct.get(), nodeInfo);
 
         // Verify the call succeeded
         REQUIRE(result == DCGM_ST_OK);
-        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version1);
+        REQUIRE(responseStruct->version == dcgmMnDiagResponse_version2);
 
         // Verify test information
         REQUIRE(responseStruct->numTests == 1);
@@ -1372,9 +1285,7 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
             // Three messages on one line: skip, parse, skip
             "MNUB [D] G: 0 node1 L: 0  debugMNUB [I] G: 5 node3 L: 1  INFO middleMNUB [T] G: 0 node1 L: 0  trace\n";
 
-        int dataFd = CreateMemFdFromString(interleavedOutput);
-        REQUIRE(dataFd >= 0);
-        DcgmNs::Defer closeFd([dataFd] { close(dataFd); });
+        auto dataFd = CreateMemFdFromString(interleavedOutput);
 
         nodeInfoMap_t nodeInfo;
         for (auto const &hostname : { "node1", "node2", "node3" })
@@ -1383,7 +1294,7 @@ TEST_CASE("MnDiagMpiRunner ParseMnUberGemmOutput_v1")
             nodeInfo[hostname].driverVersion = "570.15";
         }
 
-        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd, responseStruct.get(), nodeInfo);
+        dcgmReturn_t result = mpiRunner.MnDiagOutputCallback(dataFd.Get(), responseStruct.get(), nodeInfo);
 
         REQUIRE(result == DCGM_ST_OK);
         REQUIRE(responseStruct->numTests == 1);
@@ -1516,7 +1427,7 @@ TEST_CASE("MnDiagMpiRunnerInternal::GetRoutingInterfacesForHosts")
 
     SECTION("All hosts resolve to same interface")
     {
-        MockCommandExecutor mockExecutor;
+        MnubergemmMockCommandExecutor mockExecutor;
         mockExecutor.SetResponse(fmt::format("{} route get 10.0.0.10", ipCmd),
                                  "10.0.0.10 via 10.0.0.1 dev enP5p9s0 src 10.0.0.5 uid 1000\n    cache\n");
         mockExecutor.SetResponse(fmt::format("{} route get 10.0.0.11", ipCmd),
@@ -1530,7 +1441,7 @@ TEST_CASE("MnDiagMpiRunnerInternal::GetRoutingInterfacesForHosts")
 
     SECTION("Hosts route via different interfaces — both returned")
     {
-        MockCommandExecutor mockExecutor;
+        MnubergemmMockCommandExecutor mockExecutor;
         mockExecutor.SetResponse(fmt::format("{} route get 192.168.1.10", ipCmd),
                                  "192.168.1.10 via 192.168.1.1 dev eth0 src 192.168.1.5 uid 1000\n    cache\n");
         mockExecutor.SetResponse(fmt::format("{} route get 10.0.0.10", ipCmd),
@@ -1550,7 +1461,7 @@ TEST_CASE("MnDiagMpiRunnerInternal::GetRoutingInterfacesForHosts")
 
     SECTION("Local host (loopback route) is skipped; only remote interfaces returned")
     {
-        MockCommandExecutor mockExecutor;
+        MnubergemmMockCommandExecutor mockExecutor;
         mockExecutor.SetResponse(fmt::format("{} route get 10.0.0.5", ipCmd),
                                  "local 10.0.0.5 dev lo src 10.0.0.5 uid 1000\n    cache <local>\n");
         mockExecutor.SetResponse(fmt::format("{} route get 10.0.1.10", ipCmd),
@@ -1564,7 +1475,7 @@ TEST_CASE("MnDiagMpiRunnerInternal::GetRoutingInterfacesForHosts")
 
     SECTION("All loopback returns empty string")
     {
-        MockCommandExecutor mockExecutor;
+        MnubergemmMockCommandExecutor mockExecutor;
         mockExecutor.SetResponse(fmt::format("{} route get 127.0.0.1", ipCmd),
                                  "local 127.0.0.1 dev lo src 127.0.0.1 uid 1000\n    cache <local>\n");
         mockExecutor.SetResponse(fmt::format("{} route get 127.0.0.2", ipCmd),
@@ -1578,7 +1489,7 @@ TEST_CASE("MnDiagMpiRunnerInternal::GetRoutingInterfacesForHosts")
 
     SECTION("Empty host list returns empty string")
     {
-        MockCommandExecutor mockExecutor;
+        MnubergemmMockCommandExecutor mockExecutor;
         REQUIRE(GetRoutingInterfacesForHosts({}, &mockExecutor, ipCmd).empty());
     }
 }
@@ -1595,7 +1506,7 @@ TEST_CASE("MnDiagMpiRunner MCA interface injection in command")
         mpiRunner.SetRoutingInterfaceResolver([](std::vector<std::string> const &) { return "enP5p9s0"; });
 
         auto diagStruct = CreateTestDiagStruct();
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
         REQUIRE(FindMcaValue(cmdArgs, "btl_tcp_if_include") == "enP5p9s0");
@@ -1608,7 +1519,7 @@ TEST_CASE("MnDiagMpiRunner MCA interface injection in command")
         mpiRunner.SetRoutingInterfaceResolver([](std::vector<std::string> const &) { return "eth0,eth1"; });
 
         auto diagStruct = CreateTestDiagStruct();
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
         REQUIRE(FindMcaValue(cmdArgs, "btl_tcp_if_include") == "eth0,eth1");
@@ -1621,7 +1532,7 @@ TEST_CASE("MnDiagMpiRunner MCA interface injection in command")
         mpiRunner.SetRoutingInterfaceResolver([](std::vector<std::string> const &) { return ""; });
 
         auto diagStruct = CreateTestDiagStruct();
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
         REQUIRE(FindMcaValue(cmdArgs, "btl_tcp_if_include").empty());
@@ -1635,7 +1546,7 @@ TEST_CASE("MnDiagMpiRunner MCA interface injection in command")
         mpiRunner.SetRoutingInterfaceResolver([](std::vector<std::string> const &) { return "enP5p9s0"; });
 
         auto diagStruct = CreateTestDiagStruct();
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
 
@@ -1660,7 +1571,7 @@ TEST_CASE("MnDiagMpiRunner MCA interface injection in command")
         });
 
         auto diagStruct = CreateTestDiagStruct(); // hosts: host1, host2, host3
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         REQUIRE(capturedHosts == std::vector<std::string> { "host1", "host2", "host3" });
     }
@@ -1684,7 +1595,7 @@ TEST_CASE("MnDiagMpiRunner openmpi.detect_interfaces=0 disables auto-detection")
         auto diagStruct = CreateTestDiagStruct();
         SafeCopyTo(diagStruct.testParms[3], "openmpi.detect_interfaces=0");
 
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
         REQUIRE(FindMcaValue(cmdArgs, "btl_tcp_if_include").empty());
@@ -1705,7 +1616,7 @@ TEST_CASE("MnDiagMpiRunner openmpi.detect_interfaces=0 disables auto-detection")
         auto diagStruct = CreateTestDiagStruct();
         SafeCopyTo(diagStruct.testParms[3], "openmpi.detect_interfaces=false");
 
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
         REQUIRE(FindMcaValue(cmdArgs, "btl_tcp_if_include").empty());
@@ -1720,7 +1631,7 @@ TEST_CASE("MnDiagMpiRunner openmpi.detect_interfaces=0 disables auto-detection")
         auto diagStruct = CreateTestDiagStruct();
         SafeCopyTo(diagStruct.testParms[3], "openmpi.detect_interfaces=1");
 
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
         REQUIRE(FindMcaValue(cmdArgs, "btl_tcp_if_include") == "eth0");
@@ -1732,8 +1643,7 @@ TEST_CASE("MnDiagMpiRunner OMPI_MCA env vars are NOT promoted to -mca args")
 {
     SECTION("OMPI_MCA_btl_tcp_if_include present — auto-detection still runs, env var not forwarded")
     {
-        setenv("OMPI_MCA_btl_tcp_if_include", "ib0", 1);
-        DcgmNs::Defer cleanup([] { unsetenv("OMPI_MCA_btl_tcp_if_include"); });
+        ScopedEnvVars envVars("OMPI_MCA_btl_tcp_if_include", "ib0");
 
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
 
@@ -1744,7 +1654,7 @@ TEST_CASE("MnDiagMpiRunner OMPI_MCA env vars are NOT promoted to -mca args")
         });
 
         auto diagStruct = CreateTestDiagStruct();
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
         REQUIRE(resolverCalled);
@@ -1754,8 +1664,7 @@ TEST_CASE("MnDiagMpiRunner OMPI_MCA env vars are NOT promoted to -mca args")
 
     SECTION("OMPI_MCA_oob_tcp_if_include present — auto-detection still runs, env var not forwarded")
     {
-        setenv("OMPI_MCA_oob_tcp_if_include", "ib0", 1);
-        DcgmNs::Defer cleanup([] { unsetenv("OMPI_MCA_oob_tcp_if_include"); });
+        ScopedEnvVars envVars("OMPI_MCA_oob_tcp_if_include", "ib0");
 
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
 
@@ -1766,7 +1675,7 @@ TEST_CASE("MnDiagMpiRunner OMPI_MCA env vars are NOT promoted to -mca args")
         });
 
         auto diagStruct = CreateTestDiagStruct();
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
         REQUIRE(resolverCalled);
@@ -1776,11 +1685,9 @@ TEST_CASE("MnDiagMpiRunner OMPI_MCA env vars are NOT promoted to -mca args")
 
     SECTION("Both OMPI_MCA env vars present — auto-detection still runs, env vars not forwarded")
     {
-        setenv("OMPI_MCA_btl_tcp_if_include", "eth0", 1);
-        setenv("OMPI_MCA_oob_tcp_if_include", "eth1", 1);
-        DcgmNs::Defer cleanup([] {
-            unsetenv("OMPI_MCA_btl_tcp_if_include");
-            unsetenv("OMPI_MCA_oob_tcp_if_include");
+        ScopedEnvVars envVars({
+            { "OMPI_MCA_btl_tcp_if_include", "eth0" },
+            { "OMPI_MCA_oob_tcp_if_include", "eth1" },
         });
 
         MnDiagMpiMnubergemmRunnerTests mpiRunner;
@@ -1792,7 +1699,7 @@ TEST_CASE("MnDiagMpiRunner OMPI_MCA env vars are NOT promoted to -mca args")
         });
 
         auto diagStruct = CreateTestDiagStruct();
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
         REQUIRE(resolverCalled);
@@ -1802,22 +1709,21 @@ TEST_CASE("MnDiagMpiRunner OMPI_MCA env vars are NOT promoted to -mca args")
 
     SECTION("LogMpiInterfaceEnvVars does not crash with no env vars set")
     {
-        unsetenv("OMPI_MCA_btl_tcp_if_include");
-        unsetenv("OMPI_MCA_oob_tcp_if_include");
-        unsetenv("PRTE_MCA_oob_tcp_if_include");
+        ScopedEnvVars envVars({
+            { "OMPI_MCA_btl_tcp_if_include", std::nullopt },
+            { "OMPI_MCA_oob_tcp_if_include", std::nullopt },
+            { "PRTE_MCA_oob_tcp_if_include", std::nullopt },
+        });
 
         REQUIRE_NOTHROW(MnDiagMpiRunnerInternal::LogMpiInterfaceEnvVars());
     }
 
     SECTION("LogMpiInterfaceEnvVars does not crash with env vars set")
     {
-        setenv("OMPI_MCA_btl_tcp_if_include", "eth0", 1);
-        setenv("OMPI_MCA_oob_tcp_if_include", "eth1", 1);
-        setenv("PRTE_MCA_oob_tcp_if_include", "eth2", 1);
-        DcgmNs::Defer cleanup([] {
-            unsetenv("OMPI_MCA_btl_tcp_if_include");
-            unsetenv("OMPI_MCA_oob_tcp_if_include");
-            unsetenv("PRTE_MCA_oob_tcp_if_include");
+        ScopedEnvVars envVars({
+            { "OMPI_MCA_btl_tcp_if_include", "eth0" },
+            { "OMPI_MCA_oob_tcp_if_include", "eth1" },
+            { "PRTE_MCA_oob_tcp_if_include", "eth2" },
         });
 
         REQUIRE_NOTHROW(MnDiagMpiRunnerInternal::LogMpiInterfaceEnvVars());
@@ -1834,10 +1740,10 @@ TEST_CASE("MnDiagMpiRunner openmpi.* params do not leak into mnubergemm args")
         auto diagStruct = CreateTestDiagStruct();
         SafeCopyTo(diagStruct.testParms[3], "openmpi.detect_interfaces=0");
 
-        mpiRunner.ParseDcgmMnDiagToMpiCommand_v1(diagStruct);
+        mpiRunner.ParseDcgmMnDiagToMpiCommand(diagStruct);
 
         auto cmdArgs = mpiRunner.GetLastCommandArgs();
-        REQUIRE_FALSE(std::ranges::contains(cmdArgs, "--detect_interfaces"));
+        REQUIRE_FALSE(CommandLineArgUtils::ContainsArg(cmdArgs, "--detect_interfaces"));
     }
 }
 
@@ -1880,7 +1786,7 @@ TEST_CASE("MnDiagMpiRunnerInternal::GetRoutingInterfacesForHosts with IP address
 
     SECTION("IP addresses are passed directly to ip route get")
     {
-        MockCommandExecutor mockExecutor;
+        MnubergemmMockCommandExecutor mockExecutor;
         mockExecutor.SetResponse(fmt::format("{} route get 10.0.0.1", ipCmd),
                                  "10.0.0.1 via 10.0.0.254 dev eth0 src 10.0.0.5 uid 1000\n    cache\n");
         mockExecutor.SetResponse(fmt::format("{} route get 10.0.0.2", ipCmd),
@@ -1891,148 +1797,108 @@ TEST_CASE("MnDiagMpiRunnerInternal::GetRoutingInterfacesForHosts with IP address
     }
 }
 
-// Helper lambdas for environment variable management
-auto const saveEnvVar = [](char const *name) -> std::optional<std::string> {
-    char const *val = std::getenv(name);
-    if (val)
-    {
-        return std::string(val);
-    }
-    return std::nullopt;
-};
-
-auto const restoreEnvVar = [](char const *name, std::optional<std::string> const &val) {
-    if (val)
-    {
-        setenv(name, val->c_str(), 1);
-    }
-    else
-    {
-        unsetenv(name);
-    }
-};
-
 TEST_CASE("MnDiagMpiMnubergemmRunner ResolveTestBinaryPath [mndiag]")
 {
     SECTION("Should use default path when no environment variable is set")
     {
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-        unsetenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), std::nullopt);
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
         mockCoreProxy->SetMockCudaVersion(12000);
-        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, EFFECTIVE_UID);
+        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, MNUBERGEMM_EFFECTIVE_UID);
 
         std::string path;
         dcgmReturn_t result = runner.GetTestBinaryPath(path);
         CHECK(result == DCGM_ST_OK);
         CHECK(path.find("cuda12") != std::string::npos);
         CHECK(path.find("mnubergemm") != std::string::npos);
-
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
     SECTION("Should use custom path when environment variable points to valid executable")
     {
-        auto savedPath         = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
         std::string customPath = "/bin/true";
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), customPath.c_str(), 1);
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), customPath);
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
         mockCoreProxy->SetMockCudaVersion(12000);
-        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, EFFECTIVE_UID);
+        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, MNUBERGEMM_EFFECTIVE_UID);
 
         std::string path;
         dcgmReturn_t result = runner.GetTestBinaryPath(path);
         CHECK(result == DCGM_ST_OK);
         CHECK(path == customPath);
-
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
     SECTION("Should fallback to default path when environment variable is empty")
     {
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), "", 1);
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), "");
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
         mockCoreProxy->SetMockCudaVersion(12000);
-        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, EFFECTIVE_UID);
+        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, MNUBERGEMM_EFFECTIVE_UID);
 
         std::string path;
         dcgmReturn_t result = runner.GetTestBinaryPath(path);
         CHECK(result == DCGM_ST_OK);
         CHECK(path.find("cuda12") != std::string::npos);
         CHECK(path.find("mnubergemm") != std::string::npos);
-
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
     SECTION("Should fallback to default path when environment variable points to non-existent file")
     {
-        auto savedPath              = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
         std::string nonExistentPath = "/path/to/nonexistent/binary";
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), nonExistentPath.c_str(), 1);
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), nonExistentPath);
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
         mockCoreProxy->SetMockCudaVersion(12000);
-        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, EFFECTIVE_UID);
+        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, MNUBERGEMM_EFFECTIVE_UID);
 
         std::string path;
         dcgmReturn_t result = runner.GetTestBinaryPath(path);
         CHECK(result == DCGM_ST_OK);
         CHECK(path.find("cuda12") != std::string::npos);
         CHECK(path.find("mnubergemm") != std::string::npos);
-
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
     SECTION("Should fallback to default path when environment variable points to non-executable file")
     {
-        auto savedPath                = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-        std::string nonExecutablePath = "/dev/null"; // Exists but not a regular file
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), nonExecutablePath.c_str(), 1);
+        auto nonExecutableFile = TempFile::Random("not an executable", "mnubergemm-non-exec-");
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), nonExecutableFile.Path().string());
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
         mockCoreProxy->SetMockCudaVersion(12000);
-        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, EFFECTIVE_UID);
+        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, MNUBERGEMM_EFFECTIVE_UID);
 
         std::string path;
         dcgmReturn_t result = runner.GetTestBinaryPath(path);
         CHECK(result == DCGM_ST_OK);
         CHECK(path.find("cuda12") != std::string::npos);
         CHECK(path.find("mnubergemm") != std::string::npos);
-
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
     SECTION("Should fallback to default path when environment variable points to directory")
     {
-        auto savedPath            = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-        std::string directoryPath = "/tmp"; // A directory, not a regular file
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), directoryPath.c_str(), 1);
+        auto directoryPath = TempDir::Random("mnubergemm-dir-");
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), directoryPath.Path().string());
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
         mockCoreProxy->SetMockCudaVersion(12000);
-        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, EFFECTIVE_UID);
+        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, MNUBERGEMM_EFFECTIVE_UID);
 
         std::string path;
         dcgmReturn_t result = runner.GetTestBinaryPath(path);
         CHECK(result == DCGM_ST_OK);
         CHECK(path.find("cuda12") != std::string::npos);
         CHECK(path.find("mnubergemm") != std::string::npos);
-
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
     SECTION("CUDA version is zero with no environment variable, default path should fail")
     {
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-        unsetenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), std::nullopt);
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
         mockCoreProxy->SetMockCudaVersion(0);
-        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, EFFECTIVE_UID);
+        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, MNUBERGEMM_EFFECTIVE_UID);
 
         std::string path;
         dcgmReturn_t result = runner.GetTestBinaryPath(path);
@@ -2042,19 +1908,16 @@ TEST_CASE("MnDiagMpiMnubergemmRunner ResolveTestBinaryPath [mndiag]")
         // Second call returns the same cached error without re-resolving
         result = runner.GetTestBinaryPath(path);
         CHECK(result == DCGM_ST_NO_DATA);
-
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
     SECTION("Should fail when environment variable path is too long")
     {
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
         std::string longPath(DCGM_MAX_STR_LENGTH + 10, 'a');
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), longPath.c_str(), 1);
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), longPath);
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
         mockCoreProxy->SetMockCudaVersion(12000);
-        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, EFFECTIVE_UID);
+        MnDiagMpiMnubergemmRunner runner(*mockCoreProxy, MNUBERGEMM_EFFECTIVE_UID);
 
         std::string path;
         dcgmReturn_t result = runner.GetTestBinaryPath(path);
@@ -2064,7 +1927,5 @@ TEST_CASE("MnDiagMpiMnubergemmRunner ResolveTestBinaryPath [mndiag]")
         // Second call returns the same cached error without re-resolving
         result = runner.GetTestBinaryPath(path);
         CHECK(result == DCGM_ST_BADPARAM);
-
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 }

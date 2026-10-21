@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,16 @@
 #include "DcgmGroup.h"
 
 #include <DcgmLogging.h>
-#include <dcgm_agent.h>
+#include <DcgmOpsAnyPtr.hpp>
 
 #include <cstring>
 
-DcgmGroup::DcgmGroup()
+DcgmGroup::DcgmGroup(DcgmNs::DcgmOpsAnyPtr dcgmOps)
     : m_groupId(0)
     , m_handle(0)
     , m_info(std::make_unique<dcgmGroupInfo_t>())
     , m_fieldGroup(nullptr)
+    , m_dcgmOps(dcgmOps)
 {
     memset(m_info.get(), 0, sizeof(*m_info));
 }
@@ -34,6 +35,7 @@ DcgmGroup::DcgmGroup(DcgmGroup &&other) noexcept
     , m_handle(other.m_handle)
     , m_info(std::make_unique<dcgmGroupInfo_t>())
     , m_fieldGroup(other.m_fieldGroup)
+    , m_dcgmOps(other.m_dcgmOps)
 {
     other.m_handle     = 0;
     other.m_groupId    = 0;
@@ -66,7 +68,7 @@ dcgmReturn_t DcgmGroup::Init(dcgmHandle_t handle, const std::string &groupNameSt
 
     snprintf(groupName, sizeof(groupName), "%s", groupNameStr.c_str());
 
-    return dcgmGroupCreate(m_handle, DCGM_GROUP_EMPTY, groupName, &m_groupId);
+    return m_dcgmOps->dcgmGroupCreate(m_handle, DCGM_GROUP_EMPTY, groupName, &m_groupId);
 }
 
 dcgmReturn_t DcgmGroup::Init(dcgmHandle_t handle, const std::string &groupName, const std::vector<unsigned int> &gpuIds)
@@ -92,7 +94,7 @@ dcgmReturn_t DcgmGroup::Init(dcgmHandle_t handle, const std::string &groupName, 
             if ((ret = AddGpu(gpuIds[i])) != DCGM_ST_OK)
             {
                 // Don't return with a partially created group
-                dcgmGroupDestroy(m_handle, m_groupId);
+                m_dcgmOps->dcgmGroupDestroy(m_handle, m_groupId);
                 break;
             }
         }
@@ -119,7 +121,7 @@ dcgmReturn_t DcgmGroup::AddGpu(unsigned int gpuId)
     // Mark that we need to refresh group information
     m_info->version = 0;
 
-    return dcgmGroupAddDevice(m_handle, m_groupId, gpuId);
+    return m_dcgmOps->dcgmGroupAddDevice(m_handle, m_groupId, gpuId);
 }
 
 dcgmReturn_t DcgmGroup::Cleanup()
@@ -132,7 +134,7 @@ dcgmReturn_t DcgmGroup::Cleanup()
     dcgmReturn_t ret = FieldGroupDestroy();
     dcgmReturn_t tmp;
 
-    tmp = dcgmGroupDestroy(m_handle, m_groupId);
+    tmp = m_dcgmOps->dcgmGroupDestroy(m_handle, m_groupId);
     if (tmp == DCGM_ST_OK)
     {
         m_groupId       = 0;
@@ -156,7 +158,7 @@ dcgmReturn_t DcgmGroup::RefreshGroupInfo()
     }
 
     m_info->version  = dcgmGroupInfo_version;
-    dcgmReturn_t ret = dcgmGroupGetInfo(m_handle, m_groupId, m_info.get());
+    dcgmReturn_t ret = m_dcgmOps->dcgmGroupGetInfo(m_handle, m_groupId, m_info.get());
     if (ret != DCGM_ST_OK)
         m_info->version = 0;
 
@@ -180,7 +182,7 @@ dcgmReturn_t DcgmGroup::GetConfig(dcgmConfig_t current[], unsigned int maxSize, 
         return DCGM_ST_INSUFFICIENT_SIZE;
     }
 
-    ret = dcgmStatusCreate(&stHandle);
+    ret = m_dcgmOps->dcgmStatusCreate(&stHandle);
 
     if (ret != DCGM_ST_OK)
     {
@@ -192,10 +194,10 @@ dcgmReturn_t DcgmGroup::GetConfig(dcgmConfig_t current[], unsigned int maxSize, 
     for (unsigned int i = 0; i < actualSize; i++)
         current[i].version = dcgmConfig_version1;
 
-    ret = dcgmConfigGet(m_handle, m_groupId, DCGM_CONFIG_CURRENT_STATE, actualSize, current, stHandle);
+    ret = m_dcgmOps->dcgmConfigGet(m_handle, m_groupId, DCGM_CONFIG_CURRENT_STATE, actualSize, current, stHandle);
 
     // Ignore the return
-    dcgmStatusDestroy(stHandle);
+    m_dcgmOps->dcgmStatusDestroy(stHandle);
 
     return ret;
 }
@@ -208,7 +210,7 @@ dcgmGpuGrp_t DcgmGroup::GetGroupId()
 
 dcgmReturn_t DcgmGroup::FieldGroupCreate(const std::vector<unsigned short> &fieldIds, const std::string &fieldGroupName)
 {
-    DcgmGdFieldGroup *dfg = new DcgmGdFieldGroup();
+    DcgmGdFieldGroup *dfg = new DcgmGdFieldGroup(m_dcgmOps);
     dcgmReturn_t ret      = dfg->Init(m_handle, fieldIds, fieldGroupName);
 
     if (ret == DCGM_ST_OK)
@@ -225,7 +227,8 @@ dcgmReturn_t DcgmGroup::FieldGroupDestroy()
 
     if (m_fieldGroup != nullptr)
     {
-        if (auto const ret = dcgmUnwatchFields(m_handle, m_groupId, m_fieldGroup->GetFieldGroupId()); ret != DCGM_ST_OK)
+        if (auto const ret = m_dcgmOps->dcgmUnwatchFields(m_handle, m_groupId, m_fieldGroup->GetFieldGroupId());
+            ret != DCGM_ST_OK)
         {
             log_error("Failed to unwatch fields for group {}: ({}) {}", m_groupId, ret, errorString(ret));
             return ret;
@@ -254,7 +257,7 @@ dcgmReturn_t DcgmGroup::WatchFields(long long frequency, double keepAge)
         return DCGM_ST_BADPARAM;
     }
 
-    return dcgmWatchFields(m_handle, m_groupId, m_fieldGroup->GetFieldGroupId(), frequency, keepAge, 0);
+    return m_dcgmOps->dcgmWatchFields(m_handle, m_groupId, m_fieldGroup->GetFieldGroupId(), frequency, keepAge, 0);
 }
 
 dcgmReturn_t DcgmGroup::GetValuesSince(long long timestamp,
@@ -267,9 +270,9 @@ dcgmReturn_t DcgmGroup::GetValuesSince(long long timestamp,
     if (m_handle == 0 || m_fieldGroup == nullptr)
         return DCGM_ST_BADPARAM;
 
-    if (nextTs == NULL)
+    if (nextTs == nullptr)
         nextTs = &dummyTs;
 
-    return dcgmGetValuesSince_v2(
+    return m_dcgmOps->dcgmGetValuesSince_v2(
         m_handle, m_groupId, m_fieldGroup->GetFieldGroupId(), timestamp, nextTs, checker, userData);
 }

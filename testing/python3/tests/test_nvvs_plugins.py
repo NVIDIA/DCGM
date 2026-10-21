@@ -21,7 +21,10 @@ import dcgm_internal_helpers
 import DcgmDiag
 from DcgmDiag import check_diag_result_fail, check_diag_result_pass, find_test_in_response
 import option_parser
+from contextlib import closing
+import errno
 import os
+import stat
 import subprocess
 
 import signal
@@ -295,7 +298,7 @@ def helper_check_software_page_retirements_fail_on_pending_retirements(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
 def test_nvvs_plugin_software_pending_page_retirements_standalone(
@@ -353,7 +356,7 @@ def helper_check_software_page_retirements_fail_total_retirements(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
 def test_nvvs_plugin_software_total_page_retirements_standalone(
@@ -390,6 +393,7 @@ def test_nvvs_plugins_required_symbols():
 
     pluginPath = os.path.join(os.environ['NVVS_BIN_PATH'], 'plugins')
     numErrors = 0
+    numPluginsChecked = 0
 
     requiredSymbols = [
         'GetPluginInterfaceVersion',
@@ -400,33 +404,50 @@ def test_nvvs_plugins_required_symbols():
         'RetrieveResults'
     ]
 
-    skipLibraries = [
+    skipLibraryPrefixes = (
+        'libcublas.so',
+        'libcublasLt.so',
+        'libcurand.so',
+        'libcusparseLt.so',
+        'libnccl.so',
         'libpluginCommon.so',
-        'libcurand.so'
-    ]
+    )
 
-    for cudaDirName in os.listdir(pluginPath):
-        cudaPluginPath = os.path.join(pluginPath, cudaDirName)
-        for soName in os.listdir(cudaPluginPath):
-            soPath = os.path.join(cudaPluginPath, soName)
-            # Skip symlinks
-            if os.path.islink(soPath):
-                continue
-            # Skip non-libraries
-            if ".so" not in soPath:
-                continue
+    def pluginFiles():
+        flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
+        for directoryPath, directoryNames, fileNames, directoryFd in os.fwalk(
+                pluginPath, follow_symlinks=False):
+            if directoryPath != pluginPath:
+                directoryNames[:] = []
 
-            # Skip some helper libraries that aren't plugin entry points
-            skip = False
-            for sl in skipLibraries:
-                if sl in soPath:
-                    skip = True
-            if skip:
-                continue
+            for pluginName in (
+                    name for name in fileNames
+                    if ".so" in name
+                    if not name.startswith(skipLibraryPrefixes)):
+                soPath = os.path.join(directoryPath, pluginName)
+                try:
+                    pluginFd = os.open(pluginName, flags, dir_fd=directoryFd)
+                except OSError as error:
+                    if error.errno == errno.ELOOP:
+                        continue
+                    raise
 
-            args = [nmPath, soPath]
+                try:
+                    if not stat.S_ISREG(os.fstat(pluginFd).st_mode):
+                        continue
+                    yield soPath, pluginFd
+                finally:
+                    os.close(pluginFd)
+
+    # Canonical plugins may be stored directly in the plugin root and exposed
+    # through CUDA-directory symlinks. The generator pins each file while nm
+    # inspects it and prunes directories below the first level to avoid assets.
+    with closing(pluginFiles()) as plugins:
+        for soPath, pluginFd in plugins:
+            numPluginsChecked += 1
+            args = [nmPath, "/proc/self/fd/%d" % pluginFd]
             output = str(subprocess.check_output(
-                args, stderr=subprocess.STDOUT))
+                args, stderr=subprocess.STDOUT, pass_fds=(pluginFd,)))
 
             if ': no symbols' in output:
                 test_utils.skip_test(
@@ -438,6 +459,7 @@ def test_nvvs_plugins_required_symbols():
                                  (soPath, rs))
                     numErrors += 1
 
+    assert numPluginsChecked > 0, "No plugin libraries were checked."
     assert numErrors == 0, "Some plugins were missing symbols. See errors above."
 
 
@@ -682,7 +704,7 @@ def test_nvvs_plugin_skip_memtest_if_pre_defined_errors_present(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
 def test_nvvs_plugin_skip_memtest_if_all_entities_have_pre_defined_errors_present(
@@ -822,7 +844,7 @@ def _run_software_diag_and_assert_pass(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 def test_software_gpu_recovery_action_fail_nvml(handle, gpuIds):
     """
-    NVML injection of each GPU recovery action (1-4) causes software test to fail
+    NVML injection of each GPU recovery action (1-5) causes software test to fail
     with the corresponding DCGM_FR_GPU_RECOVERY_* code. Skipped if baseline (no injection) pass fails.
     """
     gpuId = gpuIds[0]
@@ -835,6 +857,7 @@ def test_software_gpu_recovery_action_fail_nvml(handle, gpuIds):
         (2, dcgm_errors.DCGM_FR_GPU_RECOVERY_REBOOT, "NODE_REBOOT"),
         (3, dcgm_errors.DCGM_FR_GPU_RECOVERY_DRAIN_P2P, "DRAIN_P2P"),
         (4, dcgm_errors.DCGM_FR_GPU_RECOVERY_DRAIN_RESET, "DRAIN_AND_RESET"),
+        (5, dcgm_errors.DCGM_FR_GPU_RECOVERY_IMEX_DOMAIN, "RECOVER_IMEX_DOMAIN"),
     )
 
     for inject_val, expected_code, msg_snippet in _GPU_RECOVERY_INJECTION_CASES:

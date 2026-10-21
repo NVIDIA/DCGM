@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,6 @@
 #define DCGM_LIMIT_MAX_NVLINK_ERROR 1
 // RM has informed us that CRC errors only matter at rates of 100+ per second
 #define DCGM_LIMIT_MAX_NVLINK_CRC_ERROR 100.0
-
-//! Exponent floor for non-aggregated (per-link) Symbol BER
-#define DCGM_SYMBOL_BER_FLOOR_EXP_NON_AGGREGATED 255
-
-//! Exponent floor for aggregated Symbol BER (Blackwell+)
-#define DCGM_SYMBOL_BER_FLOOR_EXP_AGGREGATED 238
 
 // This number of uncorrectable row remaps indicates GPU is in a bad state
 #define DCGM_LIMIT_MAX_ROW_REMAP_UNCORRECTABLE 512

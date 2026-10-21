@@ -86,6 +86,21 @@ dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(NvmlTaskRunner &nvmlDriver,
                                               dcgm_power_profile_helper_t const *gpuInfo,
                                               dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo);
 
+/**
+ * Get information about workload power profiles supported on this device.
+ *
+ * @param[in] profileReader Reader used to query NVML-facing workload power profile metadata.
+ * @param[in] gpuInfo GPU to query.
+ * @param[out] profilesInfo Information about supported profiles.
+ *
+ * @return DCGM_ST_OK on success; DCGM_ST_BADPARAM for null input or output pointers;
+ *         DCGM_ST_NOT_SUPPORTED when NVML reports profile support is unavailable;
+ *         DCGM_ST_NVML_ERROR for other NVML failures.
+ */
+dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(DcgmWorkloadPowerProfileReader &profileReader,
+                                              dcgm_power_profile_helper_t const *gpuInfo,
+                                              dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo);
+
 /*************************************************************************/
 /*
  * Get status information about the profiles supported on this device
@@ -98,5 +113,20 @@ dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(NvmlTaskRunner &nvmlDriver,
  *        <0 on error. See DCGM_ST_? #defines
  */
 dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(NvmlTaskRunner &nvmlDriver,
+                                                dcgm_power_profile_helper_t const *gpuInfo,
+                                                dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus);
+
+/**
+ * Get current workload power profile status for this device.
+ *
+ * @param[in] profileReader Reader used to query NVML-facing workload power profile status.
+ * @param[in] gpuInfo GPU to query.
+ * @param[out] profilesStatus Current, requested, and enforced profile masks.
+ *
+ * @return DCGM_ST_OK on success; DCGM_ST_BADPARAM for null input or output pointers;
+ *         DCGM_ST_NOT_SUPPORTED when NVML reports profile support is unavailable;
+ *         DCGM_ST_NVML_ERROR for other NVML failures.
+ */
+dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(DcgmWorkloadPowerProfileReader &profileReader,
                                                 dcgm_power_profile_helper_t const *gpuInfo,
                                                 dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus);

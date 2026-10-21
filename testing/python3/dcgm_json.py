@@ -29,7 +29,7 @@ publishFieldIds = [
     dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS,
     dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS,
     dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
-    dcgm_fields.DCGM_FI_DEV_GPU_UTIL_RATIO,
+    dcgm_fields.DCGM_FI_DEV_GPU_UTIL,
     dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING,
     dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
     dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,

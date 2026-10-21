@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,6 +107,16 @@ public:
         m_mockGpuInfo = info;
     }
 
+    void SetMockGpuIdsResult(dcgmReturn_t result)
+    {
+        m_mockGpuIdsResult = result;
+    }
+
+    void SetMockGpuInfoResult(dcgmReturn_t result)
+    {
+        m_mockGpuInfoResult = result;
+    }
+
     void SetMockGpuIdsSameSku(bool value)
     {
         m_AreAllGpuIdsSameSku = value;
@@ -129,14 +139,20 @@ public:
 
     dcgmReturn_t GetGpuIds(int, std::vector<unsigned int> &gpuIds) override
     {
-        gpuIds = m_mockGpuIds;
-        return DCGM_ST_OK;
+        if (m_mockGpuIdsResult == DCGM_ST_OK)
+        {
+            gpuIds = m_mockGpuIds;
+        }
+        return m_mockGpuIdsResult;
     }
 
     dcgmReturn_t GetAllGpuInfo(std::vector<dcgmcm_gpu_info_cached_t> &gpuInfo) override
     {
-        gpuInfo = m_mockGpuInfo;
-        return DCGM_ST_OK;
+        if (m_mockGpuInfoResult == DCGM_ST_OK)
+        {
+            gpuInfo = m_mockGpuInfo;
+        }
+        return m_mockGpuInfoResult;
     }
 
     bool AreAllGpuIdsSameSku(std::vector<unsigned int> &) const override
@@ -166,6 +182,8 @@ private:
     DcgmCoreProxy m_dummyProxy { dcgmCoreCallbacks_t {} };
     std::vector<unsigned int> m_mockGpuIds;
     std::vector<dcgmcm_gpu_info_cached_t> m_mockGpuInfo;
+    dcgmReturn_t m_mockGpuIdsResult  = DCGM_ST_OK;
+    dcgmReturn_t m_mockGpuInfoResult = DCGM_ST_OK;
     bool m_AreAllGpuIdsSameSku;
     std::string m_mockDriverVersion;
     dcgmReturn_t m_mockDriverVersionResult = DCGM_ST_OK;

@@ -17,15 +17,30 @@
 #ifndef NVVS_PLUGIN_INTERFACE_H
 #define NVVS_PLUGIN_INTERFACE_H
 
-#include "NvvsCommon.h"
+#include "NvvsPluginResult.h"
 
 #include <dcgm_api_export.h>
 #include <dcgm_structs.h>
 
 #ifdef __cplusplus
+
+#include <algorithm>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#endif
+
+#ifdef __cplusplus
+// hostEngineAppenderCallbackFp_t is defined in DcgmLogging.h
+#include <DcgmLogging.h>
+class HangDetectMonitor;
+class NvvsCommon;
+typedef HangDetectMonitor *HangDetectMonitorPtr;
+typedef NvvsCommon *NvvsCommonPtr;
+#else
+typedef void (*hostEngineAppenderCallbackFp_t)(void const *);
+typedef void *HangDetectMonitorPtr;
+typedef void *NvvsCommonPtr;
 #endif
 
 #ifdef __cplusplus
@@ -43,17 +58,9 @@ extern "C" {
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_4 4 /* 3.2.5 -> 3.3.6 */
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_5 5 /* 3.3.7 -> 3.3.8 */
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_6 6 /* 4.0.0 -> 4.2.3 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_7 7 /* Current version - 4.3 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_7
-
-#ifdef __cplusplus
-// hostEngineAppenderCallbackFp_t is defined in DcgmLogging.h
-class HangDetectMonitor;
-typedef HangDetectMonitor *HangDetectMonitorPtr;
-#else
-typedef void (*hostEngineAppenderCallbackFp_t)(void const *);
-typedef void *HangDetectMonitorPtr;
-#endif
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_7 7 /* 4.3.0 -> 4.6.1 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_8 8 /* 4.7.0 -> Current version */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_8
 
 /* IMPORTANT:
  *
@@ -303,15 +310,15 @@ typedef dcgmReturn_t (*dcgmDiagGetPluginInfo_f)(unsigned int pluginInterfaceVers
  * The plugin should perform all setup necessary for it to be ready to execute.
  * This function will have a user controllable timeout which defaults to 10 seconds in order to complete successfully.
  *
- * @param handle[in]                 - the DCGM handle that the plugin should use
- * @param statFieldIds[out]          - information to specify additional fields ids to watch and append to the stats
- * @param userData[out]              - data the plugin would like passed back to the RunTest(), RetrieveCustomStats(),
+ * @param[in] handle                 - the DCGM handle that the plugin should use
+ * @param[out] statFieldIds          - information to specify additional fields ids to watch and append to the stats
+ * @param[out] userData              - data the plugin would like passed back to the RunTest(), RetrieveCustomStats(),
  *                                     and RetrieveResults() functions. It can be ignored if the plugin wishes.
- * @param loggingSeverity[in]        - Severity at which this plugin should log. See DcgmLoggingSeverity_t
- * @param loggingCallback[in]        - Callback to use to log. The nvvs process will log on each plugin's behalf
- *file
- * @param pluginAttr[in]             - Plugin attributes which provided by NVVS.
- * @param monitor[in]                - Hang detection monitor (nullptr if disabled).
+ * @param[in] loggingSeverity        - Severity at which this plugin should log. See DcgmLoggingSeverity_t
+ * @param[in] loggingCallback        - Callback to use to log. The nvvs process will log on each plugin's behalf file
+ * @param[in] pluginAttr             - Plugin attributes which provided by NVVS.
+ * @param[in] nvvsCommon             - Shared NVVS runtime configuration.
+ * @param[in] monitor                - Hang detection monitor (nullptr if disabled).
  *
  * @return DCGM_ST_OK                - if the plugin has been set up sufficiently to run.
  *         DCGM_ST_*                   if an error condition matching a DCGM error code has caused the plugin to not be
@@ -324,6 +331,7 @@ DCGM_PUBLIC_API dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                                               DcgmLoggingSeverity_t loggingSeverity,
                                               hostEngineAppenderCallbackFp_t loggingCallback,
                                               dcgmDiagPluginAttr_v1 const *pluginAttr,
+                                              NvvsCommonPtr nvvsCommon,
                                               HangDetectMonitorPtr monitor);
 
 typedef dcgmReturn_t (*dcgmDiagInitializePlugin_f)(dcgmHandle_t handle,
@@ -332,6 +340,7 @@ typedef dcgmReturn_t (*dcgmDiagInitializePlugin_f)(dcgmHandle_t handle,
                                                    DcgmLoggingSeverity_t loggingSeverity,
                                                    hostEngineAppenderCallbackFp_t loggingCallback,
                                                    dcgmDiagPluginAttr_v1 const *pluginAttr,
+                                                   NvvsCommonPtr nvvsCommon,
                                                    HangDetectMonitorPtr monitor);
 
 /**

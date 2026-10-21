@@ -74,6 +74,12 @@ python3 scripts/codegen/libclang/generate.py \
             "any_unique_ptr": generate_any_unique_ptr.run_generator,
             "concept": generate_concept.run_generator,
         }
+        policy_type_map = {
+            "any_value": generate_any_value.AnyValuePolicies,
+            "any_ptr": generate_any_ptr.AnyPtrPolicies,
+            "any_unique_ptr": generate_any_unique_ptr.AnyUniquePtrPolicies,
+            "concept": generate_concept.ConceptPolicies,
+        }
 
         # Load yaml entries
         with open(yaml_filepath, encoding="utf-8") as f:
@@ -116,7 +122,7 @@ python3 scripts/codegen/libclang/generate.py \
         with multiprocessing.Pool() as pool:
             # Pass additional data to run_generator
             try:
-                run_generator_args = [(file, generator_fn_map)
+                run_generator_args = [(file, generator_fn_map, policy_type_map)
                                       for file in files]
                 pool.map(Generator.run_generator, run_generator_args)
             except Exception as e:
@@ -128,16 +134,19 @@ python3 scripts/codegen/libclang/generate.py \
     def run_generator(args):
         file = args[0]
         generator_fn_map = args[1]
+        policy_type_map = args[2]
 
         # Prepare arguments and pass to generator
-        libclang_path = "/usr/lib/llvm-21/lib/libclang.so"
+        libclang_path = "/usr/lib/llvm-22/lib/libclang.so"
         generator_fn = generator_fn_map.get(file["generator_type"])
-        if generator_fn is None:
+        policy_type = policy_type_map.get(file["generator_type"])
+        if generator_fn is None or policy_type is None:
             raise ValueError(
                 f"Unknown generator type: {file['generator_type']}")
+        policies = policy_type(**file["policies"])
         generator_fn(
             file["filepath"], file["class_name"],
-            file["binary_dir"], file["destination_dir"], file["policies"], libclang_path
+            file["binary_dir"], file["destination_dir"], policies, libclang_path
         )
 
 

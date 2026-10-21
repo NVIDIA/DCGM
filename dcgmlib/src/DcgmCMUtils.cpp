@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include "DcgmCMUtils.h"
-
 
 /*****************************************************************************/
 bool DcgmFieldIsMappedToNvmlField(dcgm_field_meta_p fieldMeta, bool driver520OrNewer)
@@ -127,6 +126,7 @@ const char *NvmlErrorToStringValue(nvmlReturn_t nvmlReturn)
             break;
 
         case NVML_ERROR_NOT_SUPPORTED:
+        case NVML_ERROR_FUNCTION_NOT_FOUND:
             return DCGM_STR_NOT_SUPPORTED;
 
         case NVML_ERROR_NO_PERMISSION:
@@ -155,6 +155,7 @@ long long NvmlErrorToInt64Value(nvmlReturn_t nvmlReturn)
             break;
 
         case NVML_ERROR_NOT_SUPPORTED:
+        case NVML_ERROR_FUNCTION_NOT_FOUND:
             return DCGM_INT64_NOT_SUPPORTED;
 
         case NVML_ERROR_NO_PERMISSION:
@@ -183,6 +184,7 @@ int NvmlErrorToInt32Value(nvmlReturn_t nvmlReturn)
             break;
 
         case NVML_ERROR_NOT_SUPPORTED:
+        case NVML_ERROR_FUNCTION_NOT_FOUND:
             return DCGM_INT32_NOT_SUPPORTED;
 
         case NVML_ERROR_NO_PERMISSION:
@@ -211,6 +213,7 @@ double NvmlErrorToDoubleValue(nvmlReturn_t nvmlReturn)
             break;
 
         case NVML_ERROR_NOT_SUPPORTED:
+        case NVML_ERROR_FUNCTION_NOT_FOUND:
             return DCGM_FP64_NOT_SUPPORTED;
 
         case NVML_ERROR_NO_PERMISSION:
@@ -284,5 +287,5 @@ bool DcgmFieldIsNvLinkCountField(unsigned short fieldId) noexcept
     // NVLink5 COUNT fields: 1200-1219 (TX/RX counters, errors, BER)
     // NVLink5 FEC history fields: 1404-1419
     return (fieldId >= DCGM_FI_DEV_NVLINK_TX_PACKET_TOTAL && fieldId <= DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL)
-           || (fieldId >= DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0 && fieldId <= DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15);
+           || (fieldId >= DCGM_FI_DEV_NVLINK_FEC_HISTORY_0_TOTAL && fieldId <= DCGM_FI_DEV_NVLINK_FEC_HISTORY_15_TOTAL);
 }

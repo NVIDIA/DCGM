@@ -20,26 +20,22 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
-#include <memory>
 #include <thread>
 
 using DcgmNs::Semaphore;
 
 TEST_CASE("Semaphore: Test singe release")
 {
-    auto sm = std::make_shared<Semaphore>();
+    Semaphore sm;
     std::atomic_int testedValue;
     std::atomic_bool checkResult { false };
 
-    std::thread t1([sm_wptr = std::weak_ptr<Semaphore>(sm), &testedValue, &checkResult] {
-        if (auto sm = sm_wptr.lock())
-        {
-            checkResult.store(sm->Wait() == Semaphore::WaitResult::Ok, std::memory_order_release);
-            testedValue.store(100, std::memory_order_release);
-        }
+    std::thread t1([&sm, &testedValue, &checkResult] {
+        checkResult.store(sm.Wait() == Semaphore::WaitResult::Ok, std::memory_order_release);
+        testedValue.store(100, std::memory_order_release);
     });
 
-    REQUIRE(sm->Release() == Semaphore::ReleaseResult::Ok);
+    REQUIRE(sm.Release() == Semaphore::ReleaseResult::Ok);
 
     t1.join();
 
@@ -49,25 +45,22 @@ TEST_CASE("Semaphore: Test singe release")
 
 TEST_CASE("Semaphore: Test multiple releases")
 {
-    auto sm = std::make_shared<Semaphore>();
+    Semaphore sm;
     std::atomic_int testedValue {};
     std::deque<std::atomic_bool> checkResults;
     checkResults.emplace_back(false);
     checkResults.emplace_back(false);
     checkResults.emplace_back(false);
 
-    std::thread t1([sm_wptr = std::weak_ptr<Semaphore>(sm), &testedValue, &checkResults] {
-        if (auto sm = sm_wptr.lock())
+    std::thread t1([&sm, &testedValue, &checkResults] {
+        for (int i = 0; i < 3; ++i)
         {
-            for (int i = 0; i < 3; ++i)
-            {
-                checkResults[i].store(sm->Wait() == Semaphore::WaitResult::Ok, std::memory_order_release);
-                testedValue.fetch_add(1, std::memory_order_relaxed);
-            }
+            checkResults[i].store(sm.Wait() == Semaphore::WaitResult::Ok, std::memory_order_release);
+            testedValue.fetch_add(1, std::memory_order_relaxed);
         }
     });
 
-    REQUIRE(sm->Release(3) == Semaphore::ReleaseResult::Ok);
+    REQUIRE(sm.Release(3) == Semaphore::ReleaseResult::Ok);
 
     t1.join();
 

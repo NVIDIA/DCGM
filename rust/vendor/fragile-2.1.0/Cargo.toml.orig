@@ -1,0 +1,25 @@
+[package]
+name = "fragile"
+version = "2.1.0"
+license = "Apache-2.0"
+description = "Provides wrapper types for sending non-send values to other threads."
+readme = "README.md"
+authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
+repository = "https://github.com/mitsuhiko/fragile"
+homepage = "https://github.com/mitsuhiko/fragile"
+keywords = ["send", "cell", "non-send", "send-wrapper", "failure"]
+edition = "2018"
+rust-version = "1.56.0"
+
+[features]
+default = ["stream"]
+future = []
+stream = ["future", "futures-core"]
+
+[dependencies]
+futures-core = { version = "0.3.11", optional = true }
+slab = { version = "0.4.5", optional = true }
+
+[dev-dependencies]
+futures-executor = "0.3.11"
+futures-util = "0.3.11"

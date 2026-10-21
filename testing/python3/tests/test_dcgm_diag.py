@@ -124,6 +124,27 @@ def test_helper_standalone_check_diag_empty_group(handle, gpuIds):
     assert response, "Should have received a response now that we have a non-empty group"
 
 
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_injection_gpus(2)
+def test_helper_standalone_diag_rejects_oversized_entity_id_range(handle, gpuIds):
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
+    runDiagInfo.groupId = dcgm_structs.DCGM_GROUP_NULL
+    runDiagInfo.validate = 1
+    runDiagInfo.entityIds = "gpu:{0-4294967295}"
+
+    with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MAX_LIMIT)):
+        test_utils.action_validate_wrapper(runDiagInfo, handle)
+
+    runDiagInfo.entityIds = "gpu:{0-1024}"
+    with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MAX_LIMIT)):
+        test_utils.action_validate_wrapper(runDiagInfo, handle)
+
+    runDiagInfo.entityIds = "gpu:{0-4294967296}"
+    with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
+        test_utils.action_validate_wrapper(runDiagInfo, handle)
+
+
 # This function isn't currently used and can be removed.
 
 def diag_assert_error_found(response, entityPair, testName, errorStr):
@@ -757,47 +778,6 @@ def test_dcgm_diag_pcie_failure(handle, gpuIds):
         dcgm_fields.DCGM_FE_GPU, gpuIds[0])
     assert check_diag_result_fail(
         response, entityPair, testName), "No failure detected in diagnostic"
-
-
-@test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_only_with_live_gpus()
-@test_utils.for_all_same_sku_gpus()
-def test_dcgm_diag_pcie_failure_effective_ber(handle, gpuIds):
-    testName = "pcie"
-    gpuId = gpuIds[0]
-    inject_value(
-        handle,
-        gpuId,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW,
-        2829,  # 11e-13 (1.1e-12) encoded as mantissa=11, exponent=13
-        600,
-        True,
-        repeatCount=5)
-
-    dd = DcgmDiag.DcgmDiag(
-        gpuIds=[gpuId],
-        testNamesStr=testName,
-        paramsStr="pcie.test_duration=4;pcie.is_allowed=true;pcie.test_with_gemm=false;pcie.test_broken_p2p=false",
-        version=g_latestDiagRunVer)
-    dd.SetWatchFrequency(5000000)
-    response = test_utils.diag_execute_wrapper(dd, handle)
-
-    # Verify that the effective BER is detected
-    for test in response.tests[:min(
-            response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
-        if test.name == testName:
-            break
-    assert test.name == testName, f"Expected fail result for test {testName} but none was found"
-    assert test.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
-        f"Expected fail result for test {testName} but got {test.result}")
-    assert test.numErrors > 0, f"Expected at least 1 error for test {testName}"
-    foundEffectiveBer = False
-    for i in range(test.numErrors):
-        errIdx = test.errorIndices[i]
-        if response.errors[errIdx].code == dcgm_errors.DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD:
-            foundEffectiveBer = True
-            break
-    assert foundEffectiveBer, f"Expected DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD for test {testName} but none was found"
 
 
 @test_utils.run_with_standalone_host_engine(120)

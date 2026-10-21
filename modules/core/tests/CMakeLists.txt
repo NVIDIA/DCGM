@@ -41,7 +41,8 @@ target_link_libraries(coreModuleTests
         -Wl,--no-whole-archive
         dcgm
         Catch2::Catch2WithMain
-        ${CMAKE_THREAD_LIBS_INIT}
+        test-utils
+        Threads::Threads
         fmt::fmt
         rt
         dl

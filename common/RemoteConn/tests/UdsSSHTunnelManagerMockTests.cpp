@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,18 @@
 
 #include <DcgmLogging.h>
 #include <SSHTunnelManager.hpp>
+#include <ScopedWorkingDirectory.hpp>
+#include <TempDir.hpp>
 
 #include <catch2/catch_all.hpp>
-#include <iostream>
 
 using namespace DcgmNs::Common::RemoteConn::detail;
 using namespace DcgmNs::Common::RemoteConn::Mock;
 
-MockReturns mockReturnAddressInUse = { .isAlive = false, .stdError = ADDRESS_IN_USE_MSG, .pid = 223 };
-MockReturns mockReturnSuccess      = { .isAlive = true, .stdError = CONNECTION_SUCCESS_MSG, .pid = 224 };
+MockReturns udsMockReturnAddressInUse = { .isAlive = false, .stdError = ADDRESS_IN_USE_MSG, .pid = 223 };
+MockReturns udsMockReturnSuccess      = { .isAlive = true, .stdError = CONNECTION_SUCCESS_MSG, .pid = 224 };
 
-static ChildProcessFactory MockChildProcessFactory = []() {
+static ChildProcessFactory UdsMockChildProcessFactory = []() {
     return std::make_unique<DcgmNs::Common::RemoteConn::Mock::MockChildProcess>();
 };
 // make sure we're in the same namespace as the base class to test private members.
@@ -111,19 +112,6 @@ public:
         REQUIRE_NOTHROW(boost::filesystem::create_directories(GetPrimaryPath()));
         REQUIRE_NOTHROW(boost::filesystem::create_directories(GetSecondaryPath()));
     }
-
-    ~TestUdsSSHTunnelManager()
-    {
-        try
-        {
-            boost::filesystem::remove_all(GetPrimaryPath());
-            boost::filesystem::remove_all(GetSecondaryPath());
-        }
-        catch (const boost::filesystem::filesystem_error &e)
-        {
-            // Suppress cleanup errors.
-        }
-    }
 };
 
 } // namespace DcgmNs::Common::RemoteConn::detail
@@ -132,7 +120,9 @@ public:
 TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
 {
     // Common setup
-    DcgmChildProcessManager childProcessManager(MockChildProcessFactory);
+    auto workingRoot = TempDir::Random("remoteconn-uds-mock-");
+    ScopedWorkingDirectory workingDirectory { workingRoot.Path() };
+    DcgmChildProcessManager childProcessManager(UdsMockChildProcessFactory);
     TestUdsSSHTunnelManager manager;
     SetChildProcessFuncs(manager, childProcessManager);
     auto uid                 = geteuid();
@@ -146,7 +136,7 @@ TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
     std::string localUnixPath, remoteUnixPath               = "/tmp/testRemoteUnixPath.sock";
     std::string anotherLocalUnixPath, anotherRemoteUnixPath = "/tmp/testAnotherRemoteUnixPath.sock";
     auto mockKey = manager.GetSSHAddressForwardingString(expectedLocalUnixPath, remoteUnixPath);
-    MockStateCache::SetMockReturns(mockKey, mockReturnSuccess);
+    MockStateCache::SetMockReturns(mockKey, udsMockReturnSuccess);
 
     SECTION("Basic start and stop test")
     {
@@ -187,7 +177,7 @@ TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
         // Set mock expectations for the new uid.
         auto expectedLocalUnixPath = fmt::format("{}/ssh_0.sock", newUidUnixPathPrefix);
         auto mockKey               = manager.GetSSHAddressForwardingString(expectedLocalUnixPath, remoteUnixPath);
-        MockStateCache::SetMockReturns(mockKey, mockReturnSuccess);
+        MockStateCache::SetMockReturns(mockKey, udsMockReturnSuccess);
 
         auto tunnelState = manager.StartSession(remoteHostname, remoteUnixPath, localUnixPath, newUid);
         REQUIRE(tunnelState == TunnelState::Active);
@@ -243,7 +233,7 @@ TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
                                                                      : fmt::format("./tmp/dcgm_{}", secondUid);
         auto secondLocalUnixPath         = fmt::format("{}/ssh_1.sock", newUidUnixPathPrefix);
         auto mockKey                     = manager.GetSSHAddressForwardingString(secondLocalUnixPath, remoteUnixPath);
-        MockStateCache::SetMockReturns(mockKey, mockReturnSuccess);
+        MockStateCache::SetMockReturns(mockKey, udsMockReturnSuccess);
         // Create the tmp directory for the new uid for the test. The current uid will not be able to create the
         // directory. Override the path ownership and permissions check to allow the test to continue.
         boost::filesystem::create_directories(newUidUnixPathPrefix);
@@ -255,7 +245,6 @@ TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
 
         manager.EndSession(remoteHostname, remoteUnixPath, uid);
         manager.EndSession(remoteHostname, remoteUnixPath, secondUid);
-        boost::filesystem::remove_all(newUidUnixPathPrefix);
     }
 
     SECTION("Different sessions to same host with different remote unix paths")
@@ -267,7 +256,7 @@ TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
         // Start second session to the same host with a different remote unix path
         expectedLocalUnixPath = fmt::format("{}/ssh_1.sock", localUnixPathPrefix);
         mockKey               = manager.GetSSHAddressForwardingString(expectedLocalUnixPath, anotherRemoteUnixPath);
-        MockStateCache::SetMockReturns(mockKey, mockReturnSuccess);
+        MockStateCache::SetMockReturns(mockKey, udsMockReturnSuccess);
         auto tunnelState2 = manager.StartSession(remoteHostname, anotherRemoteUnixPath, localUnixPath, uid);
         // Verify that second session returns active state.
         REQUIRE(tunnelState2 == TunnelState::Active);
@@ -285,7 +274,7 @@ TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
         // Setup for second session
         expectedLocalUnixPath = fmt::format("{}/ssh_1.sock", localUnixPathPrefix);
         mockKey               = manager.GetSSHAddressForwardingString(expectedLocalUnixPath, anotherRemoteUnixPath);
-        MockStateCache::SetMockReturns(mockKey, mockReturnSuccess);
+        MockStateCache::SetMockReturns(mockKey, udsMockReturnSuccess);
 
         // Start second session
         auto tunnelState2 = manager.StartSession(remoteHostname, anotherRemoteUnixPath, anotherLocalUnixPath, uid);
@@ -306,7 +295,7 @@ TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
         SECTION("Root user with primary path")
         {
             auto mockKey = manager.GetSSHAddressForwardingString(fmt::format("./run/dcgm/ssh_0.sock"), remoteUnixPath);
-            MockStateCache::SetMockReturns(mockKey, mockReturnSuccess);
+            MockStateCache::SetMockReturns(mockKey, udsMockReturnSuccess);
             manager.SetRunningAsRoot(true); // Run parent process as root to use primary path
             manager.SetIsRootUser(true);    // set the user to root
 
@@ -320,7 +309,7 @@ TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
         {
             auto mockKey = manager.GetSSHAddressForwardingString(fmt::format("./run/user/{}/dcgm/ssh_0.sock", uid),
                                                                  remoteUnixPath);
-            MockStateCache::SetMockReturns(mockKey, mockReturnSuccess);
+            MockStateCache::SetMockReturns(mockKey, udsMockReturnSuccess);
             manager.SetRunningAsRoot(true); // Run parent process as root to use primary path
             manager.SetIsRootUser(false);   // set the user to non-root
             // let's create ./run/user/{uid} directory which is required for the test.
@@ -334,7 +323,7 @@ TEST_CASE("UdsSSHTunnelManager tests using mock child process.")
 
         auto mockKey
             = manager.GetSSHAddressForwardingString(fmt::format("./tmp/dcgm_{}/ssh_0.sock", uid), remoteUnixPath);
-        MockStateCache::SetMockReturns(mockKey, mockReturnSuccess);
+        MockStateCache::SetMockReturns(mockKey, udsMockReturnSuccess);
         SECTION("Root user with secondary path")
         {
             manager.SetRunningAsRoot(false); // Run parent process as non-root to use secondary path

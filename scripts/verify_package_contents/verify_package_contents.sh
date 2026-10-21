@@ -104,4 +104,4 @@ fi
 export SCRIPTDIR
 export -f verify specialize template_deb template_rpm
 
-printf "%s\n" $@ | xargs --max-args=1 bash -c 'verify "$@"' _ 
+printf "%s\n" "$@" | xargs --max-args=1 bash -c 'verify "$@"' _

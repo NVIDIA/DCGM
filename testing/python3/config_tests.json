@@ -5,6 +5,7 @@
     ],
     "modules_to_run_independent": [
 	"test_workload_power_profiles",
-	"test_bind_unbind_gpus"
+	"test_bind_unbind_gpus",
+	"test_health"
     ]
 }

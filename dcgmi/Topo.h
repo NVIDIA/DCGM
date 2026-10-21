@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,15 @@
 #define TOPO_H_
 
 #include "Command.h"
+
+#include <DcgmOpsAnyPtr.hpp>
+
 #include <stdint.h>
 
 class Topo
 {
 public:
-    Topo()          = default;
+    explicit Topo(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~Topo() = default;
 
     /*****************************************************************************
@@ -53,6 +56,7 @@ private:
     /*****************************************************************************
      * Helper method to acquire a list of All GPUs on the system
      *****************************************************************************/
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
 };
 
 /*****************************************************************************
@@ -65,7 +69,7 @@ private:
 class GetGPUTopo : public Command
 {
 public:
-    GetGPUTopo(std::string hostname, unsigned int gpuId, bool json);
+    GetGPUTopo(std::string hostname, unsigned int gpuId, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -82,7 +86,7 @@ private:
 class GetGroupTopo : public Command
 {
 public:
-    GetGroupTopo(std::string hostname, unsigned int groupId, bool json);
+    GetGroupTopo(std::string hostname, unsigned int groupId, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

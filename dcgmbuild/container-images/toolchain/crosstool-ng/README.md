@@ -23,8 +23,6 @@ Operating System:
     Version of linux: 4.20.17
 
 Binary utilities:
-    Linkers to enable: ld, gold
-    Enable threaded gold: checked
     Enable support for plugins: checked
     Enable -z relro in ELF linker by default: checked (make sure `*` shows)
 
@@ -35,7 +33,8 @@ C-library:
 
 C compiler:
     Version of gcc: 14.3.0
-    gcc extra config: `--with-glibc-version=2.27 --enable-default-ssp --enable-default-pie --with-specs='%{O*:%{!O0:-D_FORTIFY_SOURCE=3}} %{!r:%{!shared:-z relro}}'`
+    gcc extra config: `--with-glibc-version=2.27 --enable-default-ssp --enable-default-pie --with-specs='%{O*:%{!O0:-D_FORTIFY_SOURCE=3}} -fuse-ld=mold -Wl,--disable-new-dtags %{!r:%{!shared:-z relro}}'`
+        We add --disable-new-dtags because we need binaries to be linked with RPATH instead of RUNPATH, as RUNPATH introduces a risk of system dependencies being loaded instead of our vendored dependencies
     Use system zlib: checked
     Enable Position Independent Executable as default: checked
     Compile libmudflap: checked
@@ -45,6 +44,10 @@ C compiler:
     Enable build-id: checked
     linker hash style: both
     Additional supported languages: C++: checked
+
+Linkers:
+    (ld is built by default; its options are under Binary utilities)
+    mold: checked
 
 Debug facilities:
     expat: checked

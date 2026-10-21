@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 target_link_libraries(modules_interface
     INTERFACE
         dcgm_interface
+        dcgm_ops
         module_common_interface
         module_common_interface)
 
@@ -48,6 +49,7 @@ function(define_dcgm_module lib_name)
 endfunction()
 
 add_subdirectory(common)
+add_subdirectory(tests)
 add_subdirectory(core/tests)
 add_subdirectory(config)
 add_subdirectory(diag)

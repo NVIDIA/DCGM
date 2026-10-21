@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 
 #pragma once
 
-#include "dcgm_structs.h"
+#include "DcgmUtilities.h"
+#include <dcgm_structs.h>
+
+#include <functional>
 
 /** Equality test for two entity pairs. */
 static inline bool operator==(const dcgmGroupEntityPair_t &a, const dcgmGroupEntityPair_t &b)
@@ -29,3 +32,24 @@ static inline bool operator<(dcgmGroupEntityPair_t const &a, dcgmGroupEntityPair
 {
     return (b.entityGroupId > a.entityGroupId) || (b.entityGroupId == a.entityGroupId && b.entityId > a.entityId);
 }
+
+namespace std
+{
+template <>
+struct hash<dcgmGroupEntityPair_t>
+{
+    std::size_t operator()(dcgmGroupEntityPair_t const &k) const
+    {
+        return DcgmNs::Utils::Hash::CompoundHash(k.entityId, k.entityGroupId);
+    }
+};
+
+template <>
+struct equal_to<dcgmGroupEntityPair_t>
+{
+    bool operator()(dcgmGroupEntityPair_t const &a, dcgmGroupEntityPair_t const &b) const
+    {
+        return a == b;
+    }
+};
+} // namespace std

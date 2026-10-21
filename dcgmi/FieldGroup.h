@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,20 @@
 #define FIELDGROUP_H
 
 #include "Command.h"
+
+#include <DcgmOpsAnyPtr.hpp>
+
 #include <vector>
 
 class FieldGroup
 {
 public:
-    FieldGroup()          = default;
-    virtual ~FieldGroup() = default;
+    explicit FieldGroup(DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    FieldGroup(FieldGroup const &)            = default;
+    FieldGroup(FieldGroup &&)                 = default;
+    FieldGroup &operator=(FieldGroup const &) = default;
+    FieldGroup &operator=(FieldGroup &&)      = default;
+    virtual ~FieldGroup()                     = default;
 
     /*****************************************************************************
      * This method is used to list the field groups on the host-engine represented
@@ -59,6 +66,8 @@ public:
     void SetFieldIdsString(std::string fieldIdsStr);
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
+
     /*****************************************************************************
      * helper method to take a string of form x,y,z... and
      * transform that into a list of field IDs
@@ -81,7 +90,7 @@ private:
 class FieldGroupListAll : public Command
 {
 public:
-    FieldGroupListAll(std::string hostname, bool json);
+    FieldGroupListAll(std::string hostname, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -96,7 +105,7 @@ private:
 class FieldGroupCreate : public Command
 {
 public:
-    FieldGroupCreate(std::string hostname, FieldGroup &obj);
+    FieldGroupCreate(std::string hostname, FieldGroup &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -111,7 +120,7 @@ private:
 class FieldGroupDestroy : public Command
 {
 public:
-    FieldGroupDestroy(std::string hostname, FieldGroup &obj);
+    FieldGroupDestroy(std::string hostname, FieldGroup &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -126,7 +135,7 @@ private:
 class FieldGroupInfo : public Command
 {
 public:
-    FieldGroupInfo(std::string hostname, FieldGroup &obj, bool json);
+    FieldGroupInfo(std::string hostname, FieldGroup &obj, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

@@ -73,9 +73,7 @@ public:
                                             size_t maxResponseSize,
                                             unsigned int timeoutMs = 60000);
 
-#ifndef DCGMLIB_TESTS
-private:
-#endif
+protected:
     DcgmIpc m_dcgmIpc;
     std::atomic<dcgm_request_id_t> m_requestId = DCGM_REQUEST_ID_NONE;
     DcgmMutex m_mutex; /* Lock to use for threaded data structures */

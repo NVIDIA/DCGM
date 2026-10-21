@@ -17,12 +17,14 @@
 #define DCGM_CORE_COMMUNICATION_CLASS_H
 
 #include <mutex>
+#include <optional>
 #include <string>
 
 #include <dcgm_core_communication.h>
 #include <dcgm_module_structs.h>
 
 #include "DcgmCacheManager.h"
+#include "DcgmCacheManagerAnyPtr.hpp"
 #include "DcgmGroupManager.h"
 #include "dcgm_structs.h"
 
@@ -34,8 +36,7 @@ class DcgmCoreCommunication
 {
 public:
     DcgmCoreCommunication()
-        : m_cacheManagerPtr(nullptr)
-        , m_groupManagerPtr(nullptr)
+        : m_groupManagerPtr(nullptr)
         , m_fvBufferCache(nullptr)
         , m_fvbufferCacheSize(0)
     {}
@@ -46,7 +47,7 @@ public:
         m_fvBufferCache = nullptr;
     }
 
-    void Init(DcgmCacheManager *cm, DcgmGroupManager *gm);
+    void Init(DcgmCacheManagerAnyPtr cm, DcgmGroupManager *gm);
 
     /**
      * @return true if this has been initialized, false otherwise
@@ -63,8 +64,8 @@ public:
     dcgmReturn_t ProcessRequestInCore(dcgm_module_command_header_t *header);
 
 private:
-    DcgmCacheManager *m_cacheManagerPtr; // Owned elsewhere, not freed. Used to process API requests
-    DcgmGroupManager *m_groupManagerPtr; // Owned elsewhere, not freed. Used to process API requests
+    std::optional<DcgmCacheManagerAnyPtr> m_cacheManagerPtr; // Owned elsewhere, not freed. Used to process API requests
+    DcgmGroupManager *m_groupManagerPtr;                     // Owned elsewhere, not freed. Used to process API requests
 
     // These two parameters are used to hold a copy of the values retrieved with GetMultipleLatestLiveValues()
     // if the size of the buffer is larger than the buffer in the response struct. These are cleaned out the

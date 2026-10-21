@@ -17,8 +17,9 @@
 #include <catch2/catch_all.hpp>
 
 #include "CommandOutputController.h"
-#include "MigTestsHelper.hpp"
-#include "TestHelpers.hpp"
+#include <CerrCapture.hpp>
+#include <CoutCapture.hpp>
+#include <MigHierarchyUtils.hpp>
 
 #include <Query.h>
 
@@ -93,7 +94,7 @@ TEST_CASE("DCGMI Output")
 +-------------------+--------------------------------------------------------------------+
 )"";
 
-        auto hierarchy = Create_4GPU_4_GI_2_CI();
+        auto hierarchy = MigHierarchyUtils::Create_4GPU_4_GI_2_CI();
         auto result    = FormatMigHierarchy(hierarchy);
 
         REQUIRE(result == expectedResult);

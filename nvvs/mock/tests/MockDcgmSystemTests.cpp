@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,24 +17,9 @@
 #include <MockDcgmSystem.h>
 #include <catch2/catch_all.hpp>
 
-class TestMockDcgmSystem : public MockDcgmSystem
-{
-public:
-    using MockDcgmSystem::m_handle;
-};
-
-TEST_CASE("MockDcgmSystem::Init")
-{
-    TestMockDcgmSystem dcgmSystemMock;
-    dcgmHandle_t testHandle = 0x1234;
-    dcgmSystemMock.Init(testHandle);
-
-    REQUIRE(dcgmSystemMock.m_handle == testHandle);
-}
-
 TEST_CASE("MockDcgmSystem::GetAllDevices")
 {
-    TestMockDcgmSystem dcgmSystemMock;
+    MockDcgmSystem dcgmSystemMock;
     std::array<dcgmGroupEntityPair_t, 2> entities {
         dcgmGroupEntityPair_t { .entityGroupId = DCGM_FE_GPU, .entityId = 0 },
         dcgmGroupEntityPair_t { .entityGroupId = DCGM_FE_GPU, .entityId = 1 },

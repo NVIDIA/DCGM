@@ -47,6 +47,12 @@ public:
 
     static std::string_view GetNvidiaVendorName();
     static std::string_view GetGraceModelName();
+    /**
+     * Returns the CPU model name reported for NVIDIA Vera CPUs.
+     *
+     * @return The model name that discovery displays for a Vera CPU.
+     */
+    [[nodiscard]] static std::string_view GetVeraModelName();
 
 private:
     void ReadPhysicalCpuIds();

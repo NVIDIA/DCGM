@@ -1630,6 +1630,8 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmHealthCheck(dcgmHandle_t pDcgmHandle,
  * \ref dcgmPolicy_t structure, if a violation has occurred, subsequent action(s) may be performed to
  * either report or contain the failure.
  *
+ * @deprecated For threshold monitoring, use the field-policy APIs beginning with \ref dcgmPolicyCreate.
+ *
  * @param pDcgmHandle        IN: DCGM Handle
  * @param groupId            IN: Group ID representing collection of one or more GPUs. Look at \ref dcgmGroupCreate for
  *                               details on creating the group. Alternatively, pass in the group id as
@@ -1654,6 +1656,8 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicySet(dcgmHandle_t pDcgmHandle,
 /**
  * Get the current violation policy inside the policy manager. Given a groupId, a number of
  * policy structures are retrieved.
+ *
+ * @deprecated For field-policy state, use \ref dcgmPolicyGetOne or \ref dcgmPolicyGetAll.
  *
  * @param pDcgmHandle        IN: DCGM Handle
  * @param groupId            IN: Group ID representing collection of one or more GPUs. Look at \ref dcgmGroupCreate for
@@ -1682,9 +1686,247 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyGet(dcgmHandle_t pDcgmHandle,
                                            dcgmStatus_t statusHandle);
 
 /**
+ * Create a field-based policy that monitors a DCGM field against a threshold.
+ *
+ * This call blocks until the policy module responds. The module assigns policyId and
+ * persists the policy when watch setup succeeds.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param fieldId            IN: DCGM field ID to monitor
+ * @param name               IN: NUL-terminated policy display name
+ * @param threshold          IN: Comparison threshold
+ * @param policyOperator     IN: Comparison operator (see \ref dcgmPolicyOperator_t)
+ * @param entities           IN: GPU entities to monitor; may be NULL when entityCount is 0
+ * @param entityCount        IN: Number of valid entries in entities
+ * @param channelMask        IN: Bitmask of notification channels (see \ref dcgmPolicyChannel_t)
+ * @param enabled            IN: Non-zero to create the policy enabled; zero to create disabled
+ * @param rateLimitSec       IN: Minimum seconds between notifications
+ * @param policyId           OUT: Module-assigned policy identifier on success
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if any input parameter is invalid
+ *        - \ref DCGM_ST_DUPLICATE_KEY        if a policy already exists for fieldId
+ *        - \ref DCGM_ST_NOT_CONFIGURED       if the policy module is unavailable
+ *        - DCGM_ST_*                         a different error has occurred. Refer to \ref dcgmReturn_t
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyCreate(dcgmHandle_t pDcgmHandle,
+                                              unsigned short fieldId,
+                                              const char *name,
+                                              double threshold,
+                                              dcgmPolicyOperator_t policyOperator,
+                                              const dcgmGroupEntityPair_t *entities,
+                                              unsigned int entityCount,
+                                              unsigned int channelMask,
+                                              unsigned int enabled,
+                                              unsigned int rateLimitSec,
+                                              uint64_t *policyId);
+
+/**
+ * Modify an existing field-based policy identified by policyId and fieldId.
+ *
+ * This call blocks until the policy module responds. Runtime fields such as
+ * violationCount are preserved by the module.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param policy             IN: Policy configuration to apply; version must be dcgmPolicyInfo_version
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if \a policy is NULL or contains invalid fields
+ *        - \ref DCGM_ST_VER_MISMATCH         if \a policy->version is unsupported
+ *        - \ref DCGM_ST_NO_DATA              if the policy does not exist
+ *        - DCGM_ST_*                         a different error has occurred. Refer to \ref dcgmReturn_t
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyModify(dcgmHandle_t pDcgmHandle, const dcgmPolicyInfo_t *policy);
+
+/**
+ * Delete one field-based policy or all field-based policies.
+ *
+ * This call blocks until the policy module responds.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param fieldId            IN: Field ID of the policy to delete when deleteAll is 0
+ * @param policyId           IN: Policy identifier to delete when deleteAll is 0
+ * @param deleteAll          IN: Non-zero to delete all field-based policies; zero to delete one policy
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if any input parameter is invalid
+ *        - \ref DCGM_ST_NO_DATA              if the policy does not exist
+ *        - DCGM_ST_*                         a different error has occurred. Refer to \ref dcgmReturn_t
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyDelete(dcgmHandle_t pDcgmHandle,
+                                              unsigned short fieldId,
+                                              uint64_t policyId,
+                                              unsigned int deleteAll);
+
+/**
+ * Enable a field-based policy.
+ *
+ * This call blocks until the policy module responds and field watches are refreshed.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param fieldId            IN: Field ID of the policy to enable
+ * @param policyId           IN: Policy identifier to enable
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if any input parameter is invalid
+ *        - \ref DCGM_ST_NO_DATA              if the policy does not exist
+ *        - DCGM_ST_*                         a different error has occurred. Refer to \ref dcgmReturn_t
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyEnable(dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId);
+
+/**
+ * Disable a field-based policy.
+ *
+ * This call blocks until the policy module responds and field watches are refreshed.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param fieldId            IN: Field ID of the policy to disable
+ * @param policyId           IN: Policy identifier to disable
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if any input parameter is invalid
+ *        - \ref DCGM_ST_NO_DATA              if the policy does not exist
+ *        - DCGM_ST_*                         a different error has occurred. Refer to \ref dcgmReturn_t
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyDisable(dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId);
+
+/**
+ * Get one field-based policy by fieldId and policyId.
+ *
+ * This call blocks until the policy module responds.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param fieldId            IN: Field ID of the policy to retrieve
+ * @param policyId           IN: Policy identifier to retrieve
+ * @param policy             IN/OUT: Caller buffer; version must be dcgmPolicyInfo_version. Populated on success.
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if \a policy is NULL
+ *        - \ref DCGM_ST_VER_MISMATCH         if \a policy->version is unsupported
+ *        - \ref DCGM_ST_NO_DATA              if the policy does not exist
+ *        - DCGM_ST_*                         a different error has occurred. Refer to \ref dcgmReturn_t
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyGetOne(dcgmHandle_t pDcgmHandle,
+                                              unsigned short fieldId,
+                                              uint64_t policyId,
+                                              dcgmPolicyInfo_t *policy);
+
+/**
+ * Get all registered field-based policies.
+ *
+ * This call blocks until the policy module responds. On \ref DCGM_ST_INSUFFICIENT_SIZE,
+ * policies contains up to \a count entries and \a count is updated to the total available.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param policies           OUT: Array of policy records; may be NULL when \a count is 0
+ * @param count              IN/OUT: On input, capacity of policies. On output, total policies available.
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if \a count is NULL or policies is NULL with non-zero capacity
+ *        - \ref DCGM_ST_INSUFFICIENT_SIZE     if more policies exist than fit in policies
+ *        - DCGM_ST_*                         a different error has occurred. Refer to \ref dcgmReturn_t
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyGetAll(dcgmHandle_t pDcgmHandle,
+                                              dcgmPolicyInfo_t *policies,
+                                              unsigned int *count);
+
+/**
+ * Import field-based policies from a YAML file.
+ *
+ * This call blocks until the policy module responds and field watches are refreshed.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param path               IN: NUL-terminated path to the YAML policy file
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if \a path is NULL or invalid
+ *        - \ref DCGM_ST_NOT_CONFIGURED       if the file could not be loaded
+ *        - DCGM_ST_*                         a different error has occurred. Refer to \ref dcgmReturn_t
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyImport(dcgmHandle_t pDcgmHandle, const char *path);
+
+/**
+ * Read recent field-based policy violations.
+ *
+ * @param pDcgmHandle      IN: DCGM handle
+ * @param sinceTimestamp   IN: Return violations at or after this timestamp (usec since 1970); 0 for all recent
+ * @param violations       OUT: Caller-allocated array of \ref dcgm_policy_violation_t
+ * @param count            IN/OUT: On input, capacity of violations; on output, total violations available
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                 if the call was successful
+ *        - \ref DCGM_ST_INSUFFICIENT_SIZE  if violations is too small; count contains total available
+ *        - \ref DCGM_ST_BADPARAM           if count is NULL or violations is NULL when capacity is non-zero
+ *        - \ref DCGM_ST_GENERIC_ERROR      if an internal error occurred
+ *        - \ref DCGM_ST_TIMEOUT            if the policy module did not respond in time
+ *
+ * @note Thread-safe for distinct handles. Does not throw C++ exceptions.
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyGetViolations(dcgmHandle_t pDcgmHandle,
+                                                     int64_t sinceTimestamp,
+                                                     dcgm_policy_violation_t *violations,
+                                                     unsigned int *count);
+
+/**
+ * Register a callback for field-based policy violations.
+ *
+ * @param pDcgmHandle      IN: DCGM handle
+ * @param fieldId          IN: Field ID to monitor; pass 0 to receive all field-policy violations
+ * @param policyId         IN: Policy identifier; pass 0 to receive violations for all policies on fieldId
+ * @param callback         IN: Callback invoked when a matching violation occurs
+ * @param userData         IN: User data passed to callback
+ *
+ * @return
+ *        - \ref DCGM_ST_OK            if the call was successful
+ *        - \ref DCGM_ST_BADPARAM      if callback is NULL
+ *        - \ref DCGM_ST_DUPLICATE_KEY  if a matching callback is already registered
+ *        - \ref DCGM_ST_GENERIC_ERROR if an internal error occurred
+ *        - \ref DCGM_ST_TIMEOUT       if the policy module did not respond in time
+ *
+ * @note Callbacks are invoked from a dedicated policy thread. Thread-safe for distinct handles.
+ *       Does not throw C++ exceptions.
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyRegister_v3(dcgmHandle_t pDcgmHandle,
+                                                   unsigned short fieldId,
+                                                   uint64_t policyId,
+                                                   fpRecvPolicyViolation callback,
+                                                   uint64_t userData);
+
+/**
+ * Unregister a field-based policy violation callback.
+ *
+ * @param pDcgmHandle      IN: DCGM handle
+ * @param fieldId          IN: Field ID passed to \ref dcgmPolicyRegister_v3
+ * @param policyId         IN: Policy identifier passed to \ref dcgmPolicyRegister_v3
+ *
+ * @return
+ *        - \ref DCGM_ST_OK            if the call was successful
+ *        - \ref DCGM_ST_BADPARAM      if any input parameter is invalid
+ *        - \ref DCGM_ST_NO_DATA       if no matching callback is registered
+ *        - \ref DCGM_ST_GENERIC_ERROR if an internal error occurred
+ *        - \ref DCGM_ST_TIMEOUT       if the policy module did not respond in time
+ *
+ * @note Thread-safe for distinct handles. Does not throw C++ exceptions.
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyUnregister_v3(dcgmHandle_t pDcgmHandle,
+                                                     unsigned short fieldId,
+                                                     uint64_t policyId);
+
+/**
  * Register a function to be called when a specific policy condition (see \ref dcgmPolicyCondition_t) has been
  * violated.  This callback(s) will be called automatically when in DCGM_OPERATION_MODE_AUTO mode and only after
  * dcgmPolicyTrigger when in DCGM_OPERATION_MODE_MANUAL mode.  All callbacks are made within a separate thread.
+ *
+ * @deprecated This group-policy callback API is being retired. Use the field-policy API:
+ *             create a policy with \ref dcgmPolicyCreate and register a callback with \ref dcgmPolicyRegister_v3.
  *
  * @param pDcgmHandle        IN: DCGM Handle
  * @param groupId            IN: Group ID representing collection of one or more GPUs. Look at \ref dcgmGroupCreate for
@@ -1711,6 +1953,9 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyRegister_v2(dcgmHandle_t pDcgmHandle,
 /**
  * Unregister a function to be called for a specific policy condition (see \ref dcgmPolicyCondition_t).
  * This function will unregister all callbacks for a given condition and handle.
+ *
+ * @deprecated This group-policy callback API is being retired. Use \ref dcgmPolicyUnregister_v3
+ *             to unregister a field-policy callback registered with \ref dcgmPolicyRegister_v3.
  *
  * @param pDcgmHandle        IN: DCGM Handle
  * @param groupId            IN: Group ID representing collection of one or more GPUs. Look at \ref dcgmGroupCreate for
@@ -1845,6 +2090,8 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmStopDiagnostic(dcgmHandle_t pDcgmHandle);
  * Inform the policy manager loop to perform an iteration and trigger the callbacks of any
  * registered functions. Callback functions will be called from a separate thread as the calling function.
  *
+ * @deprecated Use field-policy callbacks, which evaluate Cache Manager updates automatically.
+ *
  * Note: The GPU monitoring and management agent must call this method periodically if the operation
  * mode is set to manual mode (DCGM_OPERATION_MODE_MANUAL) during initialization
  * (\ref dcgmInit).
@@ -1900,6 +2147,33 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetGroupTopology(dcgmHandle_t pDcgmHandle,
                                                   dcgmGpuGrp_t groupId,
                                                   dcgmGroupTopology_v2 *pDcgmGroupTopology);
 
+/*************************************************************************/
+/**
+ * Get the best group of gpus from the specified bitmask according to topological proximity: cpuAffinity, NUMA
+ * node, and NVLink.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param inputGpuIds        IN: a bitmask of which GPUs DCGM should consider. If some of the GPUs on the system are
+ *                               already in use, they shouldn't be included in the bitmask. 0 means that all of the GPUs
+ *                               in the system should be considered.
+ * @param numGpus            IN: the number of GPUs that are desired from inputGpuIds. If this number is greater than
+ *                               the number of healthy GPUs in inputGpuIds, then less than numGpus gpus will be
+ *                               specified in outputGpuIds.
+ * @param outputGpuIds      OUT: a bitmask of numGpus or fewer GPUs from inputGpuIds that represent the best placement
+ *                               available from inputGpuIds.
+ * @param hintFlags          IN: a bitmask of DCGM_TOPO_HINT_F_ #defines of hints that should be taken into account when
+ *                               assigning outputGpuIds.
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmSelectGpusByTopology(dcgmHandle_t pDcgmHandle,
+                                                      uint64_t inputGpuIds,
+                                                      uint32_t numGpus,
+                                                      uint64_t *outputGpuIds,
+                                                      uint64_t hintFlags);
+
 /** @} */ // Closing for DCGMAPI_Topo
 
 /***************************************************************************************************/
@@ -1952,42 +2226,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetHostengineCpuUtilization(dcgmHandl
                                                                        int waitIfNoData);
 
 /** @} */ // Closing for DCGMAPI_METADATA
-
-/***************************************************************************************************/
-/** @defgroup DCGMAPI_TOPOLOGY Topology
- * @{
- *  This chapter describes the methods that query for DCGM topology information.
- */
-/***************************************************************************************************/
-
-/*************************************************************************/
-/**
- * Get the best group of gpus from the specified bitmask according to topological proximity: cpuAffinity, NUMA
- * node, and NVLink.
- *
- * @param pDcgmHandle        IN: DCGM Handle
- * @param inputGpuIds        IN: a bitmask of which GPUs DCGM should consider. If some of the GPUs on the system are
- *                               already in use, they shouldn't be included in the bitmask. 0 means that all of the GPUs
- *                               in the system should be considered.
- * @param numGpus            IN: the number of GPUs that are desired from inputGpuIds. If this number is greater than
- *                               the number of healthy GPUs in inputGpuIds, then less than numGpus gpus will be
- *                               specified in outputGpuIds.
- * @param outputGpuIds      OUT: a bitmask of numGpus or fewer GPUs from inputGpuIds that represent the best placement
- *                               available from inputGpuIds.
- * @param hintFlags          IN: a bitmask of DCGM_TOPO_HINT_F_ #defines of hints that should be taken into account when
- *                               assigning outputGpuIds.
- *
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmSelectGpusByTopology(dcgmHandle_t pDcgmHandle,
-                                                      uint64_t inputGpuIds,
-                                                      uint32_t numGpus,
-                                                      uint64_t *outputGpuIds,
-                                                      uint64_t hintFlags);
-
-/** @} */ // Closing for DCGMAPI_TOPOLOGY
 
 /***************************************************************************************************/
 /** @defgroup DCGMAPI_MODULES Modules
@@ -2142,8 +2380,8 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmAddFakeInstances(dcgmHandle_t pDcgmHandle, dcgm
  * Run a multi-node diagnostic test
  *
  * @param pDcgmHandle        IN: DCGM Handle
- * @param drmnd             IN: Multi-node diagnostic parameters. See dcgmRunMnDiag_v1
- * @param response         OUT: Result of running the multi-node diagnostic. See dcgmMnDiagResponse_v1
+ * @param drmnd             IN: Multi-node diagnostic parameters. See dcgmRunMnDiag_v2
+ * @param response         OUT: Result of running the multi-node diagnostic. See dcgmMnDiagResponse_v2
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
@@ -2154,8 +2392,8 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmAddFakeInstances(dcgmHandle_t pDcgmHandle, dcgm
  *        - \ref DCGM_ST_VER_MISMATCH         if version mismatch between drmnd and response
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmRunMnDiagnostic(dcgmHandle_t pDcgmHandle,
-                                                 dcgmRunMnDiag_v1 const *drmnd,
-                                                 dcgmMnDiagResponse_v1 *response);
+                                                 dcgmRunMnDiag_v2 const *drmnd,
+                                                 dcgmMnDiagResponse_v2 *response);
 
 
 /**

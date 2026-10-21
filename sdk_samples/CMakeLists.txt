@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,10 +36,12 @@ macro(dcgm_macro_build_sample sample)
   add_executable(${sample})
   target_sources(${sample} PRIVATE c_src/${sample}/${sample}.cpp)
   target_link_libraries(${sample} PRIVATE DCGM::dcgm)
+  set_target_properties(${sample} PROPERTIES
+    INSTALL_RPATH "$ORIGIN")
   install(
     TARGETS ${sample}
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/${DCGM_TESTS_ARCH}"
         COMPONENT Tests)
 endmacro()
 

@@ -1,0 +1,59 @@
+[dependencies.find-msvc-tools]
+version = "0.1.9"
+
+[dependencies.jobserver]
+default-features = false
+optional = true
+version = "0.1.30"
+
+[dependencies.shlex]
+version = "2.0.1"
+
+[dev-dependencies.tempfile]
+version = "3"
+
+[features]
+jobserver = []
+parallel = ["dep:libc", "dep:jobserver"]
+
+[lib]
+path = "src/lib.rs"
+
+[lints.rust.unexpected_cfgs]
+check-cfg = ["cfg(disable_clang_cl_tests)"]
+level = "allow"
+priority = 0
+
+[package]
+authors = ["Alex Crichton <alex@alexcrichton.com>"]
+autobenches = false
+autobins = false
+autoexamples = false
+autolib = false
+autotests = false
+categories = ["development-tools::build-utils"]
+description = """
+A build-time dependency for Cargo build scripts to assist in invoking the native
+C compiler to compile native C code into a static archive to be linked into Rust
+code.
+"""
+documentation = "https://docs.rs/cc"
+edition = "2018"
+exclude = ["/.github", "tests", "src/bin"]
+homepage = "https://github.com/rust-lang/cc-rs"
+keywords = ["build-dependencies"]
+license = "MIT OR Apache-2.0"
+name = "cc"
+readme = "README.md"
+repository = "https://github.com/rust-lang/cc-rs"
+rust-version = "1.63"
+version = "1.4.0"
+
+[profile.release]
+lto = true
+opt-level = 3
+
+[target."cfg(unix)".dependencies.libc]
+default-features = false
+optional = true
+version = "0.2.62"

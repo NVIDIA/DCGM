@@ -117,6 +117,52 @@ def test_dcgm_health_set_connectx_standalone(handle):
     helper_dcgm_health_set_connectx(handle)
 
 
+def helper_dcgm_health_set_imex(handle):
+    """
+    Verifies that the set/get path for IMEX health monitoring is working
+    and that IMEX is independent of NVLINK.
+    """
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetDefaultGroup()
+
+    groupObj.health.Set(0)
+
+    currentSystems = groupObj.health.Get()
+    assert (currentSystems == 0)
+
+    # IMEX only (no NVLINK)
+    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_IMEX
+    groupObj.health.Set(newSystems)
+    currentSystems = groupObj.health.Get()
+    assert (currentSystems == newSystems), \
+        f"Expected IMEX only (0x{newSystems:x}), got 0x{currentSystems:x}"
+
+    # NVLINK only (no IMEX)
+    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
+    groupObj.health.Set(newSystems)
+    currentSystems = groupObj.health.Get()
+    assert (currentSystems == newSystems), \
+        f"Expected NVLINK only (0x{newSystems:x}), got 0x{currentSystems:x}"
+
+    # Both NVLINK and IMEX
+    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK | dcgm_structs.DCGM_HEALTH_WATCH_IMEX
+    groupObj.health.Set(newSystems)
+    currentSystems = groupObj.health.Get()
+    assert (currentSystems == newSystems), \
+        f"Expected NVLINK|IMEX (0x{newSystems:x}), got 0x{currentSystems:x}"
+
+    # Set it back to 0 and validate it
+    groupObj.health.Set(0)
+    currentSystems = groupObj.health.Get()
+    assert (currentSystems == 0)
+
+
+@test_utils.run_with_standalone_host_engine(20)
+def test_dcgm_health_set_imex_standalone(handle):
+    helper_dcgm_health_set_imex(handle)
+
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_health_invalid_group_embedded(handle):
     '''
@@ -207,7 +253,7 @@ def helper_reset_pcie_replay_counter(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_pcie_standalone(handle, gpuIds):
@@ -399,7 +445,7 @@ def helper_test_dcgm_health_check_mem_dbe(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_dbe(handle, gpuIds):
@@ -573,7 +619,7 @@ def helper_test_dcgm_health_check_mem_retirements(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_retirements_standalone(handle, gpuIds):
@@ -635,7 +681,7 @@ def helper_test_dcgm_health_check_mem(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_standalone(handle, gpuIds):
@@ -667,7 +713,7 @@ def test_dcgm_standalone_health_set_thermal(handle):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_thermal(handle, gpuIds):
@@ -880,7 +926,7 @@ def test_dcgm_health_check_sanity_connectx_standalone(handle, cxIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_power(handle, gpuIds):
@@ -930,7 +976,7 @@ def test_dcgm_standalone_health_check_power(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_nvlink(handle, gpuIds):
@@ -939,7 +985,7 @@ def test_dcgm_standalone_health_check_nvlink(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_health_check_nvlink(handle, gpuIds):
@@ -1067,7 +1113,7 @@ def helper_nvlink_check_fatal_errors(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink_fatal(handle, gpuIds):
@@ -1076,7 +1122,7 @@ def test_dcgm_standalone_nvlink_fatal(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_nvlink_fatal(handle, gpuIds):
@@ -1130,7 +1176,7 @@ def helper_nvlink_crc_fatal_threshold(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink_crc_threshold(handle, gpuIds):
@@ -1139,7 +1185,7 @@ def test_dcgm_standalone_nvlink_crc_threshold(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_nvlink_crc_threshold(handle, gpuIds):
@@ -1148,7 +1194,7 @@ def test_dcgm_embedded_nvlink_crc_threshold(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_nvlink_symbol_threshold(handle, gpuIds):
@@ -1197,69 +1243,10 @@ def test_dcgm_health_nvlink_symbol_threshold(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
-@test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_injection_gpus()
-def test_dcgm_health_nvlink_effective_ber_threshold(handle, gpuIds):
-    test_utils.skip_test_if_any_nvlinks_down(handle)
-
-    handleObj = pydcgm.DcgmHandle(handle=handle)
-    systemObj = handleObj.GetSystem()
-    groupObj = systemObj.GetEmptyGroup("test1")
-    groupObj.AddGpu(gpuIds[0])
-    gpuIds = groupObj.GetGpuIds()  # Limit gpuIds to GPUs in our group
-    gpuId = gpuIds[0]
-
-    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
-    groupObj.health.Set(newSystems)
-
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, 4095, -50)
-    assert (ret == dcgm_structs.DCGM_ST_OK)
-
-    # Capture baseline incident count
-    responseV5 = groupObj.health.Check(
-        dcgm_structs.dcgmHealthResponse_version5)
-    baselineIncidentCount = responseV5.incidentCount
-
-    # 10e-13 == 1e-12 encoded as mantissa=10, exponent=13 -> ((10 << 8) | 13) = 2573
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, 2573, -20)
-    assert (ret == dcgm_structs.DCGM_ST_OK)
-
-    responseV5 = groupObj.health.Check(
-        dcgm_structs.dcgmHealthResponse_version5)
-    assert responseV5.incidentCount == baselineIncidentCount, (
-        "Effective BER at exactly 1e-12 should not create a new incident")
-
-    # 11e-13 == 1.1e-12 encoded as mantissa=11, exponent=13 -> ((11 << 8) | 13) = 2829
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, 2829, -20)
-    assert (ret == dcgm_structs.DCGM_ST_OK)
-
-    responseV5 = groupObj.health.Check(
-        dcgm_structs.dcgmHealthResponse_version5)
-
-    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-
-    # Verify exactly one new incident
-    new_incidents = max(0, responseV5.incidentCount - baselineIncidentCount)
-    assert new_incidents == 1, f"Expected 1 new incident, got {new_incidents}"
-
-    # Verify the new incident details
-    incident = responseV5.incidents[baselineIncidentCount]
-    assert incident.entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU
-    assert incident.entityInfo.entityId == gpuId
-    assert incident.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
-    assert incident.error.code == dcgm_errors.DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD
-    assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL
-
-
 def helper_health_check_nvlink5_error_counters(
         handle,
         gpuIds,
         test_fields=None,
-        symbol_ber_scenarios=None,
         run_multi_field_case=True,
         skip_if_unhealthy=False):
     """
@@ -1292,23 +1279,11 @@ def helper_health_check_nvlink5_error_counters(
             (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL,
              "link recovery events"),
             (dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL, "effective errors"),
-            (dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW, "symbol BER"),
             (dcgm_fields.DCGM_FI_DEV_NVLINK_ECC_ERROR_TOTAL, "ECC data errors"),
         ]
 
-    if symbol_ber_scenarios is None:
-        symbol_ber_scenarios = [
-            (4095, -60, 1000, -50),
-            (0, -40, 1000, -30),
-            (5, -20, 1000, -10),
-        ]
-
     for field_id, field_name in test_fields:
-        # Symbol BER has two accepted healthy raw encodings; other counters use 0.
-        scenarios = symbol_ber_scenarios if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW else [
-            (0, -50, 1, -40)
-        ]
-
+        scenarios = [(0, -50, 1, -40)]
         for healthy_value, baseline_offset, error_value, error_offset in scenarios:
             ret = dcgm_field_injection_helpers.inject_field_value_i64(
                 handle, gpuId, field_id, healthy_value, baseline_offset)
@@ -1333,10 +1308,7 @@ def helper_health_check_nvlink5_error_counters(
             assert incident.entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU, f"Wrong entity group for {field_name}"
             assert incident.entityInfo.entityId == gpuId, f"Wrong entity ID for {field_name}"
             assert incident.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK, f"Wrong system for {field_name}"
-
-            expected_error_code = dcgm_errors.DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW else dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL
-
-            assert incident.error.code == expected_error_code, f"Wrong error code for {field_name}"
+            assert incident.error.code == dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL, f"Wrong error code for {field_name}"
             assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL, f"Wrong health result for {field_name}"
 
         healthy_value = scenarios[0][0]
@@ -1352,15 +1324,11 @@ def helper_health_check_nvlink5_error_counters(
             (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL, "rx errors"),
             (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL,
                 "link recovery events"),
-            (dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW, "symbol BER"),
         ]
 
         for field_id, field_name in test_fields:
-            healthy_value = (symbol_ber_scenarios[0][0]
-                             if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW
-                             else 0)
             ret = dcgm_field_injection_helpers.inject_field_value_i64(
-                handle, gpuId, field_id, healthy_value, 10)
+                handle, gpuId, field_id, 0, 10)
             assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to clear {field_name}"
 
         responseV5 = groupObj.health.Check(
@@ -1390,21 +1358,18 @@ def helper_health_check_nvlink5_error_counters(
                 f"Wrong system for {incident.system}")
             assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL, (
                 f"Wrong health result for {incident.system}")
-            assert incident.error.code in [dcgm_errors.DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD,
-                                           dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL], f"Unexpected error code {incident.error.code}"
+            assert incident.error.code == dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL, (
+                f"Unexpected error code {incident.error.code}")
 
         for field_id, field_name in test_fields:
-            healthy_value = (symbol_ber_scenarios[0][0]
-                             if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW
-                             else 0)
             ret = dcgm_field_injection_helpers.inject_field_value_i64(
-                handle, gpuId, field_id, healthy_value, 30)
+                handle, gpuId, field_id, 0, 30)
             assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to cleanup {field_name}"
 
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink5_error_counters(handle, gpuIds):
@@ -1413,7 +1378,7 @@ def test_dcgm_standalone_nvlink5_error_counters(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_nvlink5_error_counters(handle, gpuIds):
@@ -1421,24 +1386,6 @@ def test_dcgm_embedded_nvlink5_error_counters(handle, gpuIds):
 
 
 # NO HARDWARE
-
-@skip_test_if_no_dcgm_nvml()
-@test_utils.run_with_injection_nvml_using_specific_sku('B200.yaml')
-@test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_nvml_injected_gpus()
-def test_dcgm_standalone_blackwell_symbol_ber_aggregate_floor_health(handle, gpuIds):
-    helper_health_check_nvlink5_error_counters(
-        handle,
-        gpuIds,
-        test_fields=[
-            (dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW, "symbol BER"),
-        ],
-        symbol_ber_scenarios=[
-            (73710, -50, (15 << 8) | 237, -40),
-        ],
-        run_multi_field_case=False,
-        skip_if_unhealthy=True)
-
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_only_with_live_gpus()
@@ -1541,7 +1488,7 @@ def helper_health_check_nvswitch_errors(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_nvswitches()
 def test_health_check_nvswitch_fatal_errors_standalone(handle, switchIds):
@@ -1556,7 +1503,7 @@ def test_health_check_nvswitch_fatal_errors_standalone(handle, switchIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_nvswitches()
 def test_health_check_nvswitch_nonfatal_errors_standalone(handle, switchIds):
@@ -1627,7 +1574,7 @@ def helper_health_check_nvlink_link_down_gpu(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_link_down_gpu_standalone(handle, gpuIds):
@@ -1740,7 +1687,7 @@ def helper_health_check_nvlink_all_links_up(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_all_links_up_standalone(handle, gpuIds):
@@ -1750,7 +1697,7 @@ def test_health_check_nvlink_all_links_up_standalone(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_all_links_up_embedded(handle, gpuIds):
@@ -1799,7 +1746,7 @@ def helper_health_check_nvlink_one_link_down(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_one_link_down_standalone(handle, gpuIds):
@@ -1809,7 +1756,7 @@ def test_health_check_nvlink_one_link_down_standalone(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_one_link_down_embedded(handle, gpuIds):
@@ -1856,7 +1803,7 @@ def helper_health_check_nvlink_not_supported_and_disabled(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_not_supported_and_disabled_standalone(
@@ -1868,7 +1815,7 @@ def test_health_check_nvlink_not_supported_and_disabled_standalone(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_not_supported_and_disabled_embedded(
@@ -1921,7 +1868,7 @@ def helper_health_check_nvlink_mig_down_without_mig(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_mig_down_without_mig_standalone(handle, gpuIds):
@@ -1931,7 +1878,7 @@ def test_health_check_nvlink_mig_down_without_mig_standalone(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_mig_down_without_mig_embedded(handle, gpuIds):
@@ -1984,7 +1931,7 @@ def helper_health_check_nvlink_mig_down_with_mig_enabled(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_mig_down_with_mig_enabled_standalone(
@@ -1996,7 +1943,7 @@ def test_health_check_nvlink_mig_down_with_mig_enabled_standalone(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_mig_down_with_mig_enabled_embedded(
@@ -2075,7 +2022,7 @@ def helper_health_check_multiple_failures(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_standalone_multiple_failures(handle, gpuIds):
@@ -2114,7 +2061,7 @@ def helper_health_check_unreadable_power_usage(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_standalone_unreadable_power_usage(handle, gpuIds):
@@ -2145,7 +2092,7 @@ def helper_health_set_version2(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
 def test_health_set_version2_standalone(handle, gpuIds):
@@ -2184,7 +2131,7 @@ def helper_test_dcgm_health_check_uncontained_errors(handle, gpuIds):
     assert (
         responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
     assert (responseV5.incidents[0].system ==
-            dcgm_structs.DCGM_HEALTH_WATCH_ALL)
+            dcgm_structs.DCGM_HEALTH_WATCH_MEM)
     assert (responseV5.incidents[0].health ==
             dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
     assert (responseV5.incidents[0].error.code ==
@@ -2193,7 +2140,7 @@ def helper_test_dcgm_health_check_uncontained_errors(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_health_check_uncontained_errors(handle, gpuIds):
@@ -2241,7 +2188,7 @@ def helper_test_dcgm_health_check_row_remap_failure(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_health_check_row_remap_failure(handle, gpuIds):
@@ -2302,7 +2249,7 @@ def test_dcgm_health_check_xid64_row_remap_failure(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_cpus(1)
 @test_utils.run_with_injection_cpu_cores(1)
@@ -2365,7 +2312,7 @@ def test_dcgm_health_cpu_thermal(handle, cpuIds, coreIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_cpus(1)
 @test_utils.run_with_injection_cpu_cores(1)
@@ -2409,7 +2356,7 @@ def test_dcgm_health_cpu_power(handle, cpuIds, coreIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_pcie_correctable_errors_field_injection_valid(
@@ -2453,7 +2400,7 @@ def test_dcgm_health_check_pcie_correctable_errors_field_injection_valid(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_unrepairable_flag(handle, gpuIds):
@@ -2509,7 +2456,7 @@ def test_dcgm_health_check_mem_unrepairable_flag(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 @skip_test_if_no_dcgm_nvml()
@@ -2627,7 +2574,7 @@ def test_dcgm_health_check_fabric_health_mask(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 @skip_test_if_no_dcgm_nvml()
@@ -2639,10 +2586,10 @@ def test_dcgm_health_check_imex_status(handle, gpuIds):
     groupObj = systemObj.GetEmptyGroup("test_imex")
     gpuId = gpuIds[0]
     groupObj.AddGpu(gpuId)
-    groupObj.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
+    groupObj.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_IMEX)
 
-    # Set at least one NVLink to Up so SystemHasNvLinks() returns true
-    # for injection GPUs (which default all links to NotSupported)
+    # Set at least one NVLink to Up so the IMEX bit is not stripped
+    # by MonitorWatches (systems without NVLinks skip IMEX checks)
     for linkId in range(dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU):
         dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
             handle,
@@ -2710,7 +2657,7 @@ def test_dcgm_health_check_imex_status(handle, gpuIds):
 
             if responseV5.incidentCount > 0:
                 # Check incident attributes
-                assert responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
+                assert responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_IMEX
                 assert responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL
                 # IMEX fields are global scope (DCGM_FE_NONE) so entityId
                 # should be 0
@@ -2891,7 +2838,7 @@ def clearNvlinkFields(handle, gpuId, timestamp, excluded_field_id=None):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_fabric_manager_status(handle, gpuIds):
@@ -2965,7 +2912,7 @@ def helper_health_check_gpu_recovery_action(
     Args:
         handle: DCGM handle
         gpuIds: List of GPU IDs
-        inject_value: Value to inject (0-4, or DCGM_INT64_BLANK)
+        inject_value: Value to inject (0-5, or DCGM_INT64_BLANK)
         expected_health: Expected health result (PASS, WARN, or FAIL)
         expected_error_code: Expected error code (if None, inferred from inject_value)
         health_watch: Health watch system to enable (default: DCGM_HEALTH_WATCH_DRIVER)
@@ -3004,6 +2951,7 @@ def helper_health_check_gpu_recovery_action(
                 2: dcgm_errors.DCGM_FR_GPU_RECOVERY_REBOOT,
                 3: dcgm_errors.DCGM_FR_GPU_RECOVERY_DRAIN_P2P,
                 4: dcgm_errors.DCGM_FR_GPU_RECOVERY_DRAIN_RESET,
+                5: dcgm_errors.DCGM_FR_GPU_RECOVERY_IMEX_DOMAIN,
             }
             expected_error_code = error_code_map.get(inject_value)
 
@@ -3014,6 +2962,7 @@ def helper_health_check_gpu_recovery_action(
             2: ["reboot", "inconsistent"],              # NODE_REBOOT
             3: ["peer-to-peer", "quiesced"],            # DRAIN_P2P
             4: ["reduced capacity", "drain"],           # DRAIN_AND_RESET
+            5: ["imex domain", "recovery"],             # RECOVER_IMEX_DOMAIN
         }
 
         found_driver_failure = False
@@ -3043,7 +2992,7 @@ def helper_health_check_gpu_recovery_action(
 
                 # Verify error message contains recovery action value (for
                 # non-NONE values)
-                if inject_value > 0 and inject_value <= 4:
+                if inject_value > 0 and inject_value <= 5:
                     assert str(inject_value) in incident.error.msg, \
                         f"Recovery action value {inject_value} not found in error message: {incident.error.msg}"
 
@@ -3068,7 +3017,7 @@ def helper_health_check_gpu_recovery_action(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_none_standalone(handle, gpuIds):
@@ -3084,7 +3033,7 @@ def test_health_check_gpu_recovery_action_none_standalone(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_none_embedded(handle, gpuIds):
@@ -3100,7 +3049,7 @@ def test_health_check_gpu_recovery_action_none_embedded(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_reset_standalone(handle, gpuIds):
@@ -3111,7 +3060,7 @@ def test_health_check_gpu_recovery_action_reset_standalone(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_reset_embedded(handle, gpuIds):
@@ -3122,7 +3071,7 @@ def test_health_check_gpu_recovery_action_reset_embedded(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_reboot_standalone(handle, gpuIds):
@@ -3133,7 +3082,7 @@ def test_health_check_gpu_recovery_action_reboot_standalone(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_reboot_embedded(handle, gpuIds):
@@ -3144,7 +3093,7 @@ def test_health_check_gpu_recovery_action_reboot_embedded(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_drain_p2p_standalone(handle, gpuIds):
@@ -3155,7 +3104,7 @@ def test_health_check_gpu_recovery_action_drain_p2p_standalone(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_drain_p2p_embedded(handle, gpuIds):
@@ -3166,7 +3115,7 @@ def test_health_check_gpu_recovery_action_drain_p2p_embedded(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_drain_and_reset_standalone(
@@ -3179,7 +3128,7 @@ def test_health_check_gpu_recovery_action_drain_and_reset_standalone(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_drain_and_reset_embedded(
@@ -3192,7 +3141,33 @@ def test_health_check_gpu_recovery_action_drain_and_reset_embedded(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_injection_gpus()
+def test_health_check_gpu_recovery_action_imex_domain_standalone(
+        handle,
+        gpuIds):
+    """Test GPU recovery action health check - RECOVER_IMEX_DOMAIN value (5) should FAIL"""
+    helper_health_check_gpu_recovery_action(
+        handle, gpuIds, 5, dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+
+
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_injection_gpus()
+def test_health_check_gpu_recovery_action_imex_domain_embedded(
+        handle,
+        gpuIds):
+    """Test GPU recovery action health check - RECOVER_IMEX_DOMAIN value (5) should FAIL"""
+    helper_health_check_gpu_recovery_action(
+        handle, gpuIds, 5, dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+
+
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_blank_standalone(handle, gpuIds):
@@ -3208,7 +3183,7 @@ def test_health_check_gpu_recovery_action_blank_standalone(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_blank_embedded(handle, gpuIds):
@@ -3224,7 +3199,7 @@ def test_health_check_gpu_recovery_action_blank_embedded(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_all_watches_healthy_standalone(
@@ -3243,7 +3218,7 @@ def test_health_check_gpu_recovery_action_all_watches_healthy_standalone(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_all_watches_healthy_embedded(
@@ -3262,7 +3237,7 @@ def test_health_check_gpu_recovery_action_all_watches_healthy_embedded(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_all_watches_unhealthy_standalone(
@@ -3279,7 +3254,7 @@ def test_health_check_gpu_recovery_action_all_watches_unhealthy_standalone(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_all_watches_unhealthy_embedded(
@@ -3397,7 +3372,7 @@ def helper_health_check_gpu_recovery_action_multiple_gpus(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
 def test_health_check_gpu_recovery_action_multiple_gpus_standalone(
@@ -3409,7 +3384,7 @@ def test_health_check_gpu_recovery_action_multiple_gpus_standalone(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(2)
 def test_health_check_gpu_recovery_action_multiple_gpus_embedded(
@@ -3487,7 +3462,7 @@ def helper_dcgmi_health_check_nvlink_arch_specific(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgmi_health_check_nvlink_arch_specific_fields(handle, gpuIds):
@@ -3550,7 +3525,7 @@ def helper_test_dcgm_health_check_contained_error(handle, gpuIds):
         "Expected exactly 1 incident for XID %d" % contained_error_xid
     assert responseV5.incidents[0].entityInfo.entityId == gpuId
     assert responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU
-    assert responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_ALL
+    assert responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM
     assert responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN, \
         "Incident health should be WARN for contained error"
     assert responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_CONTAINED_ERROR, \
@@ -3561,7 +3536,7 @@ def helper_test_dcgm_health_check_contained_error(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_health_check_contained_error(handle, gpuIds):

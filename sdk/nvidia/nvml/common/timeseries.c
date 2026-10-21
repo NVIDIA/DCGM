@@ -784,6 +784,8 @@ long long timeseries_bytes_used(timeseries_p ts)
 timeseries_entry_p timeseries_first(timeseries_p ts, timeseries_cursor_p cursor)
 {
     timeseries_cursor_t tempCursor;
+    if (!ts || !ts->keyedVector)
+        return NULL;
     if (NULL == cursor)
         cursor = &tempCursor;
     return (timeseries_entry_p)keyedvector_first(ts->keyedVector, cursor);
@@ -793,6 +795,8 @@ timeseries_entry_p timeseries_first(timeseries_p ts, timeseries_cursor_p cursor)
 timeseries_entry_p timeseries_last(timeseries_p ts, timeseries_cursor_p cursor)
 {
     timeseries_cursor_t tempCursor;
+    if (!ts || !ts->keyedVector)
+        return NULL;
     if (NULL == cursor)
         cursor = &tempCursor;
     return (timeseries_entry_p)keyedvector_last(ts->keyedVector, cursor);
@@ -801,12 +805,16 @@ timeseries_entry_p timeseries_last(timeseries_p ts, timeseries_cursor_p cursor)
 /*****************************************************************************/
 timeseries_entry_p timeseries_next(timeseries_p ts, timeseries_cursor_p cursor)
 {
+    if (!ts || !ts->keyedVector)
+        return NULL;
     return (timeseries_entry_p)keyedvector_next(ts->keyedVector, cursor);
 }
 
 /*****************************************************************************/
 timeseries_entry_p timeseries_prev(timeseries_p ts, timeseries_cursor_p cursor)
 {
+    if (!ts || !ts->keyedVector)
+        return NULL;
     return (timeseries_entry_p)keyedvector_prev(ts->keyedVector, cursor);
 }
 
@@ -814,6 +822,8 @@ timeseries_entry_p timeseries_prev(timeseries_p ts, timeseries_cursor_p cursor)
 timeseries_entry_p timeseries_find(timeseries_p ts, timelib64_t time, int findOp, timeseries_cursor_p cursor)
 {
     timeseries_cursor_t tempCursor;
+    if (!ts || !ts->keyedVector)
+        return NULL;
     if (NULL == cursor)
         cursor = &tempCursor;
     return (timeseries_entry_p)keyedvector_find_by_key(ts->keyedVector, &time, findOp, cursor);

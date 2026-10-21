@@ -18,6 +18,8 @@
 
 #include "DcgmVariantHelper.hpp"
 #include "PermissionCheck.hpp"
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <PluginCommon.h>
 
 #include <boost/filesystem.hpp>
@@ -25,6 +27,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <utility>
 
 namespace
 {
@@ -47,8 +50,10 @@ namespace DcgmNs::Nvvs::Plugins::NcclTests
 
 constexpr int DEFAULT_CUDA_DRIVER_MAJOR_VERSION = 12;
 
-NcclTestsPlugin::NcclTestsPlugin(dcgmHandle_t handle)
-    : m_dcgmRecorder(handle)
+NcclTestsPlugin::NcclTestsPlugin(dcgmHandle_t handle, DcgmNs::DcgmOpsAnyUniquePtr dcgmOps, NvvsCommon *nvvsCommon)
+    : Plugin(dcgmOps.AsAnyPtr())
+    , m_dcgmOpsUnique(std::move(dcgmOps))
+    , m_dcgmRecorder(handle, m_dcgmOps, nvvsCommon)
     , m_dcgmRecorderInitialized(true)
     , m_handle(handle)
     , m_cudaDriverMajorVersion(DEFAULT_CUDA_DRIVER_MAJOR_VERSION)

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,16 +32,24 @@ target_link_libraries(sysmontests
         module_common_objects
         modules_objects
         dcgm_common
+        test-utils
         dcgm_entity_types
         dcgm_logging
         dcgm_mutex
         dcgm
         Catch2::Catch2WithMain
-        ${CMAKE_THREAD_LIBS_INIT}
+        Threads::Threads
         fmt::fmt
         rt
         dl
 )
+
+set_property(DIRECTORY APPEND PROPERTY
+    ADDITIONAL_CLEAN_FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/Ruth"
+        "${CMAKE_CURRENT_BINARY_DIR}/hwmon"
+        "${CMAKE_CURRENT_BINARY_DIR}/mocksysfs"
+        "${CMAKE_CURRENT_BINARY_DIR}/tz")
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     catch_discover_tests(sysmontests EXTRA_ARGS --colour-mode ansi)

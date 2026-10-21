@@ -17,6 +17,7 @@
 #include <ChildProcess/ChildProcess.hpp>
 #include <ChildProcess/ChildProcessBuilder.hpp>
 #include <MnDiagProcessUtils.h>
+#include <TempExecutable.hpp>
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
@@ -70,8 +71,9 @@ SCENARIO("Testing process management utilities")
     SECTION("Test process lifecycle")
     {
         // Start a long-running process
+        auto executable = TempExecutable::Random("#!/bin/sh\nwhile true; do sleep 1; done\n", "mndiag-process-");
         DcgmNs::Common::Subprocess::ChildProcessBuilder builder;
-        builder.SetExecutable("/bin/sleep").AddArg("0.5");
+        builder.SetExecutable(executable.Path().string());
 
         IoContext ioContext {};
         auto process = std::make_unique<DcgmNs::Common::Subprocess::ChildProcess>(builder.Build(ioContext));

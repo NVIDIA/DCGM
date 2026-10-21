@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,15 +63,22 @@ typedef struct
 #define DCGM_MSG_PROTO_REQUEST 0x0100 /* A Google protobuf-based request (Not supported in DCGM 3.0 and newer) */
 #define DCGM_MSG_PROTO_RESPONSE \
     0x0200 /* A Google protobuf-based response to a request (Not supported in DCGM 3.0 and newer) */
-#define DCGM_MSG_MODULE_COMMAND 0x0300 /* A module command message */
-#define DCGM_MSG_POLICY_NOTIFY  0x0400 /* Async notification of a policy violation */
-#define DCGM_MSG_REQUEST_NOTIFY 0x0500 /* Notify an async request that it will receive no further updates */
+#define DCGM_MSG_MODULE_COMMAND   0x0300 /* A module command message */
+#define DCGM_MSG_POLICY_NOTIFY    0x0400 /* Deprecated legacy policy violation notification */
+#define DCGM_MSG_POLICY_VIOLATION 0x0401 /* Async notification of a field-based policy violation */
+#define DCGM_MSG_REQUEST_NOTIFY   0x0500 /* Notify an async request that it will receive no further updates */
 
-/* DCGM_MSG_POLICY_NOTIFY - Signal a client that a policy has been violated */
+/* Deprecated: DCGM_MSG_POLICY_NOTIFY signals a legacy policy violation. Use DCGM_MSG_POLICY_VIOLATION instead. */
 typedef struct
 {
     dcgmPolicyCallbackResponse_t response; /* Policy response to pass to client callbacks */
 } dcgm_msg_policy_notify_t;
+
+/* DCGM_MSG_POLICY_VIOLATION - Signal a client that a field-based policy has been violated */
+typedef struct
+{
+    dcgm_policy_violation_t violation; /* Field policy violation to pass to client callbacks */
+} dcgm_msg_policy_violation_t;
 
 /* DCGM_MSG_REQUEST_NOTIFY - Notify an async request that it will receive
  *                           no further updates

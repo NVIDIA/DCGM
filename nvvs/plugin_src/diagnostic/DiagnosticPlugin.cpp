@@ -15,10 +15,13 @@
  */
 #include "dcgm_fields.h"
 #define __STDC_LIMIT_MACROS
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <EarlyFailChecker.h>
 #include <fmt/format.h>
 #include <numeric>
 #include <stdint.h>
+#include <utility>
 
 #include "DiagnosticPlugin.h"
 #include "gpuburn_ptx_string.h"
@@ -81,9 +84,19 @@ double CalculateGFlopsMultiplier(unsigned int matrixDim)
  * GpuBurnPlugin Implementation
  */
 /*****************************************************************************/
-GpuBurnPlugin::GpuBurnPlugin(dcgmHandle_t handle)
-    : m_testParameters(new TestParameters())
-    , m_dcgmRecorder(handle)
+GpuBurnPlugin::GpuBurnPlugin(dcgmHandle_t handle,
+                             DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                             CudaOpsAnyUniquePtr cudaOps,
+                             CublasOpsAnyUniquePtr cublasOps,
+                             CudaCommonAnyUniquePtr cudaCommon,
+                             NvvsCommon *nvvsCommon)
+    : Plugin(dcgmOps.AsAnyPtr())
+    , m_dcgmOpsUnique(std::move(dcgmOps))
+    , m_testParameters(new TestParameters())
+    , m_cudaOps(std::move(cudaOps))
+    , m_cublasOps(std::move(cublasOps))
+    , m_cudaCommon(std::move(cudaCommon))
+    , m_dcgmRecorder(handle, m_dcgmOps, nvvsCommon)
     , m_handle(handle)
     , m_dcgmRecorderInitialized(true)
     , m_dcgmCommErrorOccurred(false)
@@ -129,6 +142,10 @@ GpuBurnPlugin::~GpuBurnPlugin()
 /*****************************************************************************/
 void GpuBurnPlugin::Cleanup()
 {
+    for (auto *device : m_device)
+    {
+        delete device;
+    }
     m_device.clear();
 
     // We don't own testParameters, so we don't delete them
@@ -144,19 +161,19 @@ void GpuBurnPlugin::UpdateForHGemmSupport(int deviceId)
     int major;
     int minor;
 
-    cudaError_t cudaSt = cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, deviceId);
+    cudaError_t cudaSt = m_cudaOps->cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, deviceId);
     if (cudaSt != cudaSuccess)
     {
         DCGM_LOG_ERROR << "Unable to check compute capability for the device. Assuming that cublasHgemm is supported";
-        LOG_CUDA_ERROR(GetDiagnosticTestName(), "cudaDeviceGetAttribute", cudaSt, 0, 0, false);
+        LOG_CUDA_ERROR(m_cudaCommon, GetDiagnosticTestName(), "cudaDeviceGetAttribute", cudaSt, 0, 0, false);
         return;
     }
 
-    cudaSt = cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, deviceId);
+    cudaSt = m_cudaOps->cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, deviceId);
     if (cudaSt != cudaSuccess)
     {
         DCGM_LOG_ERROR << "Unable to get compute capability for the device. Assuming that cublasHgemm is supported";
-        LOG_CUDA_ERROR(GetDiagnosticTestName(), "cudaDeviceGetAttribute", cudaSt, 0, 0, false);
+        LOG_CUDA_ERROR(m_cudaCommon, GetDiagnosticTestName(), "cudaDeviceGetAttribute", cudaSt, 0, 0, false);
         return;
     }
 
@@ -179,12 +196,13 @@ void GpuBurnPlugin::UpdateForDGemmSupport(int deviceId)
         return;
     }
 
-    cudaError_t cudaSt = cudaDeviceGetAttribute(&perf, cudaDevAttrSingleToDoublePrecisionPerfRatio, deviceId);
+    cudaError_t cudaSt
+        = m_cudaOps->cudaDeviceGetAttribute(&perf, cudaDevAttrSingleToDoublePrecisionPerfRatio, deviceId);
     if (cudaSt != cudaSuccess)
     {
         DCGM_LOG_ERROR
-            << "Unable to check single to double perf ratio for the device. Assuming that cublasDgemm is not supported";
-        LOG_CUDA_ERROR(GetDiagnosticTestName(), "cudaDeviceGetAttribute", cudaSt, 0, 0, false);
+            << "Unable to check single to double perf ratio for the device. Assuming that cublasDgemm_v2 is not supported";
+        LOG_CUDA_ERROR(m_cudaCommon, GetDiagnosticTestName(), "cudaDeviceGetAttribute", cudaSt, 0, 0, false);
         return;
     }
 
@@ -223,11 +241,11 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginEntityList_v1 const &entityInfo)
 
         int deviceIdx = 0;
 
-        cudaSt
-            = cudaDeviceGetByPCIBusId(&deviceIdx, entityInfo.entities[i].auxField.gpu.attributes.identifiers.pciBusId);
+        cudaSt = m_cudaOps->cudaDeviceGetByPCIBusId(
+            &deviceIdx, entityInfo.entities[i].auxField.gpu.attributes.identifiers.pciBusId);
         if (cudaSuccess != cudaSt)
         {
-            LOG_CUDA_ERROR(GetDiagnosticTestName(), "cudaDeviceGetByPCIBusId", cudaSt, i, 0, false);
+            LOG_CUDA_ERROR(m_cudaCommon, GetDiagnosticTestName(), "cudaDeviceGetByPCIBusId", cudaSt, i, 0, false);
             continue;
         }
 
@@ -253,7 +271,12 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginEntityList_v1 const &entityInfo)
             gbDevice = new GpuBurnDevice(GetDiagnosticTestName(),
                                          gpuId,
                                          entityInfo.entities[i].auxField.gpu.attributes.identifiers.pciBusId,
-                                         this);
+                                         this,
+                                         m_dcgmOps,
+                                         m_handle,
+                                         m_cudaOps.AsAnyPtr(),
+                                         m_cublasOps.AsAnyPtr(),
+                                         m_cudaCommon.AsAnyPtr());
         }
         catch (DcgmError &d)
         {
@@ -493,8 +516,15 @@ bool GpuBurnPlugin::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
         {
             unsigned int gpuId = m_device[i]->gpuId; /* Cache for logging as the device may get freed */
             DCGM_LOG_DEBUG << "Creating worker thread for GPU " << gpuId;
-            workerThreads[i] = new GpuBurnWorker(
-                m_device[i], *this, m_precision, m_testDuration, m_matrixDim, m_dcgmRecorder, failEarly, checkInterval);
+            workerThreads[i] = new GpuBurnWorker(m_device[i],
+                                                 *this,
+                                                 m_precision,
+                                                 m_testDuration,
+                                                 m_matrixDim,
+                                                 m_dcgmRecorder,
+                                                 m_cudaCommon.AsAnyPtr(),
+                                                 failEarly,
+                                                 checkInterval);
             // initialize the worker
             log_debug("Begin workerThreads[{}]->InitBuffers()", i);
             st = workerThreads[i]->InitBuffers();
@@ -829,10 +859,14 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
                              double testDuration,
                              unsigned int matrixDim,
                              DcgmRecorder &dr,
+                             CudaCommonAnyPtr cudaCommon,
                              bool failEarly,
                              unsigned long /* failCheckInterval */)
     : m_device(device)
     , m_plugin(plugin)
+    , m_cudaOps(device->cudaOps)
+    , m_cublasOps(device->cublasOps)
+    , m_cudaCommon(cudaCommon)
     , m_precision(precision)
     , m_precisions()
     , m_testDuration(testDuration)
@@ -847,6 +881,9 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
     , m_f16CompareFunc()
     , m_f32CompareFunc()
     , m_f64CompareFunc()
+    , m_devicePtrArrayDouble(nullptr, CUdeviceptrDeleter { m_cudaOps })
+    , m_devicePtrArraySingle(nullptr, CUdeviceptrDeleter { m_cudaOps })
+    , m_devicePtrArrayHalf(nullptr, CUdeviceptrDeleter { m_cudaOps })
     , m_AdataFP64(0)
     , m_BdataFP64(0)
     , m_AdataFP32(0)
@@ -889,30 +926,33 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
  * For use by GpuBurnWorker only.
  */
 /****************************************************************************/
-#define CHECK_CUDA_ERROR(callName, cuSt)                                                                         \
-    if (cuSt != CUDA_SUCCESS)                                                                                    \
-    {                                                                                                            \
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, m_plugin.GetDiagnosticTestName(), callName, cuSt, m_device->gpuId); \
-        return -1;                                                                                               \
-    }                                                                                                            \
-    else                                                                                                         \
+#define CHECK_CUDA_ERROR(callName, cuSt)                                                                 \
+    if (cuSt != CUDA_SUCCESS)                                                                            \
+    {                                                                                                    \
+        LOG_CUDA_ERROR_FOR_PLUGIN(                                                                       \
+            m_cudaCommon, &m_plugin, m_plugin.GetDiagnosticTestName(), callName, cuSt, m_device->gpuId); \
+        return -1;                                                                                       \
+    }                                                                                                    \
+    else                                                                                                 \
         (void)0
 
-#define CHECK_CUBLAS_ERROR_AND_RETURN(callName, cubSt)                                                              \
-    if (cubSt != CUBLAS_STATUS_SUCCESS)                                                                             \
-    {                                                                                                               \
-        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, m_plugin.GetDiagnosticTestName(), callName, cubSt, m_device->gpuId); \
-        return -1;                                                                                                  \
-    }                                                                                                               \
-    else                                                                                                            \
+#define CHECK_CUBLAS_ERROR_AND_RETURN(callName, cubSt)                                                    \
+    if (cubSt != CUBLAS_STATUS_SUCCESS)                                                                   \
+    {                                                                                                     \
+        LOG_CUBLAS_ERROR_FOR_PLUGIN(                                                                      \
+            m_cudaCommon, &m_plugin, m_plugin.GetDiagnosticTestName(), callName, cubSt, m_device->gpuId); \
+        return -1;                                                                                        \
+    }                                                                                                     \
+    else                                                                                                  \
         (void)0
 
-#define CHECK_CUBLAS_ERROR(callName, cubSt)                                                                         \
-    if (cubSt != CUBLAS_STATUS_SUCCESS)                                                                             \
-    {                                                                                                               \
-        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, m_plugin.GetDiagnosticTestName(), callName, cubSt, m_device->gpuId); \
-    }                                                                                                               \
-    else                                                                                                            \
+#define CHECK_CUBLAS_ERROR(callName, cubSt)                                                               \
+    if (cubSt != CUBLAS_STATUS_SUCCESS)                                                                   \
+    {                                                                                                     \
+        LOG_CUBLAS_ERROR_FOR_PLUGIN(                                                                      \
+            m_cudaCommon, &m_plugin, m_plugin.GetDiagnosticTestName(), callName, cubSt, m_device->gpuId); \
+    }                                                                                                     \
+    else                                                                                                  \
         (void)0
 
 /****************************************************************************/
@@ -937,26 +977,25 @@ GpuBurnWorker::~GpuBurnWorker()
     }
 
 
-    using namespace Dcgm;
     int st = Bind();
     if (st != 0)
     {
         DCGM_LOG_ERROR << "bind returned " << st;
     }
 
-#define LOCAL_FREE_DEVICE_PTR(devicePtr)                                                                 \
-    {                                                                                                    \
-        CUresult cuSt;                                                                                   \
-        if (devicePtr)                                                                                   \
-        {                                                                                                \
-            cuSt = cuMemFree_v2(devicePtr);                                                              \
-            if (cuSt != CUDA_SUCCESS)                                                                    \
-            {                                                                                            \
-                LOG_CUDA_ERROR_FOR_PLUGIN(                                                               \
-                    &m_plugin, m_plugin.GetDiagnosticTestName(), "cuMemFree_v2", cuSt, m_device->gpuId); \
-            }                                                                                            \
-            devicePtr = 0;                                                                               \
-        }                                                                                                \
+#define LOCAL_FREE_DEVICE_PTR(devicePtr)                                                                               \
+    {                                                                                                                  \
+        CUresult cuSt;                                                                                                 \
+        if (devicePtr)                                                                                                 \
+        {                                                                                                              \
+            cuSt = m_cudaOps->cuMemFree_v2(devicePtr);                                                                 \
+            if (cuSt != CUDA_SUCCESS)                                                                                  \
+            {                                                                                                          \
+                LOG_CUDA_ERROR_FOR_PLUGIN(                                                                             \
+                    m_cudaCommon, &m_plugin, m_plugin.GetDiagnosticTestName(), "cuMemFree_v2", cuSt, m_device->gpuId); \
+            }                                                                                                          \
+            devicePtr = 0;                                                                                             \
+        }                                                                                                              \
     }
 
     LOCAL_FREE_DEVICE_PTR(m_AdataFP64);
@@ -970,7 +1009,7 @@ GpuBurnWorker::~GpuBurnWorker()
 
     if (m_cublas)
     {
-        CublasProxy::CublasDestroy(m_cublas);
+        m_cublasOps->cublasDestroy_v2(m_cublas);
     }
 }
 
@@ -978,10 +1017,10 @@ GpuBurnWorker::~GpuBurnWorker()
 int GpuBurnWorker::Bind()
 {
     /* Make sure we are pointing at the right device */
-    cudaSetDevice(m_device->cudaDeviceIdx);
+    m_cudaOps->cudaSetDevice(m_device->cudaDeviceIdx);
 
     /* Grab the context from the runtime */
-    CHECK_CUDA_ERROR("cuCtxGetCurrent", cuCtxGetCurrent(&m_device->cuContext));
+    CHECK_CUDA_ERROR("cuCtxGetCurrent", m_cudaOps->cuCtxGetCurrent(&m_device->cuContext));
 
     if (!m_device->cuContext)
     {
@@ -993,7 +1032,7 @@ int GpuBurnWorker::Bind()
     }
     else
     {
-        CHECK_CUDA_ERROR("cuCtxSetCurrent", cuCtxSetCurrent(m_device->cuContext));
+        CHECK_CUDA_ERROR("cuCtxSetCurrent", m_cudaOps->cuCtxSetCurrent(m_device->cuContext));
     }
     return 0;
 }
@@ -1010,11 +1049,11 @@ size_t GpuBurnWorker::AvailMemory(int &st)
     }
     size_t freeMem  = 0;
     size_t totalMem = 0;
-    CUresult cuSt   = cuMemGetInfo_v2(&freeMem, &totalMem);
+    CUresult cuSt   = m_cudaOps->cuMemGetInfo_v2(&freeMem, &totalMem);
     if (cuSt != CUDA_SUCCESS)
     {
         LOG_CUDA_ERROR_FOR_PLUGIN(
-            &m_plugin, m_plugin.GetDiagnosticTestName(), "cuMemGetInfo_v2", cuSt, m_device->gpuId);
+            m_cudaCommon, &m_plugin, m_plugin.GetDiagnosticTestName(), "cuMemGetInfo_v2", cuSt, m_device->gpuId);
         st = -1;
         return 0;
     }
@@ -1057,24 +1096,24 @@ int GpuBurnWorker::InitBuffers()
     m_iters = baseIterations;
 
     // Allocate input matrices A and B for all precisions
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_AdataFP64, resultSizeFP64));
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_BdataFP64, resultSizeFP64));
+    CHECK_CUDA_ERROR("cuMemAlloc", m_cudaOps->cuMemAlloc_v2(&m_AdataFP64, resultSizeFP64));
+    CHECK_CUDA_ERROR("cuMemAlloc", m_cudaOps->cuMemAlloc_v2(&m_BdataFP64, resultSizeFP64));
 
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_AdataFP32, resultSizeFP32));
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_BdataFP32, resultSizeFP32));
+    CHECK_CUDA_ERROR("cuMemAlloc", m_cudaOps->cuMemAlloc_v2(&m_AdataFP32, resultSizeFP32));
+    CHECK_CUDA_ERROR("cuMemAlloc", m_cudaOps->cuMemAlloc_v2(&m_BdataFP32, resultSizeFP32));
 
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_AdataFP16, resultSizeFP16));
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_BdataFP16, resultSizeFP16));
+    CHECK_CUDA_ERROR("cuMemAlloc", m_cudaOps->cuMemAlloc_v2(&m_AdataFP16, resultSizeFP16));
+    CHECK_CUDA_ERROR("cuMemAlloc", m_cudaOps->cuMemAlloc_v2(&m_BdataFP16, resultSizeFP16));
 
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_faultyElemData, sizeof(int)));
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_nanElemData, sizeof(int)));
+    CHECK_CUDA_ERROR("cuMemAlloc", m_cudaOps->cuMemAlloc_v2(&m_faultyElemData, sizeof(int)));
+    CHECK_CUDA_ERROR("cuMemAlloc", m_cudaOps->cuMemAlloc_v2(&m_nanElemData, sizeof(int)));
 
     // Allocate output matrices - base vector owns all the actual device memory
     m_CdataVecBase.reserve(baseIterations);
     for (size_t i = 0; i < baseIterations; i++)
     {
-        m_CdataVecBase.emplace_back(new CUdeviceptr_v2(0), CUdeviceptrDeleter {});
-        CHECK_CUDA_ERROR("cuMemAlloc_v2", cuMemAlloc_v2(m_CdataVecBase[i].get(), resultSizeFP64));
+        m_CdataVecBase.emplace_back(new CUdeviceptr_v2(0), CUdeviceptrDeleter { m_cudaOps });
+        CHECK_CUDA_ERROR("cuMemAlloc_v2", m_cudaOps->cuMemAlloc_v2(m_CdataVecBase[i].get(), resultSizeFP64));
     }
 
     // Create views into the base memory for different precisions
@@ -1106,34 +1145,36 @@ int GpuBurnWorker::InitBuffers()
     }
 
     // Allocate device pointer arrays for all precisions
-    m_devicePtrArrayDouble = CUdeviceptrWrapper(new CUdeviceptr_v2(0), CUdeviceptrDeleter {});
+    m_devicePtrArrayDouble = CUdeviceptrWrapper(new CUdeviceptr_v2(0), CUdeviceptrDeleter { m_cudaOps });
     CHECK_CUDA_ERROR("cuMemAlloc_v2",
-                     cuMemAlloc_v2(m_devicePtrArrayDouble.get(), baseIterations * sizeof(CUdeviceptr_v2)));
+                     m_cudaOps->cuMemAlloc_v2(m_devicePtrArrayDouble.get(), baseIterations * sizeof(CUdeviceptr_v2)));
 
-    m_devicePtrArraySingle = CUdeviceptrWrapper(new CUdeviceptr_v2(0), CUdeviceptrDeleter {});
-    CHECK_CUDA_ERROR("cuMemAlloc_v2",
-                     cuMemAlloc_v2(m_devicePtrArraySingle.get(), baseIterations * 2 * sizeof(CUdeviceptr_v2)));
+    m_devicePtrArraySingle = CUdeviceptrWrapper(new CUdeviceptr_v2(0), CUdeviceptrDeleter { m_cudaOps });
+    CHECK_CUDA_ERROR(
+        "cuMemAlloc_v2",
+        m_cudaOps->cuMemAlloc_v2(m_devicePtrArraySingle.get(), baseIterations * 2 * sizeof(CUdeviceptr_v2)));
 
-    m_devicePtrArrayHalf = CUdeviceptrWrapper(new CUdeviceptr_v2(0), CUdeviceptrDeleter {});
+    m_devicePtrArrayHalf = CUdeviceptrWrapper(new CUdeviceptr_v2(0), CUdeviceptrDeleter { m_cudaOps });
     CHECK_CUDA_ERROR("cuMemAlloc_v2",
-                     cuMemAlloc_v2(m_devicePtrArrayHalf.get(), baseIterations * 4 * sizeof(CUdeviceptr_v2)));
+                     m_cudaOps->cuMemAlloc_v2(m_devicePtrArrayHalf.get(), baseIterations * 4 * sizeof(CUdeviceptr_v2)));
 
     // Populate all device pointer arrays upfront to eliminate host-to-device copies during precision switching
 
     // Double precision device pointer array - direct copy since they already contain raw CUdeviceptr_v2
-    CHECK_CUDA_ERROR(
-        "cuMemcpyHtoD_v2",
-        cuMemcpyHtoD_v2(*m_devicePtrArrayDouble, m_CdataVecDouble.data(), baseIterations * sizeof(CUdeviceptr_v2)));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD_v2",
+                     m_cudaOps->cuMemcpyHtoD_v2(
+                         *m_devicePtrArrayDouble, m_CdataVecDouble.data(), baseIterations * sizeof(CUdeviceptr_v2)));
 
     // Single precision device pointer array - direct copy since they already contain raw CUdeviceptr_v2
-    CHECK_CUDA_ERROR(
-        "cuMemcpyHtoD_v2",
-        cuMemcpyHtoD_v2(*m_devicePtrArraySingle, m_CdataVecSingle.data(), baseIterations * 2 * sizeof(CUdeviceptr_v2)));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD_v2",
+                     m_cudaOps->cuMemcpyHtoD_v2(*m_devicePtrArraySingle,
+                                                m_CdataVecSingle.data(),
+                                                baseIterations * 2 * sizeof(CUdeviceptr_v2)));
 
     // Half precision device pointer array - direct copy since they already contain raw CUdeviceptr_v2
-    CHECK_CUDA_ERROR(
-        "cuMemcpyHtoD_v2",
-        cuMemcpyHtoD_v2(*m_devicePtrArrayHalf, m_CdataVecHalf.data(), baseIterations * 4 * sizeof(CUdeviceptr_v2)));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD_v2",
+                     m_cudaOps->cuMemcpyHtoD_v2(
+                         *m_devicePtrArrayHalf, m_CdataVecHalf.data(), baseIterations * 4 * sizeof(CUdeviceptr_v2)));
 
     std::stringstream ss;
     ss << "Allocated space for " << baseIterations << " double precision output matrices from " << useBytes
@@ -1141,14 +1182,14 @@ int GpuBurnWorker::InitBuffers()
     m_plugin.AddInfoVerboseForGpu(m_plugin.GetDiagnosticTestName(), m_device->gpuId, ss.str());
 
     // Populating matrices A and B
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_AdataFP64, m_A_FP64.get(), resultSizeFP64));
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_BdataFP64, m_B_FP64.get(), resultSizeFP64));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", m_cudaOps->cuMemcpyHtoD_v2(m_AdataFP64, m_A_FP64.get(), resultSizeFP64));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", m_cudaOps->cuMemcpyHtoD_v2(m_BdataFP64, m_B_FP64.get(), resultSizeFP64));
 
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_AdataFP32, m_A_FP32.get(), resultSizeFP32));
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_BdataFP32, m_B_FP32.get(), resultSizeFP32));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", m_cudaOps->cuMemcpyHtoD_v2(m_AdataFP32, m_A_FP32.get(), resultSizeFP32));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", m_cudaOps->cuMemcpyHtoD_v2(m_BdataFP32, m_B_FP32.get(), resultSizeFP32));
 
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_AdataFP16, m_A_FP16.get(), resultSizeFP16));
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_BdataFP16, m_B_FP16.get(), resultSizeFP16));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", m_cudaOps->cuMemcpyHtoD_v2(m_AdataFP16, m_A_FP16.get(), resultSizeFP16));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", m_cudaOps->cuMemcpyHtoD_v2(m_BdataFP16, m_B_FP16.get(), resultSizeFP16));
 
     return InitCompareKernel();
 }
@@ -1156,16 +1197,19 @@ int GpuBurnWorker::InitBuffers()
 /****************************************************************************/
 int GpuBurnWorker::InitCompareKernel()
 {
-    CHECK_CUDA_ERROR("cuModuleLoadData", cuModuleLoadData(&m_module, (const char *)gpuburn_ptx_string));
+    CHECK_CUDA_ERROR("cuModuleLoadData", m_cudaOps->cuModuleLoadData(&m_module, (const char *)gpuburn_ptx_string));
 
-    CHECK_CUDA_ERROR("cuModuleGetFunction", cuModuleGetFunction(&m_f16CompareFunc, m_module, "compareFP16"));
-    CHECK_CUDA_ERROR("cuFuncSetCacheConfig", cuFuncSetCacheConfig(m_f16CompareFunc, CU_FUNC_CACHE_PREFER_L1));
+    CHECK_CUDA_ERROR("cuModuleGetFunction", m_cudaOps->cuModuleGetFunction(&m_f16CompareFunc, m_module, "compareFP16"));
+    CHECK_CUDA_ERROR("cuFuncSetCacheConfig",
+                     m_cudaOps->cuFuncSetCacheConfig(m_f16CompareFunc, CU_FUNC_CACHE_PREFER_L1));
 
-    CHECK_CUDA_ERROR("cuModuleGetFunction", cuModuleGetFunction(&m_f32CompareFunc, m_module, "compareFP32"));
-    CHECK_CUDA_ERROR("cuFuncSetCacheConfig", cuFuncSetCacheConfig(m_f32CompareFunc, CU_FUNC_CACHE_PREFER_L1));
+    CHECK_CUDA_ERROR("cuModuleGetFunction", m_cudaOps->cuModuleGetFunction(&m_f32CompareFunc, m_module, "compareFP32"));
+    CHECK_CUDA_ERROR("cuFuncSetCacheConfig",
+                     m_cudaOps->cuFuncSetCacheConfig(m_f32CompareFunc, CU_FUNC_CACHE_PREFER_L1));
 
-    CHECK_CUDA_ERROR("cuModuleGetFunction", cuModuleGetFunction(&m_f64CompareFunc, m_module, "compareFP64"));
-    CHECK_CUDA_ERROR("cuFuncSetCacheConfig", cuFuncSetCacheConfig(m_f64CompareFunc, CU_FUNC_CACHE_PREFER_L1));
+    CHECK_CUDA_ERROR("cuModuleGetFunction", m_cudaOps->cuModuleGetFunction(&m_f64CompareFunc, m_module, "compareFP64"));
+    CHECK_CUDA_ERROR("cuFuncSetCacheConfig",
+                     m_cudaOps->cuFuncSetCacheConfig(m_f64CompareFunc, CU_FUNC_CACHE_PREFER_L1));
 
     m_params[1] = &m_faultyElemData;
     m_params[2] = &m_nanElemData;
@@ -1193,8 +1237,8 @@ int GpuBurnWorker::Compare(int precisionIndex)
     int faultyElems = 0;
     int nanElems    = 0;
     CUfunction compare;
-    CHECK_CUDA_ERROR("cuMemsetD32_v2", cuMemsetD32_v2(m_faultyElemData, 0, 1));
-    CHECK_CUDA_ERROR("cuMemsetD32_v2", cuMemsetD32_v2(m_nanElemData, 0, 1));
+    CHECK_CUDA_ERROR("cuMemsetD32_v2", m_cudaOps->cuMemsetD32_v2(m_faultyElemData, 0, 1));
+    CHECK_CUDA_ERROR("cuMemsetD32_v2", m_cudaOps->cuMemsetD32_v2(m_nanElemData, 0, 1));
     if (precisionIndex == DIAG_HALF_PRECISION)
     {
         compare = m_f16CompareFunc;
@@ -1209,19 +1253,19 @@ int GpuBurnWorker::Compare(int precisionIndex)
     }
 
     CHECK_CUDA_ERROR("cuLaunchKernel",
-                     cuLaunchKernel(compare,
-                                    m_gridDim.x,
-                                    m_gridDim.y,
-                                    m_gridDim.z,
-                                    m_blockDim.x,
-                                    m_blockDim.y,
-                                    m_blockDim.z,
-                                    0,
-                                    0,
-                                    m_params,
-                                    0));
-    CHECK_CUDA_ERROR("cuMemcpyDtoH_v2", cuMemcpyDtoH_v2(&faultyElems, m_faultyElemData, sizeof(int)));
-    CHECK_CUDA_ERROR("cuMemcpyDtoH_v2", cuMemcpyDtoH_v2(&nanElems, m_nanElemData, sizeof(int)));
+                     m_cudaOps->cuLaunchKernel(compare,
+                                               m_gridDim.x,
+                                               m_gridDim.y,
+                                               m_gridDim.z,
+                                               m_blockDim.x,
+                                               m_blockDim.y,
+                                               m_blockDim.z,
+                                               0,
+                                               0,
+                                               m_params,
+                                               0));
+    CHECK_CUDA_ERROR("cuMemcpyDtoH_v2", m_cudaOps->cuMemcpyDtoH_v2(&faultyElems, m_faultyElemData, sizeof(int)));
+    CHECK_CUDA_ERROR("cuMemcpyDtoH_v2", m_cudaOps->cuMemcpyDtoH_v2(&nanElems, m_nanElemData, sizeof(int)));
     if (faultyElems)
     {
         m_error += (long long int)faultyElems;
@@ -1248,7 +1292,6 @@ int GpuBurnWorker::Compare(int precisionIndex)
 /****************************************************************************/
 int GpuBurnWorker::Compute(int precisionIndex)
 {
-    using namespace Dcgm;
     int st = Bind();
     if (st)
     {
@@ -1268,7 +1311,7 @@ int GpuBurnWorker::Compute(int precisionIndex)
         if (precisionIndex == DIAG_HALF_PRECISION)
         {
             CHECK_CUBLAS_ERROR_AND_RETURN("cublasHgemm",
-                                          CublasProxy::CublasHgemm(m_cublas,
+                                          m_cublasOps->cublasHgemm(m_cublas,
                                                                    CUBLAS_OP_N,
                                                                    CUBLAS_OP_N,
                                                                    m_matrixDim,
@@ -1285,39 +1328,39 @@ int GpuBurnWorker::Compute(int precisionIndex)
         }
         else if (precisionIndex == DIAG_SINGLE_PRECISION)
         {
-            CHECK_CUBLAS_ERROR_AND_RETURN("cublasSgemm",
-                                          CublasProxy::CublasSgemm(m_cublas,
-                                                                   CUBLAS_OP_N,
-                                                                   CUBLAS_OP_N,
-                                                                   m_matrixDim,
-                                                                   m_matrixDim,
-                                                                   m_matrixDim,
-                                                                   &alpha,
-                                                                   (const float *)m_AdataFP32,
-                                                                   m_matrixDim,
-                                                                   (const float *)m_BdataFP32,
-                                                                   m_matrixDim,
-                                                                   &beta,
-                                                                   (float *)outputMatrix,
-                                                                   m_matrixDim));
+            CHECK_CUBLAS_ERROR_AND_RETURN("cublasSgemm_v2",
+                                          m_cublasOps->cublasSgemm_v2(m_cublas,
+                                                                      CUBLAS_OP_N,
+                                                                      CUBLAS_OP_N,
+                                                                      m_matrixDim,
+                                                                      m_matrixDim,
+                                                                      m_matrixDim,
+                                                                      &alpha,
+                                                                      (const float *)m_AdataFP32,
+                                                                      m_matrixDim,
+                                                                      (const float *)m_BdataFP32,
+                                                                      m_matrixDim,
+                                                                      &beta,
+                                                                      (float *)outputMatrix,
+                                                                      m_matrixDim));
         }
         else
         {
-            CHECK_CUBLAS_ERROR_AND_RETURN("cublasDgemm",
-                                          CublasProxy::CublasDgemm(m_cublas,
-                                                                   CUBLAS_OP_N,
-                                                                   CUBLAS_OP_N,
-                                                                   m_matrixDim,
-                                                                   m_matrixDim,
-                                                                   m_matrixDim,
-                                                                   &alphaD,
-                                                                   (const double *)m_AdataFP64,
-                                                                   m_matrixDim,
-                                                                   (const double *)m_BdataFP64,
-                                                                   m_matrixDim,
-                                                                   &betaD,
-                                                                   (double *)outputMatrix,
-                                                                   m_matrixDim));
+            CHECK_CUBLAS_ERROR_AND_RETURN("cublasDgemm_v2",
+                                          m_cublasOps->cublasDgemm_v2(m_cublas,
+                                                                      CUBLAS_OP_N,
+                                                                      CUBLAS_OP_N,
+                                                                      m_matrixDim,
+                                                                      m_matrixDim,
+                                                                      m_matrixDim,
+                                                                      &alphaD,
+                                                                      (const double *)m_AdataFP64,
+                                                                      m_matrixDim,
+                                                                      (const double *)m_BdataFP64,
+                                                                      m_matrixDim,
+                                                                      &betaD,
+                                                                      (double *)outputMatrix,
+                                                                      m_matrixDim));
         }
     }
     return 0;
@@ -1336,7 +1379,6 @@ double GpuBurnWorker::GetGFlopsMultiplier()
 /****************************************************************************/
 void GpuBurnWorker::run()
 {
-    using namespace Dcgm;
     double startTime;
     double computeTime = 0;
     double iterEnd     = 0;
@@ -1350,10 +1392,11 @@ void GpuBurnWorker::run()
         return;
     }
 
-    cublasStatus_t cubSt = CublasProxy::CublasCreate(&m_cublas);
+    cublasStatus_t cubSt = m_cublasOps->cublasCreate_v2(&m_cublas);
     if (cubSt != CUBLAS_STATUS_SUCCESS)
     {
-        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, m_plugin.GetDiagnosticTestName(), "cublasCreate", cubSt, 0, 0, false);
+        LOG_CUBLAS_ERROR_FOR_PLUGIN(
+            m_cudaCommon, &m_plugin, m_plugin.GetDiagnosticTestName(), "cublasCreate_v2", cubSt, 0, 0, false);
         m_stopTime = timelib_usecSince1970();
         return;
     }
@@ -1370,7 +1413,7 @@ void GpuBurnWorker::run()
     if (m_plugin.AlwaysUseTensor())
     {
         log_debug("Enabling tensor math for GPU {} because parameter settings request it.", m_device->gpuId);
-        CHECK_CUBLAS_ERROR("cublasSetMathMode", CublasProxy::CublasSetMathMode(m_cublas, CUBLAS_TENSOR_OP_MATH));
+        CHECK_CUBLAS_ERROR("cublasSetMathMode", m_cublasOps->cublasSetMathMode(m_cublas, CUBLAS_TENSOR_OP_MATH));
         hintedTensorCores = true;
     }
 
@@ -1434,7 +1477,7 @@ void GpuBurnWorker::run()
             {
                 DCGM_LOG_DEBUG << "Enabling tensor math for GPU " << m_device->gpuId;
                 CHECK_CUBLAS_ERROR("cublasSetMathMode",
-                                   CublasProxy::CublasSetMathMode(m_cublas, CUBLAS_TENSOR_OP_MATH));
+                                   m_cublasOps->cublasSetMathMode(m_cublas, CUBLAS_TENSOR_OP_MATH));
                 hintedTensorCores = true;
             }
 

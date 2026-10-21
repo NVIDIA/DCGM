@@ -42,7 +42,7 @@ function (add_3rd_party_library condition libName installDir)
 endfunction()
 
 
-add_3rd_party_library(ANY_SANITIZER "libstdc++.so" ${DCGM_TESTS_APP_DIR})
-add_3rd_party_library(ADDRESS_SANITIZER "libasan.so" ${DCGM_TESTS_APP_DIR})
-add_3rd_party_library(THREAD_SANITIZER "libtsan.so" ${DCGM_TESTS_APP_DIR})
-add_3rd_party_library(LEAK_SANITIZER "liblsan.so" ${DCGM_TESTS_APP_DIR})
+add_3rd_party_library(ANY_SANITIZER "libstdc++.so" ${DCGM_TESTS_APP_DIR}/${DCGM_TESTS_ARCH})
+add_3rd_party_library(ADDRESS_SANITIZER "libasan.so" ${DCGM_TESTS_APP_DIR}/${DCGM_TESTS_ARCH})
+add_3rd_party_library(THREAD_SANITIZER "libtsan.so" ${DCGM_TESTS_APP_DIR}/${DCGM_TESTS_ARCH})
+add_3rd_party_library(LEAK_SANITIZER "liblsan.so" ${DCGM_TESTS_APP_DIR}/${DCGM_TESTS_ARCH})

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,18 +22,28 @@
 #include "DcgmHandle.h"
 #include "NvvsCommon.h" //logging functions
 #include "dcgm_test_apis.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmStringHelpers.h>
 
-DcgmHandle::DcgmHandle()
+DcgmHandle::DcgmHandle(DcgmNs::DcgmOpsAnyPtr dcgmOps)
     : m_lastReturn(DCGM_ST_OK)
     , m_handle(0)
     , m_ownHandle(true)
+    , m_dcgmOps(dcgmOps)
+{}
+
+DcgmHandle::DcgmHandle(DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t handle)
+    : m_lastReturn(DCGM_ST_OK)
+    , m_handle(handle)
+    , m_ownHandle(false)
+    , m_dcgmOps(dcgmOps)
 {}
 
 DcgmHandle::DcgmHandle(DcgmHandle &&other) noexcept
     : m_lastReturn(other.m_lastReturn)
     , m_handle(other.m_handle)
     , m_ownHandle(other.m_ownHandle)
+    , m_dcgmOps(other.m_dcgmOps)
 {
     if (m_ownHandle)
     {
@@ -61,10 +71,11 @@ void DcgmHandle::Cleanup()
     if (m_ownHandle && m_handle)
     {
         if (m_handle == (dcgmHandle_t)DCGM_EMBEDDED_HANDLE)
-            dcgmStopEmbedded(m_handle);
+            m_dcgmOps->dcgmStopEmbedded(m_handle);
         else
-            dcgmDisconnect(m_handle);
+            m_dcgmOps->dcgmDisconnect(m_handle);
 
+        m_handle = 0;
         /* Don't call dcgmShutdown here as it will nuke all other connections */
     }
 }
@@ -116,9 +127,9 @@ dcgmReturn_t DcgmHandle::ConnectToDcgm(const std::string &dcgmHostname)
             SafeCopyTo<sizeof(hostname)>(hostname, dcgmHostname.c_str());
     }
 
-    m_lastReturn = dcgmInit();
+    m_lastReturn = m_dcgmOps->dcgmInit();
     if (m_lastReturn == DCGM_ST_OK)
-        m_lastReturn = dcgmConnect_v2(hostname, &params, &m_handle);
+        m_lastReturn = m_dcgmOps->dcgmConnect_v2(hostname, &params, &m_handle);
 
     /* If we got connected or another error, return */
     if (m_lastReturn != DCGM_ST_CONNECTION_NOT_VALID)
@@ -131,7 +142,7 @@ dcgmReturn_t DcgmHandle::ConnectToDcgm(const std::string &dcgmHostname)
        the embedded host engine. Only the first instance of this class should do that */
     int count                                    = 0;
     unsigned int gpuIdList[DCGM_MAX_NUM_DEVICES] = { 0 };
-    m_lastReturn = dcgmGetAllDevices((dcgmHandle_t)DCGM_EMBEDDED_HANDLE, gpuIdList, &count);
+    m_lastReturn = m_dcgmOps->dcgmGetAllDevices((dcgmHandle_t)DCGM_EMBEDDED_HANDLE, gpuIdList, &count);
     /* If the API succeeded (already running) or we got another error, return */
     if (m_lastReturn != DCGM_ST_UNINITIALIZED)
     {
@@ -141,6 +152,6 @@ dcgmReturn_t DcgmHandle::ConnectToDcgm(const std::string &dcgmHostname)
     }
 
     log_debug("Starting embedded host engine.");
-    m_lastReturn = dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &m_handle);
+    m_lastReturn = m_dcgmOps->dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &m_handle);
     return m_lastReturn;
 }

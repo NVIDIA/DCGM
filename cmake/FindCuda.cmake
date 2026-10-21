@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -59,7 +59,8 @@ foreach(_Cuda_VERSION IN LISTS _Cuda_VERSIONS)
         "CUDA${_Cuda_MAJOR_VERSION}_INCLUDE_DIR"
         "CUDA${_Cuda_MAJOR_VERSION}_STATIC_LIBS"
         "CUDA${_Cuda_MAJOR_VERSION}_LIBS"
-        "CUDA${_Cuda_MAJOR_VERSION}_STATIC_CUBLAS_LIBS")
+        "CUDA${_Cuda_MAJOR_VERSION}_CUBLAS_LIBRARY"
+        "CUDA${_Cuda_MAJOR_VERSION}_CUBLASLT_LIBRARY")
 
     list(TRANSFORM _Cuda_PATHS
         APPEND "/cuda-${_Cuda_VERSION}/${_Cuda_TARGET_DIR}/include"
@@ -114,10 +115,27 @@ foreach(_Cuda_VERSION IN LISTS _Cuda_VERSIONS)
         set(_Cuda_FOUND FALSE)
     endif()
 
-    foreach(_Cuda_LIBRARY IN ITEMS cudart cublas cublasLt)
+    find_library(
+        Cuda_${_Cuda_MAJOR_VERSION}_cudart_LIBRARY
+        cudart_static
+        HINTS "${_Cuda_INSTALL_ROOT}/lib"
+        NO_PACKAGE_ROOT_PATH
+        NO_CMAKE_PATH
+        NO_CMAKE_ENVIRONMENT_PATH
+        NO_SYSTEM_ENVIRONMENT_PATH
+        NO_CMAKE_INSTALL_PREFIX
+        NO_CMAKE_FIND_ROOT_PATH)
+
+    mark_as_advanced(Cuda_${_Cuda_MAJOR_VERSION}_cudart_LIBRARY)
+
+    if (NOT Cuda_${_Cuda_MAJOR_VERSION}_cudart_LIBRARY)
+        set(_Cuda_FOUND FALSE)
+    endif()
+
+    foreach(_Cuda_LIBRARY IN ITEMS cublas cublasLt)
         find_library(
             Cuda_${_Cuda_MAJOR_VERSION}_${_Cuda_LIBRARY}_LIBRARY
-            ${_Cuda_LIBRARY}_static
+            "${_Cuda_LIBRARY}"
             HINTS "${_Cuda_INSTALL_ROOT}/lib"
             NO_PACKAGE_ROOT_PATH
             NO_CMAKE_PATH
@@ -147,9 +165,28 @@ foreach(_Cuda_VERSION IN LISTS _Cuda_VERSIONS)
         "${Cuda_${_Cuda_MAJOR_VERSION}_culibos_LIBRARY}")
 
     set(CUDA${_Cuda_MAJOR_VERSION}_LIBS "${Cuda_${_Cuda_MAJOR_VERSION}_cuda_LIBRARY}")
-    set(CUDA${_Cuda_MAJOR_VERSION}_STATIC_CUBLAS_LIBS
-        "${Cuda_${_Cuda_MAJOR_VERSION}_cublas_LIBRARY}"
+    set(CUDA${_Cuda_MAJOR_VERSION}_CUBLAS_LIBRARY
+        "${Cuda_${_Cuda_MAJOR_VERSION}_cublas_LIBRARY}")
+    set(CUDA${_Cuda_MAJOR_VERSION}_CUBLASLT_LIBRARY
         "${Cuda_${_Cuda_MAJOR_VERSION}_cublasLt_LIBRARY}")
+
+    if (NOT TARGET Cuda::cublas${_Cuda_MAJOR_VERSION})
+        add_library(Cuda::cublas${_Cuda_MAJOR_VERSION} SHARED IMPORTED)
+        set_target_properties(Cuda::cublas${_Cuda_MAJOR_VERSION}
+            PROPERTIES
+                IMPORTED_LOCATION "${CUDA${_Cuda_MAJOR_VERSION}_CUBLAS_LIBRARY}"
+                IMPORTED_SONAME "libcublas.so.${_Cuda_MAJOR_VERSION}"
+                INTERFACE_INCLUDE_DIRECTORIES "${CUDA${_Cuda_MAJOR_VERSION}_INCLUDE_DIR}")
+    endif()
+
+    if (NOT TARGET Cuda::cublasLt${_Cuda_MAJOR_VERSION})
+        add_library(Cuda::cublasLt${_Cuda_MAJOR_VERSION} SHARED IMPORTED)
+        set_target_properties(Cuda::cublasLt${_Cuda_MAJOR_VERSION}
+            PROPERTIES
+                IMPORTED_LOCATION "${CUDA${_Cuda_MAJOR_VERSION}_CUBLASLT_LIBRARY}"
+                IMPORTED_SONAME "libcublasLt.so.${_Cuda_MAJOR_VERSION}"
+                INTERFACE_INCLUDE_DIRECTORIES "${CUDA${_Cuda_MAJOR_VERSION}_INCLUDE_DIR}")
+    endif()
 endforeach()
 
 unset(_Cuda_LIBRARY)
@@ -168,5 +205,3 @@ if (NOT Cuda_FOUND)
 endif()
 
 unset(_Cuda_REQUIRED_VARS)
-
-# TODO: Define imported targets. Port call sites from module variables.

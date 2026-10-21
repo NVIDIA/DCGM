@@ -19,6 +19,7 @@
 
 #include "DcgmHostEngineHandler.h"
 
+#include "DcgmCacheManagerAnyPtr.hpp"
 #include "DcgmCoreCommunication.h"
 #include "DcgmGroupManager.h"
 #include "DcgmModuleCommandValidation.h"
@@ -387,31 +388,17 @@ bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityG
 
         case DCGM_FE_LINK:
         {
-            dcgm_link_t link {};
-
-            link.parsed.switchId = 0;
-            link.raw             = entityId;
-
-            switch (link.parsed.type)
+            auto parsed = ParseLinkEntityId(entityId);
+            if (!parsed)
             {
-                case DCGM_FE_GPU:
-                    return mpCacheManager->GetIsValidEntityId(entityGroupId, entityId);
-
-                case DCGM_FE_SWITCH:
-                    if (link.parsed.index >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
-                    {
-                        return false;
-                    }
-
-                    entityGroupId = DCGM_FE_SWITCH;
-                    entityId      = link.parsed.switchId;
-
-                    break;
-
-                default:
-                    return false;
+                return false;
             }
-
+            if (parsed->parsed.type == DCGM_FE_GPU)
+            {
+                return mpCacheManager->GetIsValidEntityId(entityGroupId, entityId);
+            }
+            entityGroupId = DCGM_FE_SWITCH;
+            entityId      = parsed->parsed.switchId;
             break;
         }
         case DCGM_FE_SWITCH:
@@ -1269,7 +1256,7 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToClient(dcgm_connection_id_t 
     msgBytes->resize(msgLength);
     memcpy(msgBytes->data(), msgData, msgLength);
 
-    dcgmReturn_t retSt = m_dcgmIpc->SendMessage(connectionId, std::move(dcgmMessage), false);
+    dcgmReturn_t retSt = SendMessageViaIpc(connectionId, std::move(dcgmMessage));
 
     DCGM_LOG_DEBUG << "Sent raw message length " << msgLength << ", requestId " << requestId << ", msgType 0x"
                    << std::hex << msgType << " to connectionId " << std::dec << connectionId << " retSt " << (int)retSt;
@@ -1679,7 +1666,7 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     fieldIds.push_back(DCGM_FI_DEV_PCIE_RX_THROUGHPUT);
     fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL);
-    fieldIds.push_back(DCGM_FI_DEV_GPU_UTIL_RATIO);
+    fieldIds.push_back(DCGM_FI_DEV_GPU_UTIL);
     fieldIds.push_back(DCGM_FI_DEV_MEM_COPY_UTIL);
     fieldIds.push_back(DCGM_FI_DEV_ECC_DBE_VOL_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_SM_CLOCK);
@@ -2316,7 +2303,7 @@ void DcgmNvmlSystemEventThread::run(void)
     log_info("DcgmNvmlSystemEventThread ended");
 }
 
-void DcgmNvmlSystemEventThread::SetCacheManager(DcgmCacheManager *cacheManager)
+void DcgmNvmlSystemEventThread::SetCacheManager(DcgmCacheManagerAnyUniquePtr *cacheManager)
 {
     m_cacheManager = cacheManager;
 }
@@ -2374,7 +2361,8 @@ void EngineHangDetectHandler::HandleHangDetectedEvent(HangDetectHandler::HangDet
  Constructor for DCGM Host Engine Handler
  *****************************************************************************/
 DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params)
-    : m_communicator()
+    : mpCacheManager(std::unique_ptr<DcgmCacheManager> {})
+    , m_communicator()
     , m_hostengineHealth(0)
     , m_usingInjectionNvml(false)
 {
@@ -2384,8 +2372,6 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     InitializeHangDetection();
 
     m_dcgmIpc = std::make_unique<DcgmIpc>(DCGM_HE_NUM_WORKERS, m_monitor.get());
-
-    mpCacheManager = nullptr;
 
     /* Set this in case a child class calls our Instance() method during this constructor.
        We really need to move away from the singleton model */
@@ -2463,10 +2449,11 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
         }
     }
 
-    mpCacheManager = new DcgmCacheManager();
-    m_nvmlSystemEventThread->SetCacheManager(mpCacheManager);
+    mpCacheManager                      = std::make_unique<DcgmCacheManager>();
+    DcgmCacheManagerAnyPtr cacheManager = mpCacheManager.AsAnyPtr();
+    m_nvmlSystemEventThread->SetCacheManager(&mpCacheManager);
     m_nvmlSystemEventThread->SetHangDetectMonitor(m_monitor.get());
-    mModuleCoreObj.Initialize(mpCacheManager);
+    mModuleCoreObj.Initialize(cacheManager);
 
     mpCacheManager->SetHangDetectMonitor(m_monitor.get());
 
@@ -2516,7 +2503,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     }
 
     /* Initialize the group manager before we add our default watches */
-    mpGroupManager = new DcgmGroupManager(mpCacheManager, HostEngineHandler {}, false);
+    mpGroupManager = new DcgmGroupManager(cacheManager, HostEngineHandler {}, false);
     mpGroupManager->SubscribeForGroupEvents(HostEngineOnGroupEventCB, this);
     m_nvmlSystemEventThread->SetGroupManager(mpGroupManager);
     mModuleCoreObj.SetGroupManager(mpGroupManager);
@@ -2525,7 +2512,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
 
     m_childProcessManager.SetHangDetectMonitor(m_monitor.get());
 
-    m_communicator.Init(mpCacheManager, mpGroupManager);
+    m_communicator.Init(cacheManager, mpGroupManager);
     m_coreCallbacks.postfunc   = PostRequestToCore;
     m_coreCallbacks.poster     = &m_communicator;
     m_coreCallbacks.version    = dcgmCoreCallbacks_version;
@@ -2613,7 +2600,7 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
      * Wait until after ~CacheManager() to close the modules.
      */
     UnloadModules();
-    deleteNotNull(mpCacheManager);
+    ResetCacheManager();
     deleteNotNull(mpFieldGroupManager);
 
     for (auto &m_module : m_modules)
@@ -2635,6 +2622,12 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
     RemoveAllTrackedRequests();
 
     ShutdownNvml();
+}
+
+void DcgmHostEngineHandler::ResetCacheManager()
+{
+    std::destroy_at(&mpCacheManager);
+    std::construct_at(&mpCacheManager, std::unique_ptr<DcgmCacheManager> {});
 }
 
 dcgmReturn_t DcgmHostEngineHandler::SendModuleMessage(dcgmModuleId_t id, dcgm_module_command_header_t *moduleCommand)
@@ -3317,7 +3310,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
 
 
         HelperGetInt32StatSummary(
-            DCGM_FE_GPU, singleInfo->gpuId, DCGM_FI_DEV_GPU_UTIL_RATIO, &singleInfo->smUtilization, startTime, endTime);
+            DCGM_FE_GPU, singleInfo->gpuId, DCGM_FI_DEV_GPU_UTIL, &singleInfo->smUtilization, startTime, endTime);
         HelperGetInt32StatSummary(DCGM_FE_GPU,
                                   singleInfo->gpuId,
                                   DCGM_FI_DEV_MEM_COPY_UTIL,
@@ -3989,7 +3982,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
         singleInfo->endTime   = endTime;
 
         DcgmHostEngineHandler::Instance()->HelperGetInt32StatSummary(
-            DCGM_FE_GPU, singleInfo->gpuId, DCGM_FI_DEV_GPU_UTIL_RATIO, &singleInfo->smUtilization, startTime, endTime);
+            DCGM_FE_GPU, singleInfo->gpuId, DCGM_FI_DEV_GPU_UTIL, &singleInfo->smUtilization, startTime, endTime);
 
         /* If the SM utilization is blank, update the average with the SM utilization value as 0 for this GPU*/
         if (DCGM_INT32_IS_BLANK(singleInfo->smUtilization.average))
@@ -5107,35 +5100,29 @@ DcgmEntityStatus_t DcgmHostEngineHandler::GetEntityStatus(dcgm_field_entity_grou
 {
     if (entityGroupId == DCGM_FE_LINK)
     {
-        // Decode the link entity to determine type
-        dcgm_link_t link {};
-        link.raw = entityId;
+        auto parsed = ParseLinkEntityId(entityId);
+        if (!parsed)
+        {
+            log_warning("Invalid LINK entityId {}", entityId);
+            return DcgmEntityStatusUnknown;
+        }
 
         log_debug("DCGM_FE_LINK entityId {} -> type {} gpuId {} index {} ",
                   entityId,
-                  static_cast<uint8_t>(link.parsed.type),
-                  static_cast<uint8_t>(link.parsed.gpuId),
-                  static_cast<uint16_t>(link.parsed.index));
+                  static_cast<uint8_t>(parsed->parsed.type),
+                  static_cast<uint8_t>(parsed->parsed.gpuId),
+                  static_cast<uint16_t>(parsed->parsed.index));
 
-        switch (link.parsed.type)
+        if (parsed->parsed.type == DCGM_FE_GPU)
         {
-            case DCGM_FE_GPU:
+            if (!mpCacheManager->GetIsValidEntityId(DCGM_FE_GPU, parsed->parsed.gpuId))
             {
-                // Validate GPU exists using CacheManager
-                if (!mpCacheManager->GetIsValidEntityId(DCGM_FE_GPU, link.parsed.gpuId))
-                {
-                    log_warning("GPU {} is invalid", static_cast<uint8_t>(link.parsed.gpuId));
-                    return DcgmEntityStatusUnknown;
-                }
-
-                log_verbose("Valid GPU link");
-                return DcgmEntityStatusOk;
+                log_warning("GPU {} is invalid", static_cast<uint8_t>(parsed->parsed.gpuId));
+                return DcgmEntityStatusUnknown;
             }
-
-            /* Other link types currently handled by the NvSwitch module */
-            default:
-                return GetNvSwitchEntityStatus(entityGroupId, entityId);
+            return DcgmEntityStatusOk;
         }
+        return GetNvSwitchEntityStatus(entityGroupId, entityId);
     }
     else if ((entityGroupId == DCGM_FE_SWITCH) || (entityGroupId == DCGM_FE_CONNECTX))
     {

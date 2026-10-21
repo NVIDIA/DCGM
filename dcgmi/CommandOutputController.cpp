@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -359,7 +359,8 @@ static char const ERROR_FOOTER[] = "+---------+---------------------------------
 
 
 /************************************************************************************/
-GPUErrorOutputController::GPUErrorOutputController()
+GPUErrorOutputController::GPUErrorOutputController(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
 {}
 GPUErrorOutputController::~GPUErrorOutputController()
 {}
@@ -377,7 +378,7 @@ void GPUErrorOutputController::display()
     DcgmFieldsInit();
 
     /* Look at status to get individual errors */
-    result = dcgmStatusPopError(mErrHandle, &currentError);
+    result = m_dcgmOps->dcgmStatusPopError(mErrHandle, &currentError);
 
     if (result != DCGM_ST_NO_DATA)
     {
@@ -429,7 +430,7 @@ void GPUErrorOutputController::display()
         CommandOutputController::display();
 
         // Get next error
-        result = dcgmStatusPopError(mErrHandle, &currentError);
+        result = m_dcgmOps->dcgmStatusPopError(mErrHandle, &currentError);
     }
 
     if (hadData)

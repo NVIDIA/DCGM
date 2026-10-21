@@ -16,11 +16,10 @@ import pydcgm
 import dcgm_agent
 import dcgm_structs
 import test_utils
+import nvidia_smi_utils
 
 
-@test_utils.run_with_standalone_host_engine(initializedClient=True)
-@test_utils.run_only_with_live_gpus()
-def test_nvlink_p2p_all_status(handle, gpuIds):
+def helper_nvlink_p2p_all_status(handle, gpuIds):
     """
     Get nvlink p2p status for each GPU and assert if it's unexpected
     """
@@ -57,6 +56,12 @@ def test_nvlink_p2p_all_status(handle, gpuIds):
 # we have a test specifically for that. (The test was buggy and corrected, not
 # the hostengine service.)
 #
+
+
+@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_only_with_live_gpus()
+def test_nvlink_p2p_all_status(handle, gpuIds):
+    helper_nvlink_p2p_all_status(handle, gpuIds)
 
 
 def helper_nvlink_p2p_specific_status(handle, gpuIds):
@@ -106,8 +111,67 @@ def test_nvlink_p2p_specific_status(handle, gpuIds):
 # Test for single GPU.
 
 
+def helper_nvlink_p2p_single_status(handle, gpuIds):
+    gpuIds = [gpuIds[0]]
+    helper_nvlink_p2p_specific_status(handle, gpuIds)
+
+
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
 @test_utils.run_only_with_live_gpus()
 def test_nvlink_p2p_single_status(handle, gpuIds):
-    gpuIds = [gpuIds[0]]
-    helper_nvlink_p2p_specific_status(handle, gpuIds)
+    helper_nvlink_p2p_single_status(handle, gpuIds)
+
+
+def _get_dcgm_nvlink_up_counts(dcgmSystem):
+    """
+    Returns {gpuId: up_link_count} from the DCGM NvLink status API.
+
+    Counts links in the Up state. This is the same source `dcgmi nvlink -s`
+    renders as 'U', via dcgmGetNvLinkLinkStatus.
+    """
+    linkStatus = dcgmSystem.discovery.GetNvLinkLinkStatus()
+    counts = {}
+    for i in range(linkStatus.numGpus):
+        gpu = linkStatus.gpus[i]
+        upCount = 0
+        for j in range(dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU):
+            if gpu.linkState[j] == dcgm_structs.DcgmNvLinkLinkStateUp:
+                upCount += 1
+        counts[gpu.entityId] = upCount
+    return counts
+
+
+def helper_nvlink_count_matches_nvidia_smi(handle, gpuIds):
+    """
+    Verify the active NVLink count per GPU matches between nvidia-smi and DCGM.
+    """
+    smiCounts = nvidia_smi_utils.get_nvlink_active_counts_by_uuid()
+    if not smiCounts:
+        test_utils.skip_test(
+            "nvidia-smi NVLink information is unavailable, skipping test.")
+
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgmCounts = _get_dcgm_nvlink_up_counts(dcgmSystem)
+
+    for gpuId in gpuIds:
+        uuid = dcgmSystem.discovery.GetGpuAttributes(gpuId).identifiers.uuid
+        assert uuid in smiCounts, \
+            "No nvidia-smi NVLink data for GPU %d (%s)." % (gpuId, uuid)
+        assert gpuId in dcgmCounts, \
+            "No DCGM NVLink data for GPU %d." % gpuId
+
+        smiCount = smiCounts[uuid]
+        dcgmCount = dcgmCounts[gpuId]
+        logger.info("test_nvlink GPU %d (%s): nvidia-smi=%d, dcgm=%d active NVLinks" % (
+            gpuId, uuid, smiCount, dcgmCount))
+        assert smiCount == dcgmCount, \
+            "NVLink count mismatch for GPU %d (%s): nvidia-smi=%d, dcgm=%d." % (
+                gpuId, uuid, smiCount, dcgmCount)
+
+
+@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_with_nvml()
+def test_nvlink_count_matches_nvidia_smi(handle, gpuIds):
+    helper_nvlink_count_matches_nvidia_smi(handle, gpuIds)

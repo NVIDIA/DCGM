@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #pragma once
 
 #include "Command.h"
+
+#include <DcgmOpsAnyPtr.hpp>
 
 #include <optional>
 #include <string>
@@ -45,7 +47,7 @@ enum class dcgmEnvVarStatus_t
 class EnvironmentInfo : public Command
 {
 public:
-    EnvironmentInfo(std::string hostname, std::string envVarName);
+    EnvironmentInfo(std::string hostname, std::string envVarName, DcgmNs::DcgmOpsAnyPtr dcgmOps);
     std::string GetEnvVarValue() const;
     void SetEnvVarName(std::string const &envVarName);
     std::optional<std::string> GetCurrentProcessEnvVarValue() const;

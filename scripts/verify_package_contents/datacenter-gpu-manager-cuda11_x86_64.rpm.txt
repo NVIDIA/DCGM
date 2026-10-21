@@ -1,6 +1,4 @@
 /usr/bin/dcgmproftester11
-/usr/lib64/libdcgm_cublas_proxy11.so.<MAJORVERSION>
-/usr/lib64/libdcgm_cublas_proxy11.so.<SOFTWAREVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11

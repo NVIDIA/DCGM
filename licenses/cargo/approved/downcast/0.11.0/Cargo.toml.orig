@@ -1,0 +1,18 @@
+[package]
+name = "downcast"
+version = "0.11.0"
+authors = ["Felix Köpge <fkoep@mailbox.org>"]
+license = "MIT"
+edition = "2018"
+
+description = "Trait for downcasting trait objects back to their original types."
+documentation = "https://docs.rs/downcast"
+repository = "https://github.com/fkoep/downcast-rs"
+readme = "README.md"
+keywords = ["any"]
+categories = ["no-std", "rust-patterns"]
+
+[features]
+default = ["std"]
+std = []
+nightly = []

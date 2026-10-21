@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,12 @@
 #include "DcgmSystem.h"
 #include "DcgmValuesSinceHolder.h"
 #include "IgnoreErrorCodesHelper.h"
+#include "NvvsCommon.h"
 #include "TestParameters.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include "timelib.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <json/json.h>
 
 #define VALUE "value"
@@ -70,9 +72,8 @@ public:
 class DcgmRecorder : public DcgmRecorderBase
 {
 public:
-    DcgmRecorder();
     DcgmRecorder(DcgmRecorder &&other) noexcept;
-    explicit DcgmRecorder(dcgmHandle_t handle);
+    DcgmRecorder(dcgmHandle_t handle, DcgmNs::DcgmOpsAnyPtr dcgmOps, NvvsCommon *nvvsCommon);
     ~DcgmRecorder();
 
     /*
@@ -87,16 +88,6 @@ public:
                             const std::string &fieldGroupName,
                             const std::string &groupName,
                             double testDuration);
-
-    /*
-     * Initialize by connecting to the hostengine at the specified hostname
-     */
-    dcgmReturn_t Init(const std::string &hostname);
-
-    /*
-     * Initialize by accepting the pre-existing handle to DCGM
-     */
-    void Init(dcgmHandle_t handle);
 
     /*
      */
@@ -254,8 +245,6 @@ public:
                             timelib64_t startTime,
                             long long &highTemp);
 
-    dcgmHandle_t GetHandle();
-
     /*
      * Checks if the specified GPU reported clocks event and sets an appropriate error message if so.
      *
@@ -270,7 +259,6 @@ public:
                             std::vector<DcgmError> &fatalErorList,
                             std::vector<DcgmError> &ignoredErrorList);
 
-    int CheckEffectiveBER(unsigned int gpuId, std::vector<DcgmError> &fatalErrorList);
 
     /*
      * Populates dcgmTimeseriesInfo with the current value of the specified field for the specified GPU
@@ -402,12 +390,15 @@ public:
                          int &retCode);
 
 private:
+    //! NVVS common state
+    NvvsCommon *m_nvvsCommon;
     std::vector<unsigned short> m_fieldIds;
     std::vector<unsigned int> m_gpuIds;
     dcgmFieldGrp_t m_fieldGroupId;
     std::map<std::string, std::map<std::string, std::string>> m_groupSingleData;
 
     DcgmHandle m_dcgmHandle;
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; // DCGM API interface.
     DcgmGroup m_dcgmGroup;
     DcgmSystem m_dcgmSystem;
 

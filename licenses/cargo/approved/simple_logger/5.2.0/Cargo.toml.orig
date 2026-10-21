@@ -1,0 +1,56 @@
+[package]
+name = "simple_logger"
+version = "5.2.0"
+license = "MIT"
+authors = ["Sam Clements <sam@borntyping.co.uk>"]
+description = "A logger that prints all messages with a readable output format"
+repository = "https://github.com/borntyping/rust-simple_logger"
+edition = "2018"
+
+[features]
+default = ["colors", "timestamps"]
+colors = ["colored"]
+threads = []
+timestamps = ["time"]
+nightly = []
+stderr = []
+
+[dependencies]
+log = { version = "^0.4.28", features = ["std"] }
+time = { version = "^0.3.47", features = ["formatting", "local-offset", "macros"], optional = true }
+colored = { version = "^3.0.0", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "^0.61.2", features = ["Win32_System_Console", "Win32_Foundation"] }
+
+[[example]]
+name = "colors"
+required-features = ["colors"]
+
+[[example]]
+name = "stderr"
+required-features = ["colors", "stderr"]
+
+[[example]]
+name = "threads"
+required-features = ["threads"]
+
+[[example]]
+name = "timestamps_local"
+required-features = ["timestamps"]
+
+[[example]]
+name = "timestamps_none"
+required-features = ["timestamps"]
+
+[[example]]
+name = "timestamps_utc"
+required-features = ["timestamps"]
+
+[[example]]
+name = "timestamps_utc_offset"
+required-features = ["timestamps"]
+
+[[example]]
+name = "timestamps_format"
+required-features = ["timestamps"]

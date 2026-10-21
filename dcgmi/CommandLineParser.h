@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,9 @@
 
 #include "Command.h"
 #include "dcgmi_common.h"
+
+#include <DcgmOpsAnyPtr.hpp>
+
 #include <functional>
 #include <map>
 #include <string>
@@ -31,17 +34,18 @@ class CommandLineParser
 public:
     // entry point to start CL processing
     // only accepts a subsytem name
-    static dcgmReturn_t ProcessCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
-#ifndef DCGMI_TESTS
-private:
-#endif
+protected:
     struct StaticConstructor
     {
         StaticConstructor();
     };
+
     // map of subsystem function pointers
-    static inline std::map<std::string, dcgmReturn_t (*)(int argc, char const *const *argv)> m_functionMap;
+    static inline std::map<std::string,
+                           dcgmReturn_t (*)(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps)>
+        m_functionMap;
     static inline StaticConstructor m_staticConstructor;
 
     // Allows parser tests to mock command execution without connecting to hostengine.
@@ -57,24 +61,24 @@ private:
     }
 
     // subsystem CL processing
-    static dcgmReturn_t ProcessQueryCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessPolicyCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessGroupCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessFieldGroupCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessConfigCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessHealthCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessDiagCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessStatsCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessTopoCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessIntrospectCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessNvlinkCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessDmonCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessModuleCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessProfileCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessSettingsCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessVersionInfoCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessAdminCommandLine(int argc, char const *const *argv);
-    static dcgmReturn_t ProcessMnDiagCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessQueryCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessPolicyCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessGroupCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessFieldGroupCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessConfigCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessHealthCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessDiagCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessStatsCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessTopoCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessIntrospectCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessNvlinkCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessDmonCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessModuleCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessProfileCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessSettingsCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessVersionInfoCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessAdminCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    static dcgmReturn_t ProcessMnDiagCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps);
     static unsigned int CheckGroupIdArgument(const std::string &groupId);
 
     // Helper to validate the clocks event mask parameter
@@ -82,6 +86,7 @@ private:
 
     static std::string ConcatenateParameters(std::vector<std::string> const &parameters);
     static std::vector<std::string> GetHostListVector(std::string_view hostList);
+    static std::vector<std::string> ReadHostFile(std::string const &path);
     static std::string ExpandRange(std::string const &range);
 
     static void ValidateParameters(const std::string &parameters);
@@ -96,7 +101,7 @@ private:
     // Helper method to validate the parameters for the mnDiag command
     static void ProcessAndValidateMnDiagParams(int argc,
                                                char const *const *argv,
-                                               dcgmRunMnDiag_v1 &drmnd,
+                                               dcgmRunMnDiag_v2 &drmnd,
                                                std::string &hostEngineAddressValue,
                                                bool &hostAddressWasOverridden,
                                                bool &jsonOutput);
@@ -105,7 +110,10 @@ private:
                                                                                    char workloadPowerProfileAction,
                                                                                    int groupId);
     // Helper method to valid the environment variable value from the hostengine
-    static void ValidateEnvironmentInfo(int argc, char const *const *argv, std::string const &envVarName);
+    static void ValidateEnvironmentInfo(int argc,
+                                        char const *const *argv,
+                                        std::string const &envVarName,
+                                        DcgmNs::DcgmOpsAnyPtr dcgmOps);
 };
 
 #endif // DCGMI_CLI_PARSER_H

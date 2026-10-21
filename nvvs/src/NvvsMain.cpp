@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include "Plugin.h"
 #include <DcgmBuildInfo.hpp>
 #include <DcgmNvvsResponseWrapper.h>
+#include <DcgmOps.h>
 #include <FdChannelClient.h>
 #include <NvvsException.hpp>
 #include <NvvsExitCode.h>
@@ -26,6 +27,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace
 {
@@ -47,7 +49,7 @@ static void main_sig_handler(int signo)
         case SIGKILL:
         case SIGTERM:
             main_should_stop.store(1);
-            nvvsCommon.mainReturnCode = NVVS_ST_SUCCESS; /* Still counts as an error */
+            mainReturnCode = NVVS_ST_SUCCESS; /* Still counts as an error */
             break;
 
 
@@ -66,46 +68,47 @@ static void main_sig_handler(int signo)
     }
 }
 
-void OutputMainError(const std::string &error, nvvsReturn_t errorCode = NVVS_ST_GENERIC_ERROR)
+void OutputMainError(NvvsCommon *nvvsCommon, const std::string &error, nvvsReturn_t errorCode = NVVS_ST_GENERIC_ERROR)
 {
     DcgmNvvsResponseWrapper diagResponse;
-    if (auto ret = diagResponse.SetVersion(nvvsCommon.diagResponseVersion); ret != DCGM_ST_OK)
+    if (auto ret = diagResponse.SetVersion(nvvsCommon->diagResponseVersion); ret != DCGM_ST_OK)
     {
         std::string const errMsg
-            = fmt::format("failed to set version [{}], err: [{}].", nvvsCommon.diagResponseVersion, ret);
+            = fmt::format("failed to set version [{}], err: [{}].", nvvsCommon->diagResponseVersion, ret);
         log_error(errMsg);
         std::cerr << errMsg << std::endl;
         return;
     }
     diagResponse.SetSystemError(error, DCGM_FR_INTERNAL);
 
-    if (nvvsCommon.channelFd == -1)
+    if (nvvsCommon->channelFd == -1)
     {
         fmt::print(stderr, "Got runtime_error: {}. Error code: {}\n", error, errorCode);
     }
     else
     {
-        if (!FdChannelClient(nvvsCommon.channelFd).Write(diagResponse.RawBinaryBlob()))
+        if (!FdChannelClient(nvvsCommon->channelFd).Write(diagResponse.RawBinaryBlob()))
         {
             log_error("failed to write diag response to caller.");
         }
     }
 
     log_error("Got runtime_error: {}. Error code: {}", error, errorCode);
-    log_error("Global error mask is: {:#064x}", nvvsCommon.errorMask);
+    log_error("Global error mask is: {:#064x}", nvvsCommon->errorMask);
 }
 
 /*****************************************************************************/
 int main(int argc, char **argv)
 {
+    NvvsCommon nvvsCommon;
+    DcgmNs::DcgmOps dcgmOps;
     std::unique_ptr<NvidiaValidationSuite> nvvs;
 
     struct sigaction sigHandler = {};
 
     sigHandler.sa_handler = main_sig_handler;
     sigemptyset(&sigHandler.sa_mask);
-    sigHandler.sa_flags       = 0;
-    nvvsCommon.mainReturnCode = NVVS_ST_SUCCESS; /* Set by NvidiaValidationSuite constructor, but not until later */
+    sigHandler.sa_flags = 0;
 
     /* Install signal handlers */
     sigaction(SIGINT, &sigHandler, nullptr);
@@ -114,28 +117,27 @@ int main(int argc, char **argv)
     try
     {
         // declare new NVVS object
-        nvvs              = std::make_unique<NvidiaValidationSuite>();
+        nvvs = std::make_unique<NvidiaValidationSuite>(&nvvsCommon, DcgmHandle(&dcgmOps), DcgmSystem(&dcgmOps, 0));
         std::string error = nvvs->Go(argc, argv);
         if (!error.empty())
         {
-            OutputMainError(error);
+            OutputMainError(&nvvsCommon, error);
         }
     }
     catch (NvvsException const &ex)
     {
-        OutputMainError(ex.what(), ex.GetErrorCode());
-        nvvsCommon.mainReturnCode = ex.GetErrorCode();
+        OutputMainError(&nvvsCommon, ex.what(), ex.GetErrorCode());
+        mainReturnCode = ex.GetErrorCode();
     }
     catch (std::runtime_error &e)
     {
-        OutputMainError(e.what());
-        nvvsCommon.mainReturnCode = NVVS_ST_GENERIC_ERROR;
+        OutputMainError(&nvvsCommon, e.what());
+        mainReturnCode = NVVS_ST_GENERIC_ERROR;
     }
     catch (std::exception &e)
     {
-        OutputMainError(e.what());
-        nvvsCommon.mainReturnCode = NVVS_ST_SUCCESS;
+        OutputMainError(&nvvsCommon, e.what());
     }
 
-    return nvvsCommon.mainReturnCode;
+    return mainReturnCode;
 }

@@ -3504,6 +3504,266 @@ nvmlReturn_t nvmlEventSetWait_v2(nvmlEventSet_t set, nvmlEventData_t *data, unsi
     return NVML_SUCCESS;
 }
 
+nvmlReturn_t nvmlEventSetRegisterGpuOperationalEvents_v1(nvmlEventSet_t eventSet,
+                                                         const nvmlGpuOperationalEventConfig_v1_t *config)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlEventSetRegisterGpuOperationalEvents_v1");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(eventSet));
+        preparedValues.push_back(InjectionArgument(config));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlEventSetWait_v3(nvmlEventSet_t set, nvmlEventSetWait_v3_t *params)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlEventSetWait_v3");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(set));
+        preparedValues.push_back(InjectionArgument(params));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlEventSetGetContextCount_v1(nvmlEventSet_t set, nvmlEventSetGetContextCount_v1_t *params)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlEventSetGetContextCount_v1");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(set));
+        preparedValues.push_back(InjectionArgument(params));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlEventSetGetContextInfo_v1(nvmlEventSet_t set, nvmlEventSetGetContextInfo_v1_t *params)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlEventSetGetContextInfo_v1");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(set));
+        preparedValues.push_back(InjectionArgument(params));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlEventSetGetContextData_v1(nvmlEventSet_t set, nvmlEventSetGetContextData_v1_t *params)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlEventSetGetContextData_v1");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(set));
+        preparedValues.push_back(InjectionArgument(params));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nvmlEventSet_t set,
+                                                                   nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *params)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(set));
+        preparedValues.push_back(InjectionArgument(params));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
 nvmlReturn_t nvmlEventSetFree(nvmlEventSet_t set)
 {
     // The following snippet is generated from write_function

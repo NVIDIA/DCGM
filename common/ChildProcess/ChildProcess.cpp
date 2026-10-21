@@ -28,19 +28,191 @@
 #include "Pipe.hpp"
 
 #include <DcgmLogging.h>
-#include <DcgmUtilities.h>
 #include <Defer.hpp>
+#include <FileHandle.hpp>
+#include <UserCredentials.hpp>
 
+#include <algorithm>
 #include <atomic>
+#include <boost/asio/dispatch.hpp>
+#include <boost/asio/post.hpp>
+#include <boost/asio/thread_pool.hpp>
 #include <boost/process.hpp>
 #include <boost/process/extend.hpp>
 #include <cerrno>
+#include <climits>
+#include <fcntl.h>
 #include <latch>
+#include <set>
+#include <stdexcept>
+#include <sys/resource.h>
+#include <sys/wait.h>
 #include <thread>
+#include <unistd.h>
 
 
 namespace DcgmNs::Common::Subprocess
 {
+
+namespace
+{
+
+    boost::process::environment ToBoostProcessEnvironment(ChildProcessEnvironment const &environment)
+    {
+        boost::process::environment boostEnvironment;
+        for (auto const &pair : environment)
+        {
+            boostEnvironment.emplace(pair.first, pair.second);
+        }
+        return boostEnvironment;
+    }
+
+} // namespace
+
+ChildProcessEnvironment CurrentChildProcessEnvironment()
+{
+    ChildProcessEnvironment environment;
+    for (auto const &entry : boost::this_process::environment())
+    {
+        environment.emplace(entry.get_name(), entry.to_string());
+    }
+    return environment;
+}
+
+ChildProcessEnvironment BuildChildProcessEnvironment(
+    ChildProcessEnvironment baseEnvironment,
+    std::optional<ChildProcessEnvironment> const &configuredEnvironment,
+    ChildProcessEnvironmentMode environmentMode)
+{
+    ChildProcessEnvironment environment = environmentMode == ChildProcessEnvironmentMode::Inherit
+                                              ? std::move(baseEnvironment)
+                                              : ChildProcessEnvironment {};
+    if (configuredEnvironment.has_value())
+    {
+        for (auto const &pair : *configuredEnvironment)
+        {
+            environment.emplace(pair.first, pair.second);
+        }
+    }
+    return environment;
+}
+
+ChildProcessFds BuildChildProcessAllowedFds(ChildProcessFds allowedFds, ChildProcessFds const &additionalFds)
+{
+    allowedFds.insert(additionalFds.begin(), additionalFds.end());
+    return allowedFds;
+}
+
+namespace detail
+{
+
+    inline constexpr std::size_t MAX_EXEC_SETUP_ERROR_DETAIL = 256;
+
+    inline void WriteAllToStderr(char const *text, std::size_t length) noexcept
+    {
+        while (length > 0)
+        {
+            auto const written = ::write(STDERR_FILENO, text, length);
+            if (written <= 0)
+            {
+                return;
+            }
+            text += written;
+            length -= static_cast<std::size_t>(written);
+        }
+    }
+
+    inline void WriteCStringToStderr(char const *text) noexcept
+    {
+        if (text == nullptr)
+        {
+            return;
+        }
+
+        std::size_t length = 0;
+        while (length < MAX_EXEC_SETUP_ERROR_DETAIL && text[length] != '\0')
+        {
+            ++length;
+        }
+        WriteAllToStderr(text, length);
+    }
+
+    inline void WriteIntToStderr(int value) noexcept
+    {
+        char buffer[16] {};
+        auto cursor   = std::end(buffer);
+        bool negative = value < 0;
+        auto remaining
+            = negative ? static_cast<unsigned int>(-(static_cast<long long>(value))) : static_cast<unsigned int>(value);
+
+        do
+        {
+            *--cursor = static_cast<char>('0' + (remaining % 10));
+            remaining /= 10;
+        } while (remaining != 0);
+
+        if (negative)
+        {
+            *--cursor = '-';
+        }
+
+        WriteAllToStderr(cursor, static_cast<std::size_t>(std::end(buffer) - cursor));
+    }
+
+    [[noreturn]] inline void ExitExecSetupFailure(char const *prefix, char const *detail) noexcept
+    {
+        WriteCStringToStderr(prefix);
+        WriteCStringToStderr(detail);
+        WriteAllToStderr("]\n", 2);
+        ::_exit(EXIT_FAILURE);
+    }
+
+    [[noreturn]] inline void ExitExecSetupFailure(char const *prefix, int value) noexcept
+    {
+        WriteCStringToStderr(prefix);
+        WriteIntToStderr(value);
+        WriteAllToStderr("]\n", 2);
+        ::_exit(EXIT_FAILURE);
+    }
+
+} //namespace detail
+
+void ChannelTimeoutState::Arm(std::chrono::milliseconds duration, TimePoint now)
+{
+    m_duration = duration;
+    m_deadline = now + duration;
+    m_fired    = false;
+}
+
+void ChannelTimeoutState::ObserveActivity(TimePoint now)
+{
+    if (!m_duration.has_value() || !m_deadline.has_value())
+    {
+        return;
+    }
+    m_deadline = now + *m_duration;
+}
+
+void ChannelTimeoutState::Disarm()
+{
+    m_deadline = std::nullopt;
+    m_fired    = false;
+}
+
+bool ChannelTimeoutState::ShouldFire(TimePoint now)
+{
+    if (!m_deadline.has_value() || m_fired || now < *m_deadline)
+    {
+        return false;
+    }
+    m_fired = true;
+    return true;
+}
+
+bool ChannelTimeoutState::IsArmed() const
+{
+    return m_deadline.has_value() && !m_fired;
+}
 
 void ChangeUser(std::optional<std::string> userName)
 {
@@ -53,35 +225,79 @@ void ChangeUser(std::optional<std::string> userName)
     {
         if (auto const newCred = GetUserCredentials(userName->c_str()); newCred.has_value())
         {
-            ChangeUser(ChangeUserPolicy::Permanently, *newCred);
+            ::ChangeUser(ChangeUserPolicy::Permanently, *newCred);
         }
         else
         {
-            std::string errMsg
-                = fmt::format("Unable to find credentials for specified service account [{}]", userName->c_str());
-            fmt::print(stderr, "{}\n", errMsg);
-            fflush(stderr);
-
-            exit(EXIT_FAILURE);
+            detail::ExitExecSetupFailure("Unable to find credentials for specified service account [",
+                                         userName->c_str());
         }
     }
     catch (std::exception const &ex)
     {
-        std::string errMsg = fmt::format("Unable to change privileges. Ex: [{}]", ex.what());
-        log_error(errMsg);
-        fmt::print(stderr, "{}\n", errMsg);
-        fflush(stderr);
-
-        exit(EXIT_FAILURE);
+        detail::ExitExecSetupFailure("Unable to change privileges. Ex: [", ex.what());
     }
 }
 
+namespace
+{
+
+    // Reap a forked-but-failed-exec child whose pid was published through pidPipeRead by on_exec_setup.
+    // Called from the parent's bp::process_error catch block. If the read returns EAGAIN, no fork happened
+    // (e.g. setup error before fork) and there is nothing to reap.
+    void ReapFailedLaunchChild(DcgmNs::Utils::FileHandle &pidPipeRead, boost::filesystem::path const &executable)
+    {
+        if (pidPipeRead.Get() < 0)
+        {
+            return;
+        }
+
+        int const flags = ::fcntl(pidPipeRead.Get(), F_GETFL, 0);
+        if (flags < 0 || ::fcntl(pidPipeRead.Get(), F_SETFL, flags | O_NONBLOCK) < 0)
+        {
+            log_warning("fcntl on pidPipeRead: errno={}", errno);
+            return;
+        }
+
+        pid_t childPid          = -1;
+        ssize_t const bytesRead = pidPipeRead.ReadExact(reinterpret_cast<std::byte *>(&childPid), sizeof(childPid));
+        if (bytesRead != static_cast<ssize_t>(sizeof(childPid)) || childPid <= 0)
+        {
+            return;
+        }
+
+        int status = 0;
+        pid_t reaped;
+        do
+        {
+            reaped = ::waitpid(childPid, &status, 0);
+        } while (reaped == -1 && errno == EINTR);
+
+        if (reaped == -1 && errno != ECHILD)
+        {
+            log_warning("waitpid({}) after failed launch of {}: errno={}", childPid, executable.string(), errno);
+        }
+    }
+
+} // namespace
+
 struct ChildProcess::Impl
 {
+    struct ExitCallbackState
+    {
+        explicit ExitCallbackState(Impl *impl)
+            : m_target(impl)
+        {}
+
+        std::mutex m_mutex;
+        Impl *m_target;
+    };
+
     Impl(IoContext &ioContextRef)
         : ioContext(ioContextRef)
         , stdOutPipe(ioContext.Get())
         , stdErrPipe(ioContext.Get())
+        , exitCallbackState(std::make_shared<ExitCallbackState>(this))
     {}
 
     ~Impl()
@@ -94,7 +310,7 @@ struct ChildProcess::Impl
         // same time, because it is not possible to join the coroutines correctly in
         // this case. This is expected to be rare.
         auto expectedCount = expectedCoroutinesCount.load(std::memory_order_relaxed);
-        while (startedCoroutinesCount.load(std::memory_order_relaxed) != expectedCount)
+        while (startedCoroutinesCount.load(std::memory_order_acquire) != expectedCount)
         {
             std::this_thread::yield();
         }
@@ -102,35 +318,274 @@ struct ChildProcess::Impl
         // Issue a termination request and wait for all coroutines to complete.
         // Unless we do this, the coroutines will run until the ioContext owned by
         // the parent process is destroyed, possibly accessing destructed objects.
+        // The acquire loads pair with the coroutines' counter increments so that
+        // everything the coroutines wrote (e.g. StdLines) is visible here before
+        // this Impl's members are destroyed.
         endCoroutines.store(true, std::memory_order_relaxed);
-        while (completedCoroutinesCount.load(std::memory_order_relaxed) != expectedCount)
+        while (completedCoroutinesCount.load(std::memory_order_acquire) != expectedCount)
         {
             std::this_thread::yield();
         }
+        for (auto &[_, channel] : channels)
+        {
+            CloseChannel(*channel);
+        }
+
+        // Boost owns the exit callback and may invoke it after the child process object is
+        // destroyed. Serialize with a callback already in progress, then make future late
+        // callbacks no-ops before this Impl's members are released.
+        std::lock_guard<std::mutex> callbackGuard(exitCallbackState->m_mutex);
+        exitCallbackState->m_target = nullptr;
     }
 
-    static auto FdProcess(ChildProcess::Impl &self) -> boost::asio::awaitable<int>
+    struct ChannelDesc
     {
-        if (!self.fdChannelOpt) //nothing to do
+        ChannelDesc(boost::asio::io_context &ioContext, int fd)
+            : fdResponses(ioContext)
+            , channelFd(fd)
+            , timeoutTimer(ioContext)
+        {}
+
+        Pipe fdResponses;
+        int channelFd;
+        FramedChannel fdChannel;
+        boost::asio::steady_timer timeoutTimer;
+        std::optional<std::chrono::milliseconds> timeoutDuration;
+        std::function<void()> timeoutHandler;
+        std::shared_ptr<ChannelTimeoutState> timeoutState = std::make_shared<ChannelTimeoutState>();
+        struct TimeoutRuntime
         {
-            log_debug("fdChannelOpt not set, returning.");
+            std::atomic_bool active { true };
+            std::atomic_bool fired { false };
+            std::atomic<std::uint64_t> generation { 0 };
+            std::function<void()> handler;
+            std::shared_ptr<boost::asio::thread_pool> handlerPool;
+        };
+        // Timer callbacks may already be queued when a channel is closed. Keep
+        // only the small callback runtime alive; ChannelDesc itself can close
+        // without leaving queued handlers with a dangling reference.
+        std::shared_ptr<TimeoutRuntime> timeoutRuntime = std::make_shared<TimeoutRuntime>();
+    };
+
+    void ResetChannelTimeout(ChannelDesc &channel)
+    {
+        std::latch resetComplete(1);
+        boost::asio::dispatch(channel.timeoutTimer.get_executor(), [&channel, &resetComplete] {
+            auto complete = Defer([&resetComplete] { resetComplete.count_down(); });
+            if (!channel.timeoutDuration.has_value() || !channel.timeoutState->IsArmed())
+            {
+                return;
+            }
+
+            channel.timeoutState->ObserveActivity(ChannelTimeoutState::Clock::now());
+            auto runtime          = channel.timeoutRuntime;
+            auto timeoutState     = channel.timeoutState;
+            auto const generation = runtime->generation.fetch_add(1, std::memory_order_relaxed) + 1;
+            channel.timeoutTimer.expires_after(*channel.timeoutDuration);
+            channel.timeoutTimer.async_wait([runtime, timeoutState, generation](boost::system::error_code const &ec) {
+                if (ec == boost::asio::error::operation_aborted)
+                {
+                    return;
+                }
+                if (runtime->generation.load(std::memory_order_relaxed) != generation)
+                {
+                    return;
+                }
+                if (!runtime->active.load(std::memory_order_relaxed))
+                {
+                    return;
+                }
+                if (!timeoutState->ShouldFire(ChannelTimeoutState::Clock::now()))
+                {
+                    return;
+                }
+                if (!runtime->handler || !runtime->handlerPool)
+                {
+                    return;
+                }
+                auto handler = runtime->handler;
+                auto pool    = runtime->handlerPool;
+                boost::asio::post(*pool, [runtime, generation, handler = std::move(handler)]() mutable {
+                    if (runtime->generation.load(std::memory_order_relaxed) != generation
+                        || !runtime->active.load(std::memory_order_relaxed))
+                    {
+                        return;
+                    }
+                    bool expected = false;
+                    if (!runtime->fired.compare_exchange_strong(expected, true, std::memory_order_relaxed))
+                    {
+                        return;
+                    }
+                    handler();
+                });
+            });
+        });
+        resetComplete.wait();
+    }
+
+    void CloseChannel(ChannelDesc &channel)
+    {
+        std::latch closeComplete(1);
+        boost::asio::dispatch(channel.timeoutTimer.get_executor(), [&channel, &closeComplete] {
+            auto complete = Defer([&closeComplete] { closeComplete.count_down(); });
+            channel.timeoutRuntime->active.store(false, std::memory_order_relaxed);
+            channel.timeoutState->Disarm();
+            channel.timeoutTimer.cancel();
+            channel.fdChannel.Close();
+        });
+        closeComplete.wait();
+    }
+
+    struct FdBinding
+    {
+        int targetFd;
+        int sourceFd;
+    };
+
+    /**
+     * Duplicate a source descriptor to a descriptor that will not be overwritten
+     * by the final child-FD binding assignments.
+     */
+    static int DuplicateAwayFromTargets(int fd, std::set<int> const &targetFds)
+    {
+        int minFd = 3;
+        while (true)
+        {
+            int dupFd = ::fcntl(fd, F_DUPFD, minFd);
+            if (dupFd < 0)
+            {
+                detail::ExitExecSetupFailure("Unable to duplicate child fd [", fd);
+            }
+            if (!targetFds.contains(dupFd))
+            {
+                return dupFd;
+            }
+            ::close(dupFd);
+            minFd = dupFd + 1;
+        }
+    }
+
+    /**
+     * Bind child-visible framed channel descriptors without clobbering source
+     * descriptors that overlap another channel's target descriptor.
+     */
+    static void BindChannelFds(std::unordered_map<int, std::unique_ptr<ChannelDesc>> const &channels)
+    {
+        std::vector<FdBinding> bindings;
+        bindings.reserve(channels.size());
+        std::set<int> targetFds;
+        for (auto const &[targetFd, channel] : channels)
+        {
+            bindings.push_back({ .targetFd = targetFd, .sourceFd = channel->fdResponses.WriteEnd().native_handle() });
+            targetFds.insert(targetFd);
+        }
+        std::sort(bindings.begin(), bindings.end(), [](FdBinding const &lhs, FdBinding const &rhs) {
+            return lhs.targetFd < rhs.targetFd;
+        });
+
+        for (auto &binding : bindings)
+        {
+            if (binding.sourceFd != binding.targetFd && targetFds.contains(binding.sourceFd))
+            {
+                binding.sourceFd = DuplicateAwayFromTargets(binding.sourceFd, targetFds);
+            }
+        }
+
+        for (auto const &binding : bindings)
+        {
+            if (::dup2(binding.sourceFd, binding.targetFd) < 0)
+            {
+                detail::ExitExecSetupFailure("Unable to bind child fd [", binding.targetFd);
+            }
+        }
+        for (auto const &binding : bindings)
+        {
+            if (binding.sourceFd != binding.targetFd)
+            {
+                ::close(binding.sourceFd);
+            }
+        }
+    }
+
+    static std::optional<int> GetMaxFileDescriptor()
+    {
+        rlimit limit {};
+        if (::getrlimit(RLIMIT_NOFILE, &limit) == 0 && limit.rlim_cur != RLIM_INFINITY)
+        {
+            return limit.rlim_cur > static_cast<rlim_t>(INT_MAX) ? INT_MAX : static_cast<int>(limit.rlim_cur);
+        }
+
+        auto const openMax = ::sysconf(_SC_OPEN_MAX);
+        if (openMax > 0)
+        {
+            return openMax > INT_MAX ? INT_MAX : static_cast<int>(openMax);
+        }
+
+        return std::nullopt;
+    }
+
+    static void CloseFdsExcept(ChildProcessFds const &allowedFds)
+    {
+        auto const maxFd = GetMaxFileDescriptor();
+        if (!maxFd.has_value())
+        {
+            detail::ExitExecSetupFailure("Unable to determine child fd close bound [", "getrlimit/sysconf unavailable");
+        }
+        for (int fd = 0; fd < *maxFd; ++fd)
+        {
+            if (allowedFds.contains(fd))
+            {
+                continue;
+            }
+            auto const flags = ::fcntl(fd, F_GETFD);
+            if (flags < 0)
+            {
+                if (errno == EBADF)
+                {
+                    continue;
+                }
+                detail::ExitExecSetupFailure("Unable to inspect child fd [", fd);
+            }
+            /*
+             * Close-on-exec descriptors cannot leak into the final child image,
+             * but launch machinery may still need them to report exec failure.
+             */
+            if ((flags & FD_CLOEXEC) != 0)
+            {
+                continue;
+            }
+            if (::close(fd) != 0 && errno != EBADF)
+            {
+                detail::ExitExecSetupFailure("Unable to close child fd [", fd);
+            }
+        }
+    }
+
+    static auto FdProcess(ChildProcess::Impl &self, int fd) -> boost::asio::awaitable<int>
+    {
+        auto channelIt = self.channels.find(fd);
+        if (channelIt == self.channels.end()) //nothing to do
+        {
+            log_debug("channel fd {} not set, returning.", fd);
             co_return 0;
         }
+        auto &channel = *channelIt->second;
 
         auto cancellationState            = co_await boost::asio::this_coro::cancellation_state;
         constexpr unsigned int bufferSize = 65536;
         std::vector<std::byte> buffer(bufferSize);
 
         auto cleanup = Defer([&]() { self.completedCoroutinesCount++; });
-        self.startedCoroutinesCount.fetch_add(1, std::memory_order_relaxed);
+        self.startedCoroutinesCount.fetch_add(1, std::memory_order_release);
         while (cancellationState.cancelled() == boost::asio::cancellation_type::none
                && !self.endCoroutines.load(std::memory_order_relaxed))
         {
             try
             {
-                size_t read = co_await self.fdChannelOpt->fdResponses.ReadEnd().async_read_some(
-                    boost::asio::buffer(buffer), boost::asio::use_awaitable);
-                self.fdChannelOpt->fdChannel.Write({ buffer.data(), read });
+                size_t read = co_await channel.fdResponses.ReadEnd().async_read_some(boost::asio::buffer(buffer),
+                                                                                     boost::asio::use_awaitable);
+                self.ResetChannelTimeout(channel);
+                channel.fdChannel.Write({ buffer.data(), read });
             }
             catch (boost::system::system_error const &e)
             {
@@ -138,8 +593,9 @@ struct ChildProcess::Impl
                 // We get eof when the child process closes the pipe.
                 if (e.code() == boost::asio::error::eof || e.code() == boost::asio::error::bad_descriptor)
                 {
-                    log_debug("fd pipe closed for process {}, reason {}", self.executable.string(), e.code().value());
-                    self.fdChannelOpt->fdChannel.Close();
+                    log_debug(
+                        "fd pipe {} closed for process {}, reason {}", fd, self.executable.string(), e.code().value());
+                    self.CloseChannel(channel);
                     co_return 0;
                 }
                 if (e.code() != boost::asio::error::operation_aborted)
@@ -152,7 +608,7 @@ struct ChildProcess::Impl
                 }
             }
         }
-        self.fdChannelOpt->fdChannel.Close();
+        self.CloseChannel(channel);
         co_return 0;
     }
 
@@ -162,7 +618,7 @@ struct ChildProcess::Impl
         auto cancellationState = co_await boost::asio::this_coro::cancellation_state;
         boost::asio::streambuf buffer;
         auto cleanup = Defer([&]() { self.completedCoroutinesCount++; });
-        self.startedCoroutinesCount.fetch_add(1, std::memory_order_relaxed);
+        self.startedCoroutinesCount.fetch_add(1, std::memory_order_release);
         while (cancellationState.cancelled() == boost::asio::cancellation_type::none
                && !self.endCoroutines.load(std::memory_order_relaxed))
         {
@@ -180,6 +636,15 @@ struct ChildProcess::Impl
                 // We get eof when the child process closes the pipe.
                 if (e.code() == boost::asio::error::eof || e.code() == boost::asio::error::bad_descriptor)
                 {
+                    if (buffer.size() > 0)
+                    {
+                        std::istream tmpInputStream(&buffer);
+                        std::string line;
+                        while (std::getline(tmpInputStream, line))
+                        {
+                            target.Write(line);
+                        }
+                    }
                     log_debug("StdLines pipe closed for process {}", self.executable.string());
                     target.Close();
                     co_return 0;
@@ -204,22 +669,49 @@ struct ChildProcess::Impl
     {
         namespace bp = boost::process;
         std::latch launchProcessLatch(1);
-        bool failedToLaunch = false;
-        auto launchProcess  = [this, &launchProcessLatch, &failedToLaunch]() {
+
+        // boost::process 1.85.0 throws out of _read_error before invoke's post-fork
+        // waitpid runs, so a forked-but-failed-exec child is left as a zombie. The child
+        // writes getpid() through this pipe in on_exec_setup; the parent reads in the
+        // catch block to reap. O_CLOEXEC on both ends so the fds don't leak into the
+        // successfully-execed program.
+        int pipeFds[2] = { -1, -1 };
+        if (::pipe2(pipeFds, O_CLOEXEC) != 0)
+        {
+            log_warning("pipe2 for failed-launch pid capture: errno={}", errno);
+        }
+        DcgmNs::Utils::FileHandle pidPipeRead { pipeFds[0] };
+        DcgmNs::Utils::FileHandle pidPipeWrite { pipeFds[1] };
+
+        auto launchProcess = [this, &launchProcessLatch, &pidPipeRead, &pidPipeWrite]() {
+            failedToLaunch.store(false, std::memory_order_relaxed);
             try
             {
-                auto bp_on_exec_setup = [this](auto  &/* exec */) {
+                auto bp_on_exec_setup = [this, &pidPipeWrite](auto & /* exec */) {
                     // There is a possibility that the parent process is not yet to append the pid to the waitpid
                     // queue before the child process exits. This is a workaround to ensure that the child process
                     // pid is in the queue before the child process exits.
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    BindChannelFds(channels);
+                    // Publish our pid so the parent can reap us if execve fails.
+                    // Runs post-fork in the child; WriteExact is async-signal-safe (write+plain-int store)
+                    // and retries on EINTR + partial writes.
+                    if (pidPipeWrite.Get() >= 0)
+                    {
+                        pid_t const myPid = ::getpid();
+                        (void)pidPipeWrite.WriteExact(&myPid, sizeof(myPid));
+                    }
                     ChangeUser(this->userName);
+                    if (allowedFds.has_value())
+                    {
+                        CloseFdsExcept(*allowedFds);
+                    }
                 }; // child process
 
-                auto bp_on_success = [this](auto  &/* exec */) {
-                    if (fdChannelOpt)
+                auto bp_on_success = [this](auto & /* exec */) {
+                    for (auto &[_, channel] : channels)
                     {
-                        auto ec = fdChannelOpt->fdResponses.CloseWriteEnd();
+                        auto ec = channel->fdResponses.CloseWriteEnd();
                         if (ec)
                         {
                             log_error("Error closing write end of fd pipe: {}", ec.message());
@@ -231,71 +723,70 @@ struct ChildProcess::Impl
                 // chance that the SIGCHLD of the second child process is delivered before the child process pid
                 // is added to the boost waitpid queue (ref sigchld_service.hpp). When this happens, the process
                 // will not be reaped and the on_exit handler will not be called.
-                auto bp_on_exit = [this](int exit, const std::error_code  &/* ec */) {
+                auto callbackState = exitCallbackState;
+                auto bp_on_exit    = [callbackState](int exit, std::error_code const &) {
+                    std::lock_guard<std::mutex> callbackGuard(callbackState->m_mutex);
+                    auto *self = callbackState->m_target;
+                    if (self == nullptr)
                     {
-                        std::unique_lock<std::mutex> lock(lockProcessStatus);
-                        running.store(false, std::memory_order_relaxed);
-                        exited.store(true, std::memory_order_relaxed);
-                        pid            = -1;
-                        exitCode       = process.exit_code();
-                        nativeExitCode = process.native_exit_code();
+                        return;
+                    }
+
+                    {
+                        std::unique_lock<std::mutex> lock(self->lockProcessStatus);
+                        self->running.store(false, std::memory_order_relaxed);
+                        self->exited.store(true, std::memory_order_relaxed);
+                        self->pid            = -1;
+                        self->exitCode       = self->process.exit_code();
+                        self->nativeExitCode = self->process.native_exit_code();
                     }
                     if (exit != 0)
                     {
-                        log_error("Process {} exited with exit code: {}", executable.string(), exit);
+                        log_error("Process {} exited with exit code: {}", self->executable.string(), exit);
                     }
                     else
                     {
-                        log_info("Process {} exited with exit code: {}", executable.string(), exit);
+                        log_info("Process {} exited with exit code: {}", self->executable.string(), exit);
                     }
-                    cvProcessStatus.notify_one();
+                    self->cvProcessStatus.notify_one();
                 }; // parent process
 
                 {
                     // Boost::asio's initial global signal handling setup happens on demand during process
                     // launch and is not thread safe. As a workaround, grab this mutex during process creation.
                     std::lock_guard<std::mutex> processCreationGuard(ioContext.GetProcessCreationMutex());
-                    if (fdChannelOpt)
-                    {
-                        process = bp::child(executable,
-                                            bp::args(args),
-                                            bp::std_out > stdOutPipe,
-                                            bp::std_err > stdErrPipe,
-                                            bp::std_in < bp::null,
-                                            bp::env = environment,
-                                            bp::extend::on_exec_setup(bp_on_exec_setup),
-                                            bp::on_exit(bp_on_exit),
-                                            bp::extend::on_success(bp_on_success),
-                                            bp::posix::fd.bind(fdChannelOpt->channelFd,
-                                                               fdChannelOpt->fdResponses.WriteEnd().native_handle()),
-                                            ioContext.Get());
-                    }
-                    else
-                    {
-                        process = bp::child(executable,
-                                            bp::args(args),
-                                            bp::std_out > stdOutPipe,
-                                            bp::std_err > stdErrPipe,
-                                            bp::std_in < bp::null,
-                                            bp::env = environment,
-                                            bp::extend::on_exec_setup(bp_on_exec_setup),
-                                            bp::on_exit(bp_on_exit),
-                                            bp::extend::on_success(bp_on_success),
-                                            ioContext.Get());
-                    }
+                    process = bp::child(executable,
+                                        bp::args(args),
+                                        bp::std_out > stdOutPipe,
+                                        bp::std_err > stdErrPipe,
+                                        bp::std_in < bp::null,
+                                        bp::env = environment,
+                                        bp::extend::on_exec_setup(bp_on_exec_setup),
+                                        bp::on_exit(bp_on_exit),
+                                        bp::extend::on_success(bp_on_success),
+                                        ioContext.Get());
                 }
             }
             catch (bp::process_error const &e)
             {
                 log_error("Child process {} failed to launch, error: {}", executable.string(), e.what());
+
+                // If a child was forked before exec failed, our on_exec_setup wrote the child's
+                // pid to pidPipeWrite. By the time we get here, the child has finished writing
+                // and has already _exit()'d (the parent's _read_error in boost::process can't
+                // return until the child writes errno, which it does after our pid write). So a
+                // non-blocking read either returns the pid bytes immediately, or returns
+                // EAGAIN meaning no fork happened (e.g. setup error before fork).
+                ReapFailedLaunchChild(pidPipeRead, executable);
+
                 // This will release any readers blocked on reads
                 stdErrLines.Close();
                 stdOutLines.Close();
-                if (fdChannelOpt)
+                for (auto &[_, channel] : channels)
                 {
-                    fdChannelOpt->fdChannel.Close();
+                    CloseChannel(*channel);
                 }
-                failedToLaunch = true;
+                failedToLaunch.store(true, std::memory_order_relaxed);
             }
             launchProcessLatch.count_down();
         };
@@ -311,7 +802,7 @@ struct ChildProcess::Impl
         ioContext.Post(launchProcess);
         launchProcessLatch.wait();
 
-        if (failedToLaunch)
+        if (failedToLaunch.load(std::memory_order_relaxed))
         {
             log_error("Child process {} failed to launch", executable.string());
             return;
@@ -328,15 +819,24 @@ struct ChildProcess::Impl
             }
         }
 
-        if (fdChannelOpt)
+        for (auto const &[fd, channel] : channels)
         {
-            boost::asio::co_spawn(ioContext.Get(), FdProcess(*this), boost::asio::detached);
+            ResetChannelTimeout(*channel);
+            boost::asio::co_spawn(ioContext.Get(), FdProcess(*this, fd), boost::asio::detached);
             expectedCoroutinesCount.fetch_add(1, std::memory_order_relaxed);
         }
         boost::asio::co_spawn(ioContext.Get(), StdLinesProcess(*this, stdOutPipe, stdOutLines), boost::asio::detached);
         expectedCoroutinesCount.fetch_add(1, std::memory_order_relaxed);
         boost::asio::co_spawn(ioContext.Get(), StdLinesProcess(*this, stdErrPipe, stdErrLines), boost::asio::detached);
         expectedCoroutinesCount.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void ValidateChannelRegistrationAllowed() const
+    {
+        if (runStarted.load(std::memory_order_relaxed))
+        {
+            throw std::logic_error("ChildProcess channel registration must happen before Run()");
+        }
     }
 
     enum class KillProcessIntent : std::uint8_t
@@ -382,9 +882,14 @@ struct ChildProcess::Impl
         return signaledPid;
     }
 
-    void Stop(bool force = false) noexcept
+    void Stop(bool force = false)
     {
         SignalRunningProcess(force ? KillProcessIntent::Sigkill : KillProcessIntent::Sigterm);
+    }
+
+    bool TryStop(bool force = false)
+    {
+        return SignalRunningProcess(force ? KillProcessIntent::Sigkill : KillProcessIntent::Sigterm).has_value();
     }
 
     std::optional<pid_t> GetRunningPid() const
@@ -397,7 +902,7 @@ struct ChildProcess::Impl
         return pid;
     }
 
-    void Kill(int sigTermTimeoutSec = 10) noexcept
+    void Kill(int sigTermTimeoutSec = 10)
     {
         if (!SignalRunningProcess(KillProcessIntent::Sigterm))
         {
@@ -437,6 +942,11 @@ struct ChildProcess::Impl
     {
         std::unique_lock<std::mutex> lock(lockProcessStatus);
         return running.load(std::memory_order_relaxed);
+    }
+
+    bool FailedToLaunch() const
+    {
+        return failedToLaunch.load(std::memory_order_relaxed);
     }
 
     std::optional<int> GetExitCode() const
@@ -491,25 +1001,22 @@ struct ChildProcess::Impl
     }
 
     IoContext &ioContext;
+    std::shared_ptr<boost::asio::thread_pool> timeoutHandlerPool { std::make_shared<boost::asio::thread_pool>(1) };
 
-    struct ChannelDesc
-    {
-        Pipe fdResponses;
-        int channelFd;
-        FramedChannel fdChannel;
-    };
-
-    std::unique_ptr<ChannelDesc> fdChannelOpt;
+    std::unordered_map<int, std::unique_ptr<ChannelDesc>> channels;
+    std::optional<int> legacyChannelFd;
 
     boost::process::async_pipe stdOutPipe;
     boost::process::async_pipe stdErrPipe;
 
     boost::process::child process;
+    std::shared_ptr<ExitCallbackState> exitCallbackState;
 
     boost::filesystem::path executable;
     std::vector<std::string> args;
     std::optional<std::string> userName;
     boost::process::environment environment;
+    std::optional<ChildProcessFds> allowedFds;
 
     StdLines stdOutLines;
     StdLines stdErrLines;
@@ -517,11 +1024,13 @@ struct ChildProcess::Impl
     // io context thread and main thread have race condition.
     mutable std::mutex lockProcessStatus;
     mutable std::condition_variable cvProcessStatus;
-    int exitCode             = -1;
-    int nativeExitCode       = -1;
-    std::atomic_bool exited  = false;
-    std::atomic_bool running = false;
-    pid_t pid                = -1;
+    int exitCode                    = -1;
+    int nativeExitCode              = -1;
+    std::atomic_bool exited         = false;
+    std::atomic_bool running        = false;
+    std::atomic_bool runStarted     = false;
+    std::atomic_bool failedToLaunch = false;
+    pid_t pid                       = -1;
 
     std::atomic_bool endCoroutines                     = false;
     std::atomic<unsigned int> completedCoroutinesCount = 0;
@@ -544,6 +1053,7 @@ StdLines &ChildProcess::StdErr()
 static void GetStdBuffer(StdLines &stdLines, fmt::memory_buffer &buffer, bool block)
 {
     buffer.clear();
+    bool firstLine = true;
     while (block || (!block && !stdLines.IsEmpty()))
     {
         auto line = stdLines.Read();
@@ -551,7 +1061,12 @@ static void GetStdBuffer(StdLines &stdLines, fmt::memory_buffer &buffer, bool bl
         {
             return;
         }
+        if (!firstLine)
+        {
+            buffer.push_back('\n');
+        }
         buffer.append(*line);
+        firstLine = false;
     }
 }
 
@@ -570,6 +1085,7 @@ void ChildProcess::GetStdOutBuffer(fmt::memory_buffer &outString, bool block)
 void ChildProcess::Run()
 {
     Validate();
+    m_impl->runStarted.store(true, std::memory_order_relaxed);
     m_impl->Run();
 }
 
@@ -588,7 +1104,9 @@ void ChildProcess::Create(IoContext &ioContext,
                           std::optional<std::vector<std::string>> const &args,
                           std::optional<std::unordered_map<std::string, std::string>> const &env,
                           std::optional<std::string> const &userName,
-                          std::optional<int> channelFd)
+                          std::optional<int> channelFd,
+                          ChildProcessEnvironmentMode environmentMode,
+                          std::optional<ChildProcessFds> const &allowedFds)
 {
     m_impl             = std::make_unique<ChildProcess::Impl>(ioContext);
     m_impl->executable = executable;
@@ -599,11 +1117,11 @@ void ChildProcess::Create(IoContext &ioContext,
     }
     if (env.has_value())
     {
-        m_impl->environment = static_cast<boost::process::environment>(boost::this_process::environment());
-        for (auto const &pair : env.value())
-        {
-            m_impl->environment.emplace(pair.first, pair.second);
-        }
+        auto baseEnvironment = environmentMode == ChildProcessEnvironmentMode::Inherit
+                                   ? CurrentChildProcessEnvironment()
+                                   : ChildProcessEnvironment {};
+        m_impl->environment
+            = ToBoostProcessEnvironment(BuildChildProcessEnvironment(std::move(baseEnvironment), env, environmentMode));
     }
     if (userName.has_value() && !(*userName).empty())
     {
@@ -611,9 +1129,10 @@ void ChildProcess::Create(IoContext &ioContext,
     }
     if (channelFd.has_value())
     {
-        m_impl->fdChannelOpt
-            = std::make_unique<ChildProcess::Impl::ChannelDesc>(m_impl->ioContext.Get(), channelFd.value());
+        AddFramedChannel(channelFd.value());
+        m_impl->legacyChannelFd = channelFd.value();
     }
+    m_impl->allowedFds = allowedFds;
 }
 
 std::optional<pid_t> ChildProcess::GetPid() const
@@ -626,6 +1145,18 @@ bool ChildProcess::IsAlive() const
 {
     Validate();
     return m_impl->IsAlive();
+}
+
+bool ChildProcess::FailedToLaunch() const
+{
+    Validate();
+    return m_impl->FailedToLaunch();
+}
+
+bool ChildProcess::TryStop(bool force)
+{
+    Validate();
+    return m_impl->TryStop(force);
 }
 
 std::optional<int> ChildProcess::GetExitCode() const
@@ -646,13 +1177,13 @@ void ChildProcess::Wait(std::optional<std::chrono::milliseconds> timeout)
     m_impl->Wait(timeout);
 }
 
-void ChildProcess::Stop(bool force) noexcept
+void ChildProcess::Stop(bool force)
 {
     Validate();
     m_impl->Stop(force);
 }
 
-void ChildProcess::Kill(int sigTermTimeoutSec) noexcept
+void ChildProcess::Kill(int sigTermTimeoutSec)
 {
     Validate();
     m_impl->Kill(sigTermTimeoutSec);
@@ -661,11 +1192,60 @@ void ChildProcess::Kill(int sigTermTimeoutSec) noexcept
 std::optional<std::reference_wrapper<FramedChannel>> ChildProcess::GetFdChannel()
 {
     Validate();
-    if (m_impl->fdChannelOpt)
+    if (m_impl->legacyChannelFd.has_value())
     {
-        return m_impl->fdChannelOpt->fdChannel;
+        return GetFdChannel(*m_impl->legacyChannelFd);
     }
     return std::nullopt;
+}
+
+void ChildProcess::AddFramedChannel(int fd)
+{
+    Validate();
+    m_impl->ValidateChannelRegistrationAllowed();
+    if (m_impl->channels.contains(fd))
+    {
+        return;
+    }
+    m_impl->channels.emplace(fd, std::make_unique<ChildProcess::Impl::ChannelDesc>(m_impl->ioContext.Get(), fd));
+}
+
+std::optional<std::reference_wrapper<FramedChannel>> ChildProcess::GetFdChannel(int fd)
+{
+    Validate();
+    auto channelIt = m_impl->channels.find(fd);
+    if (channelIt == m_impl->channels.end())
+    {
+        return std::nullopt;
+    }
+    return channelIt->second->fdChannel;
+}
+
+std::expected<void, ChannelTimeoutError> ChildProcess::OnChannelTimeout(int fd,
+                                                                        std::chrono::milliseconds duration,
+                                                                        std::function<void()> handler)
+{
+    Validate();
+    m_impl->ValidateChannelRegistrationAllowed();
+    if (duration <= std::chrono::milliseconds { 0 })
+    {
+        return std::unexpected(ChannelTimeoutError::InvalidDuration);
+    }
+    auto channelIt = m_impl->channels.find(fd);
+    if (channelIt == m_impl->channels.end())
+    {
+        return std::unexpected(ChannelTimeoutError::NotRegistered);
+    }
+    auto &channel           = *channelIt->second;
+    channel.timeoutDuration = duration;
+    channel.timeoutHandler  = std::move(handler);
+    channel.timeoutState->Arm(duration, ChannelTimeoutState::Clock::now());
+    channel.timeoutRuntime->active.store(true, std::memory_order_relaxed);
+    channel.timeoutRuntime->fired.store(false, std::memory_order_relaxed);
+    channel.timeoutRuntime->generation.store(0, std::memory_order_relaxed);
+    channel.timeoutRuntime->handler     = channel.timeoutHandler;
+    channel.timeoutRuntime->handlerPool = m_impl->timeoutHandlerPool;
+    return {};
 }
 
 ChildProcess &ChildProcess::operator=(ChildProcess &&) noexcept = default;

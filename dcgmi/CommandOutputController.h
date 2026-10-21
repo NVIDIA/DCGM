@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 
 #ifndef COMMANDOUTPUTCONTROLLER_H_
 #define COMMANDOUTPUTCONTROLLER_H_
+
+#include <DcgmOpsAnyPtr.hpp>
 
 #include <DcgmLogging.h>
 #include <dcgm_structs.h>
@@ -121,7 +123,7 @@ typedef struct
 class GPUErrorOutputController : CommandOutputController
 {
 public:
-    GPUErrorOutputController();
+    explicit GPUErrorOutputController(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~GPUErrorOutputController();
 
     /* Display a preset error display containing all the error codes and error
@@ -138,6 +140,7 @@ public:
     void addErrorStringOverride(short fieldId, dcgmReturn_t errorCode, std::string replacement);
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; //!< DCGM API interface.
     dcgmStatus_t mErrHandle {};
     std::vector<dcgmErrorStringOverride_t> mStringOverriders;
 };

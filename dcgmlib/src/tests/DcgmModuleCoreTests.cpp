@@ -17,15 +17,18 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <DcgmProtocol.h>
-#include <Defer.hpp>
+#include <ScopedDcgmFields.hpp>
 #include <core/DcgmModuleCore.h>
 #include <dcgm_core_structs.h>
 #include <dcgm_fields.h>
+#include <dcgm_fields_internal.hpp>
 
 #include <any>
 
+#include <algorithm>
 #include <array>
 #include <cstring>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -39,6 +42,16 @@ void InitCoreMessage(T &msg, unsigned int subCommand, unsigned int version)
     msg.header.subCommand = subCommand;
     msg.header.version    = version;
 }
+
+class GpmCacheManager : public DcgmCacheManager
+{
+public:
+    void ForceGpmSupport()
+    {
+        m_nvmlLoaded.store(true, std::memory_order_release);
+        m_forceProfMetricsThroughGpm = true;
+    }
+};
 
 } // namespace
 
@@ -195,8 +208,7 @@ TEST_CASE("DcgmModuleCore handles lightweight valid core messages")
 
     GIVEN("a fake cache manager")
     {
-        DcgmFieldsInit();
-        DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+        ScopedDcgmFields fields;
 
         DcgmCacheManager cacheManager;
         unsigned int const gpuId = cacheManager.AddFakeGpu();
@@ -360,6 +372,43 @@ TEST_CASE("DcgmModuleCore handles lightweight valid core messages")
             }
         }
     }
+}
+
+TEST_CASE("DcgmModuleCore advertises canonical and 4.7-compatible NVLink profiling fields")
+{
+    ScopedDcgmFields fields;
+    DcgmModuleCore module;
+    GpmCacheManager cacheManager;
+    unsigned int const gpuId = cacheManager.AddFakeGpu();
+    cacheManager.ForceGpmSupport();
+    module.Initialize(&cacheManager);
+
+    dcgm_core_msg_get_metric_groups_t msg {};
+    InitCoreMessage(msg, DCGM_CORE_SR_PROF_GET_METRIC_GROUPS, dcgm_core_msg_get_metric_groups_version);
+    msg.metricGroups.gpuId = gpuId;
+
+    REQUIRE(module.ProcessMessage(&msg.header) == DCGM_ST_OK);
+    REQUIRE(msg.metricGroups.numMetricGroups == 3);
+
+    auto contains = [](dcgmProfMetricGroupInfo_v2 const &group, unsigned short fieldId) {
+        auto const fields = std::span(group.fieldIds, group.numFieldIds);
+        return std::ranges::find(fields, fieldId) != fields.end();
+    };
+
+    auto const &firstGroup  = msg.metricGroups.metricGroups[0];
+    auto const &secondGroup = msg.metricGroups.metricGroups[1];
+    CHECK(contains(firstGroup, DCGM_FI_PROF_NVLINK_TX_BYTES));
+    CHECK(contains(firstGroup, DCGM_FI_PROF_NVLINK_RX_BYTES));
+
+    for (unsigned short fieldId = DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_FIRST;
+         fieldId <= DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_LAST;
+         ++fieldId)
+    {
+        CAPTURE(fieldId);
+        CHECK(contains(secondGroup, fieldId));
+    }
+    CHECK(contains(secondGroup, DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK_ID));
+    CHECK(contains(secondGroup, DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK_ID));
 }
 
 TEST_CASE("DcgmModuleCore handles hostengine environment variable requests")

@@ -17,12 +17,14 @@
 #define TCLAP_SETBASE_ZERO 1
 
 #include "CommandLineParser.h"
+
 #include "Config.h"
 #include "DcgmiProfile.h"
 #include "DcgmiSettings.h"
 #include "DcgmiTest.h"
 #include "DeviceMonitor.h"
 #include "Diag.h"
+#include "EntityListHelpers.h"
 #include "Environment.h"
 #include "FieldGroup.h"
 #include "Group.h"
@@ -40,26 +42,176 @@
 
 #include <DcgmBuildInfo.hpp>
 #include <DcgmDiagCommon.h>
+#include <DcgmPolicyUtils.h>
 #include <DcgmStringConversions.h>
 #include <DcgmStringHelpers.h>
 #include <MnDiagCommon.h>
 #include <dcgm_fields.h>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
+#include <timelib.h>
+
 #include <fmt/ranges.h>
 #include <tclap/ArgException.h>
-#include <timelib.h>
 
 #include <algorithm>
 #include <cctype>
 #include <csignal>
+#include <fstream>
 #include <iostream>
+#include <limits>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 
 #define CHECK_TCLAP_ARG_NEGATIVE_VALUE(arg, name) \
     if (arg.getValue() < 0)                       \
     throw TCLAP::CmdLineParseException("Positive value expected, negative value found", name)
+
+namespace
+{
+void ValidateMnDiagParameterPrefixes(std::string_view parameters, std::string_view testName)
+{
+    std::vector<std::string> parameterList;
+    dcgmTokenizeString(std::string(parameters), ";", parameterList);
+
+    std::string const testPrefix = std::string(testName) + ".";
+    for (auto const &parameter : parameterList)
+    {
+        if (parameter.empty())
+        {
+            continue;
+        }
+
+        if (std::string_view(parameter).starts_with(testPrefix) || std::string_view(parameter).starts_with("openmpi."))
+        {
+            continue;
+        }
+
+        throw TCLAP::CmdLineParseException(
+            fmt::format(
+                "Parameter '{}' must use either the '{}' prefix or the 'openmpi.' prefix", parameter, testPrefix),
+            "parameters");
+    }
+}
+
+uint64_t ParsePolicyId(std::string const &value)
+{
+    try
+    {
+        size_t parsedLength = 0;
+        auto const policyId = std::stoull(value, &parsedLength);
+        if (value.empty() || value.front() == '-' || parsedLength != value.size())
+        {
+            throw TCLAP::CmdLineParseException("Expected unsigned integer policy ID", "policy-id");
+        }
+        return policyId;
+    }
+    catch (TCLAP::ArgException const &)
+    {
+        throw;
+    }
+    catch (std::exception const &)
+    {
+        throw TCLAP::CmdLineParseException("Expected unsigned integer policy ID", "policy-id");
+    }
+}
+
+dcgmPolicyOperator_t ParsePolicyOperator(std::string value)
+{
+    std::transform(
+        value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    static std::unordered_map<std::string, std::string> const aliases {
+        { ">", "GREATER_THAN" },
+        { "gt", "GREATER_THAN" },
+        { "greater", "GREATER_THAN" },
+        { ">=", "GREATER_THAN_OR_EQUAL" },
+        { "ge", "GREATER_THAN_OR_EQUAL" },
+        { "gte", "GREATER_THAN_OR_EQUAL" },
+        { "<", "LESS_THAN" },
+        { "lt", "LESS_THAN" },
+        { "less", "LESS_THAN" },
+        { "<=", "LESS_THAN_OR_EQUAL" },
+        { "le", "LESS_THAN_OR_EQUAL" },
+        { "lte", "LESS_THAN_OR_EQUAL" },
+        { "==", "EQUAL" },
+        { "=", "EQUAL" },
+        { "eq", "EQUAL" },
+        { "!=", "NOT_EQUAL" },
+        { "ne", "NOT_EQUAL" },
+        { "changed", "CHANGED" },
+        { "change", "CHANGED" },
+    };
+    if (auto const it = aliases.find(value); it != aliases.end())
+    {
+        value = it->second;
+    }
+    else
+    {
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+            return static_cast<char>(std::toupper(c));
+        });
+    }
+
+    if (auto const policyOperator = DcgmPolicyUtils::StringToOperator(value); policyOperator.has_value())
+    {
+        return *policyOperator;
+    }
+    throw TCLAP::CmdLineParseException("Expected one of >, >=, <, <=, ==, !=, changed", "operator");
+}
+
+unsigned int ParsePolicyChannels(std::string const &value)
+{
+    std::vector<std::string> tokens;
+    dcgmTokenizeString(value, ",", tokens);
+    unsigned int mask = 0;
+    for (auto token : tokens)
+    {
+        if (token.empty())
+        {
+            continue;
+        }
+        std::transform(token.begin(), token.end(), token.begin(), [](unsigned char c) {
+            return static_cast<char>(std::toupper(c));
+        });
+        if (auto const channel = DcgmPolicyUtils::StringToChannel(token); channel.has_value())
+        {
+            mask |= *channel;
+        }
+        else
+        {
+            throw TCLAP::CmdLineParseException("Expected channels from console,file,callback", "channels");
+        }
+    }
+    if (mask == 0)
+    {
+        throw TCLAP::CmdLineParseException("At least one channel is required", "channels");
+    }
+    return mask;
+}
+
+std::vector<dcgmGroupEntityPair_t> ParsePolicyEntities(std::string const &value)
+{
+    if (value.empty() || value == "all")
+    {
+        return {};
+    }
+
+    std::vector<dcgmGroupEntityPair_t> entities;
+    if (auto const parseError = DcgmNs::EntityListParser(value, entities); !parseError.empty())
+    {
+        throw TCLAP::CmdLineParseException(parseError, "entities");
+    }
+    if (std::any_of(
+            entities.begin(), entities.end(), [](auto const &entity) { return entity.entityGroupId != DCGM_FE_GPU; }))
+    {
+        throw TCLAP::CmdLineParseException("Field policies only support GPU entities for now", "entities");
+    }
+    return entities;
+}
+} // namespace
 
 static const std::string g_hostnameHelpText
     = "Connects to specified IP or fully-qualified domain name. To connect to a host engine that was started with -d (unix socket), prefix the unix socket filename with 'unix://'. [default = localhost]";
@@ -122,7 +274,7 @@ CommandLineParser::StaticConstructor::StaticConstructor()
 
 /* Entry method into this class for a given command line provided by main()
  */
-dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     try
@@ -150,38 +302,38 @@ dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *
         cmd.add(input);
 #ifdef DEBUG
         TCLAP::ValueArg<std::string> testArg(
-            "", "test", "Tests and Cache Manager [dcgmi test –h for more info]", false, "", "", cmd);
+            "", "test", "Tests and Cache Manager [dcgmi test -h for more info]", false, "", "", cmd);
 #endif
         TCLAP::ValueArg<std::string> topoArg(
             "", "topo", "GPU Topology [dcgmi topo -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> statsArg(
             "", "stats", "Process Statistics [dcgmi stats -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> diagArg(
-            "", "diag", "System Validation/Diagnostic [dcgmi diag –h for more info]", false, "", "", cmd);
+            "", "diag", "System Validation/Diagnostic [dcgmi diag -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> policyArg(
-            "", "policy", "Policy Management [dcgmi policy –h for more info]", false, "", "", cmd);
+            "", "policy", "Policy Management [dcgmi policy -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> healthArg(
-            "", "health", "Health Monitoring [dcgmi health –h for more info]", false, "", "", cmd);
+            "", "health", "Health Monitoring [dcgmi health -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> configArg(
-            "", "config", "Configuration Management [dcgmi config –h for more info]", false, "", "", cmd);
+            "", "config", "Configuration Management [dcgmi config -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> groupArg(
-            "", "group", "GPU Group Management [dcgmi group –h for more info]", false, "", "", cmd);
+            "", "group", "GPU Group Management [dcgmi group -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> fieldGroupArg(
-            "", "fieldgroup", "Field Group Management [dcgmi fieldgroup –h for more info]", false, "", "", cmd);
+            "", "fieldgroup", "Field Group Management [dcgmi fieldgroup -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> queryArg(
-            "", "discovery", "Discover GPUs on the system [dcgmi discovery –h for more info]", false, "", "", cmd);
+            "", "discovery", "Discover GPUs on the system [dcgmi discovery -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> introspectArg(
-            "", "introspect", "Gather info about DCGM itself [dcgmi introspect –h for more info]", false, "", "", cmd);
+            "", "introspect", "Gather info about DCGM itself [dcgmi introspect -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> nvlinkArg(
             "",
             "nvlink",
-            "Displays NvLink link statuses and error counts [dcgmi nvlink –h for more info]",
+            "Displays NvLink link statuses and error counts [dcgmi nvlink -h for more info]",
             false,
             "",
             "",
             cmd);
         TCLAP::ValueArg<std::string> dmonArg(
-            "", "dmon", "Stats Monitoring of GPUs [dcgmi dmon –h for more info]", false, "", "", cmd);
+            "", "dmon", "Stats Monitoring of GPUs [dcgmi dmon -h for more info]", false, "", "", cmd);
         TCLAP::ValueArg<std::string> moduleArg("", "modules", "Control and list DCGM modules", false, "", "", cmd);
         TCLAP::ValueArg<std::string> profileArg(
             "", "profile", "Control and list DCGM profiling metrics", false, "", "", cmd);
@@ -189,7 +341,7 @@ dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *
         TCLAP::ValueArg<std::string> mnDiagArg(
             "",
             "mndiag",
-            "Multi Node System Validation/Diagnostic [dcgmi mndiag –h for more info]",
+            "Multi Node System Validation/Diagnostic [dcgmi mndiag -h for more info]",
             false,
             "",
             "",
@@ -213,18 +365,17 @@ dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *
 
         if (versionArg.getValue())
         {
-            ProcessVersionInfoCommandLine(argc, argv);
-            return DCGM_ST_OK;
+            return ProcessVersionInfoCommandLine(argc, argv, dcgmOps);
         }
 
         // Validate CUDA_VISIBLE_DEVICES environment variable
-        ValidateEnvironmentInfo(argc, argv, "CUDA_VISIBLE_DEVICES");
+        ValidateEnvironmentInfo(argc, argv, "CUDA_VISIBLE_DEVICES", dcgmOps);
 
         // call the correct subsystem
         auto it = m_functionMap.find(subsystemArg.getValue());
         if (it != m_functionMap.end())
         {
-            result = std::invoke(m_functionMap[subsystemArg.getValue()], argc, argv);
+            result = std::invoke(m_functionMap[subsystemArg.getValue()], argc, argv, dcgmOps);
         }
         else
         {
@@ -251,7 +402,9 @@ dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *
 // the below subsystem processing commands assume two things
 // 1) that the calling structure is already in a try block
 // 2) that the argc and argv commands have not been modified
-dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc,
+                                                        char const *const *argv,
+                                                        DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "discovery";
@@ -324,35 +477,37 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
 
     if (getList.isSet())
     {
-        result = ExecuteCommand(QueryDeviceList(hostAddress.getValue(), allGpus.isSet()));
+        result = ExecuteCommand(QueryDeviceList(hostAddress.getValue(), allGpus.isSet(), dcgmOps));
     }
     else if (computeInstances.isSet())
     {
-        result = ExecuteCommand(QueryHierarchyInfo(hostAddress.getValue()));
+        result = ExecuteCommand(QueryHierarchyInfo(hostAddress.getValue(), dcgmOps));
     }
     else if (gpuId.isSet())
     {
-        result = ExecuteCommand(QueryDeviceInfo(hostAddress.getValue(), gpuId.getValue(), getInfo.getValue()));
+        result = ExecuteCommand(QueryDeviceInfo(hostAddress.getValue(), gpuId.getValue(), getInfo.getValue(), dcgmOps));
     }
     else if (groupId.isSet())
     {
         result = ExecuteCommand(
-            QueryGroupInfo(hostAddress.getValue(), groupId.getValue(), getInfo.getValue(), verbose.isSet()));
+            QueryGroupInfo(hostAddress.getValue(), groupId.getValue(), getInfo.getValue(), verbose.isSet(), dcgmOps));
     }
     else if (cpuId.isSet())
     {
-        result = ExecuteCommand(QueryCpuInfo(hostAddress.getValue(), cpuId.getValue(), getInfo.getValue()));
+        result = ExecuteCommand(QueryCpuInfo(hostAddress.getValue(), cpuId.getValue(), getInfo.getValue(), dcgmOps));
     }
     else if (getInfo.isSet())
     {
         result = ExecuteCommand(
-            QueryGroupInfo(hostAddress.getValue(), DCGM_GROUP_ALL_GPUS, getInfo.getValue(), verbose.isSet()));
+            QueryGroupInfo(hostAddress.getValue(), DCGM_GROUP_ALL_GPUS, getInfo.getValue(), verbose.isSet(), dcgmOps));
     }
 
     return result;
 }
 
-dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc,
+                                                         char const *const *argv,
+                                                         DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "policy";
@@ -365,17 +520,22 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
     // args are displayed in reverse order to this list
 
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN");
-    TCLAP::SwitchArg clearPolicy("", "clear", "Clear the current violation policy.", false);
-    TCLAP::SwitchArg getPolicy("", "get", "Get the current violation policy.", false);
+    TCLAP::SwitchArg clearPolicy("", "clear", "Deprecated: clear the legacy violation policy.", false);
+    TCLAP::SwitchArg getPolicy(
+        "",
+        "get",
+        "Deprecated without --field: get the legacy violation policy; use --field for field policies.",
+        false);
     TCLAP::SwitchArg regPolicy(
         "",
         "reg",
-        "Register this process for policy updates.  This process will sit in an infinite loop waiting for updates from the policy manager.",
+        "Deprecated: register this process for legacy policy updates. This process will sit in an infinite loop waiting "
+        "for updates from the policy manager.",
         false);
     TCLAP::ValueArg<std::string> setPolicyArg(
         "",
         "set",
-        "Set the current violation policy. Use csv action,validation (ie. 1,2)"
+        "Deprecated: set the legacy violation policy. Use csv action,validation (ie. 1,2)"
         "\n-----"
         "\nAction to take when any of the violations specified occur.\n 0 - None\n 1 - GPU Reset"
         "\n-----"
@@ -414,17 +574,56 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
     TCLAP::SwitchArg nvlinkError("n", "nvlinkerrors", "Add NVLink errors to the policy conditions.", cmd, false);
     TCLAP::SwitchArg xidError("x", "xiderrors", "Add XID errors to the policy conditions.", cmd, false);
     TCLAP::SwitchArg json("j", "json", "Print the output in a json format", cmd, false);
+    TCLAP::SwitchArg createFieldPolicy("", "create", "Create a field-based policy.", false);
+    TCLAP::SwitchArg listFieldPolicies("", "list", "List field-based policies.", false);
+    TCLAP::SwitchArg modifyFieldPolicy("", "modify", "Modify a field-based policy.", false);
+    TCLAP::SwitchArg deleteFieldPolicy("", "delete", "Delete a field-based policy.", false);
+    TCLAP::SwitchArg enableFieldPolicy("", "enable", "Enable a field-based policy.", false);
+    TCLAP::SwitchArg disableFieldPolicy("", "disable", "Disable a field-based policy.", false);
+    TCLAP::SwitchArg watchFieldPolicies("", "watch", "Display field-based policy violations.", false);
+    TCLAP::SwitchArg deleteAllFieldPolicies(
+        "", "all", "Apply the selected field-policy operation to all policies.", cmd, false);
+    TCLAP::SwitchArg disabledFieldPolicy("", "disabled", "Create the field-based policy disabled.", cmd, false);
+    TCLAP::SwitchArg watchOnce("", "once", "Fetch field-policy violations once and exit.", cmd, false);
+    TCLAP::ValueArg<std::string> importFieldPolicies(
+        "", "import", "Import field-based policies from YAML.", false, "", "path");
+    TCLAP::ValueArg<int> fieldPolicyFieldId(
+        "f", "field", "DCGM field ID for field-policy operations.", false, 0, "fieldId", cmd);
+    TCLAP::ValueArg<std::string> fieldPolicyId("", "policy-id", "Field-based policy ID.", false, "", "policyId", cmd);
+    TCLAP::ValueArg<std::string> fieldPolicyName("", "name", "Field-based policy name.", false, "", "name", cmd);
+    TCLAP::ValueArg<double> fieldPolicyThreshold(
+        "", "threshold", "Field-based policy threshold.", false, 0.0, "threshold", cmd);
+    TCLAP::ValueArg<std::string> fieldPolicyOperator(
+        "", "operator", "Field-based policy operator.", false, "", "operator", cmd);
+    TCLAP::ValueArg<std::string> fieldPolicyEntities(
+        "", "entities", "Comma-separated GPU entities or all.", false, "", "entities", cmd);
+    TCLAP::ValueArg<std::string> fieldPolicyChannels(
+        "", "channels", "Comma-separated channels: console,file,callback.", false, "console", "channels", cmd);
+    TCLAP::ValueArg<int> fieldPolicyRateLimit("", "rate-limit", "Rate limit in seconds.", false, 60, "seconds", cmd);
+    TCLAP::ValueArg<std::string> fieldPolicySince(
+        "", "since", "Return violations since this timestamp in usec.", false, "0", "timestamp", cmd);
+    TCLAP::ValueArg<int> fieldPolicyMaxViolations(
+        "", "max-violations", "Maximum violations to return.", false, DCGM_POLICY_MAX_VIOLATIONS, "count", cmd);
+    TCLAP::ValueArg<int> fieldPolicyWatchInterval(
+        "", "interval", "Watch interval in seconds.", false, 1, "seconds", cmd);
 
     std::vector<TCLAP::Arg *> xors;
     xors.push_back(&getPolicy);
     xors.push_back(&regPolicy);
     xors.push_back(&setPolicyArg);
     xors.push_back(&clearPolicy);
+    xors.push_back(&createFieldPolicy);
+    xors.push_back(&listFieldPolicies);
+    xors.push_back(&modifyFieldPolicy);
+    xors.push_back(&deleteFieldPolicy);
+    xors.push_back(&enableFieldPolicy);
+    xors.push_back(&disableFieldPolicy);
+    xors.push_back(&watchFieldPolicies);
+    xors.push_back(&importFieldPolicies);
     cmd.xorAdd(xors);
     cmd.add(&hostAddress);
 
-    helpOutput.addDescription(
-        "policy -- Used to control policies for groups of GPUs. Policies control actions which are triggered by specific events.");
+    helpOutput.addDescription("policy -- Manage field-based policies and deprecated legacy group violation policies.");
     helpOutput.addToGroup("1", &hostAddress);
     helpOutput.addToGroup("1", &groupId);
     helpOutput.addToGroup("1", &getPolicy);
@@ -445,6 +644,37 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
     helpOutput.addToGroup("3", &nvlinkError);
     helpOutput.addToGroup("3", &xidError);
 
+    // --clear has its own group: it only needs host and group, not the set condition flags.
+    helpOutput.addToGroup("5", &hostAddress);
+    helpOutput.addToGroup("5", &groupId);
+    helpOutput.addToGroup("5", &clearPolicy);
+
+    helpOutput.addToGroup("4", &hostAddress);
+    helpOutput.addToGroup("4", &getPolicy);
+    helpOutput.addToGroup("4", &json);
+    helpOutput.addToGroup("4", &createFieldPolicy);
+    helpOutput.addToGroup("4", &listFieldPolicies);
+    helpOutput.addToGroup("4", &modifyFieldPolicy);
+    helpOutput.addToGroup("4", &deleteFieldPolicy);
+    helpOutput.addToGroup("4", &enableFieldPolicy);
+    helpOutput.addToGroup("4", &disableFieldPolicy);
+    helpOutput.addToGroup("4", &watchFieldPolicies);
+    helpOutput.addToGroup("4", &importFieldPolicies);
+    helpOutput.addToGroup("4", &fieldPolicyFieldId);
+    helpOutput.addToGroup("4", &fieldPolicyId);
+    helpOutput.addToGroup("4", &fieldPolicyName);
+    helpOutput.addToGroup("4", &fieldPolicyThreshold);
+    helpOutput.addToGroup("4", &fieldPolicyOperator);
+    helpOutput.addToGroup("4", &fieldPolicyEntities);
+    helpOutput.addToGroup("4", &fieldPolicyChannels);
+    helpOutput.addToGroup("4", &fieldPolicyRateLimit);
+    helpOutput.addToGroup("4", &deleteAllFieldPolicies);
+    helpOutput.addToGroup("4", &disabledFieldPolicy);
+    helpOutput.addToGroup("4", &watchOnce);
+    helpOutput.addToGroup("4", &fieldPolicySince);
+    helpOutput.addToGroup("4", &fieldPolicyMaxViolations);
+    helpOutput.addToGroup("4", &fieldPolicyWatchInterval);
+
     cmd.parse(argc, argv);
 
     // Check for negative (invalid) inputs
@@ -452,6 +682,124 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(thermal, "maxtemp");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(power, "maxpower");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(groupId, "group");
+    CHECK_TCLAP_ARG_NEGATIVE_VALUE(fieldPolicyFieldId, "field");
+    CHECK_TCLAP_ARG_NEGATIVE_VALUE(fieldPolicyRateLimit, "rate-limit");
+    CHECK_TCLAP_ARG_NEGATIVE_VALUE(fieldPolicyMaxViolations, "max-violations");
+    CHECK_TCLAP_ARG_NEGATIVE_VALUE(fieldPolicyWatchInterval, "interval");
+
+    if (getPolicy.isSet() && fieldPolicyId.isSet() && !fieldPolicyFieldId.isSet())
+    {
+        throw TCLAP::CmdLineParseException("--get with --policy-id requires --field", "get");
+    }
+
+    bool const isFieldGet           = getPolicy.isSet() && fieldPolicyFieldId.isSet();
+    bool const hasFieldPolicyAction = createFieldPolicy.isSet() || listFieldPolicies.isSet()
+                                      || modifyFieldPolicy.isSet() || deleteFieldPolicy.isSet()
+                                      || enableFieldPolicy.isSet() || disableFieldPolicy.isSet()
+                                      || watchFieldPolicies.isSet() || importFieldPolicies.isSet() || isFieldGet;
+    if (hasFieldPolicyAction)
+    {
+        if (fieldPolicyFieldId.getValue() < 0
+            || fieldPolicyFieldId.getValue() > std::numeric_limits<unsigned short>::max())
+        {
+            throw TCLAP::CmdLineParseException("Field ID must fit in an unsigned short", "field");
+        }
+        if (fieldPolicyMaxViolations.getValue() == 0 || fieldPolicyWatchInterval.getValue() == 0)
+        {
+            throw TCLAP::CmdLineParseException("Maximum violations and interval must be greater than zero", "watch");
+        }
+
+        FieldPolicyOptions options;
+        options.hasFieldId       = fieldPolicyFieldId.isSet();
+        options.hasPolicyId      = fieldPolicyId.isSet();
+        options.hasName          = fieldPolicyName.isSet();
+        options.hasThreshold     = fieldPolicyThreshold.isSet();
+        options.hasOperator      = fieldPolicyOperator.isSet();
+        options.hasEntities      = fieldPolicyEntities.isSet();
+        options.hasChannels      = fieldPolicyChannels.isSet();
+        options.hasRateLimit     = fieldPolicyRateLimit.isSet();
+        options.fieldId          = static_cast<unsigned short>(fieldPolicyFieldId.getValue());
+        options.name             = fieldPolicyName.getValue();
+        options.threshold        = fieldPolicyThreshold.getValue();
+        options.enabled          = !disabledFieldPolicy.isSet();
+        options.rateLimitSec     = fieldPolicyRateLimit.getValue();
+        options.deleteAll        = deleteAllFieldPolicies.isSet();
+        options.watchOnce        = watchOnce.isSet();
+        options.maxViolations    = static_cast<unsigned int>(fieldPolicyMaxViolations.getValue());
+        options.watchIntervalSec = static_cast<unsigned int>(fieldPolicyWatchInterval.getValue());
+        try
+        {
+            options.sinceTimestamp = std::stoll(fieldPolicySince.getValue());
+            if (options.sinceTimestamp < 0)
+            {
+                throw std::out_of_range("negative timestamp");
+            }
+        }
+        catch (std::exception const &)
+        {
+            throw TCLAP::CmdLineParseException("Expected non-negative integer timestamp", "since");
+        }
+        if (options.hasPolicyId)
+            options.policyId = ParsePolicyId(fieldPolicyId.getValue());
+        if (options.hasOperator)
+            options.policyOperator = ParsePolicyOperator(fieldPolicyOperator.getValue());
+        if (options.hasEntities)
+            options.entities = ParsePolicyEntities(fieldPolicyEntities.getValue());
+        if (options.hasChannels)
+            options.channelMask = ParsePolicyChannels(fieldPolicyChannels.getValue());
+
+        if (createFieldPolicy.isSet())
+        {
+            options.action = FieldPolicyAction::Create;
+            if (!options.hasFieldId || !options.hasName || !options.hasOperator)
+            {
+                throw TCLAP::CmdLineParseException("--create requires --field, --name, and --operator", "create");
+            }
+            if (options.policyOperator != DCGM_POLICY_OP_CHANGED && !options.hasThreshold)
+            {
+                throw TCLAP::CmdLineParseException("--create requires --threshold except with --operator changed",
+                                                   "create");
+            }
+        }
+        else if (listFieldPolicies.isSet())
+            options.action = FieldPolicyAction::List;
+        else if (isFieldGet)
+            options.action = FieldPolicyAction::Get;
+        else if (modifyFieldPolicy.isSet())
+        {
+            options.action = FieldPolicyAction::Modify;
+            if (!options.hasFieldId || !options.hasPolicyId)
+            {
+                throw TCLAP::CmdLineParseException("--modify requires --field and --policy-id", "modify");
+            }
+            if (!(options.hasName || options.hasThreshold || options.hasOperator || options.hasEntities
+                  || options.hasChannels || options.hasRateLimit))
+            {
+                throw TCLAP::CmdLineParseException("No field-policy modifications specified", "modify");
+            }
+        }
+        else if (deleteFieldPolicy.isSet())
+        {
+            options.action = FieldPolicyAction::Delete;
+            if (!options.deleteAll && (!options.hasFieldId || !options.hasPolicyId))
+                throw TCLAP::CmdLineParseException("--delete requires --field and --policy-id unless --all is used",
+                                                   "delete");
+        }
+        else if (enableFieldPolicy.isSet() || disableFieldPolicy.isSet())
+        {
+            options.action = enableFieldPolicy.isSet() ? FieldPolicyAction::Enable : FieldPolicyAction::Disable;
+            if (!options.hasFieldId || !options.hasPolicyId)
+                throw TCLAP::CmdLineParseException("--enable/--disable requires --field and --policy-id", "policy-id");
+        }
+        else if (importFieldPolicies.isSet())
+        {
+            options.action     = FieldPolicyAction::Import;
+            options.importPath = importFieldPolicies.getValue();
+        }
+        else
+            options.action = FieldPolicyAction::Watch;
+        return ExecuteCommand(FieldPolicy(hostAddress.getValue(), std::move(options), json.getValue(), dcgmOps));
+    }
 
     if (setPolicyArg.isSet()
         && !(maxpages.isSet() || thermal.isSet() || power.isSet() || eccdbe.isSet() || pciError.isSet()
@@ -490,8 +838,8 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
 
     if (getPolicy.getValue())
     {
-        result
-            = ExecuteCommand(GetPolicy(hostAddress.getValue(), groupId.getValue(), verbose.isSet(), json.getValue()));
+        result = ExecuteCommand(
+            GetPolicy(hostAddress.getValue(), groupId.getValue(), verbose.isSet(), json.getValue(), dcgmOps));
     }
 
     int buffer = 0;
@@ -508,7 +856,7 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
         setPolicy.validation = DCGM_POLICY_VALID_NONE;
         setPolicy.response   = DCGM_POLICY_FAILURE_NONE; // ignored for now
 
-        result = ExecuteCommand(SetPolicy(hostAddress.getValue(), setPolicy, groupId.getValue()));
+        result = ExecuteCommand(SetPolicy(hostAddress.getValue(), setPolicy, groupId.getValue(), dcgmOps));
     }
     else if (setPolicyArg.isSet())
     {
@@ -566,7 +914,7 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
         setPol.validation = (dcgmPolicyValidation_t)(setPolicyArg.getValue().at(2) - '0');
         setPol.response   = DCGM_POLICY_FAILURE_NONE; // ignored for now
 
-        result = ExecuteCommand(SetPolicy(hostAddress.getValue(), setPol, groupId.getValue()));
+        result = ExecuteCommand(SetPolicy(hostAddress.getValue(), setPol, groupId.getValue(), dcgmOps));
     }
     else if (regPolicy.isSet())
     {
@@ -598,18 +946,20 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
         {
             buffer += DCGM_POLICY_COND_XID;
         }
-        result = ExecuteCommand(RegPolicy(hostAddress.getValue(), groupId.getValue(), buffer));
+        result = ExecuteCommand(RegPolicy(hostAddress.getValue(), groupId.getValue(), buffer, dcgmOps));
     }
 
     return result;
 }
 
-dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc,
+                                                        char const *const *argv,
+                                                        DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "group";
     DCGMOutput helpOutput;
-    Group groupObj;
+    Group groupObj(dcgmOps);
 
     DCGMSubsystemCmdLine cmd(
         std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
@@ -724,7 +1074,7 @@ dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *co
 
     if (listGroup.isSet())
     {
-        result = ExecuteCommand(GroupList(hostAddress.getValue(), json.getValue()));
+        result = ExecuteCommand(GroupList(hostAddress.getValue(), json.getValue(), dcgmOps));
     }
     else if (createGroup.isSet())
     {
@@ -746,12 +1096,12 @@ dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *co
         {
             groupType = DCGM_GROUP_DEFAULT_NVSWITCHES;
         }
-        result = ExecuteCommand(GroupCreate(hostAddress.getValue(), groupObj, groupType));
+        result = ExecuteCommand(GroupCreate(hostAddress.getValue(), groupObj, groupType, dcgmOps));
     }
     else if (deleteGroup.isSet())
     {
         groupObj.SetGroupId(deleteGroup.getValue());
-        result = ExecuteCommand(GroupDestroy(hostAddress.getValue(), groupObj));
+        result = ExecuteCommand(GroupDestroy(hostAddress.getValue(), groupObj, dcgmOps));
     }
     else if (groupId.isSet())
     {
@@ -759,29 +1109,31 @@ dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *co
 
         if (infoGroup.isSet())
         {
-            result = ExecuteCommand(GroupInfo(hostAddress.getValue(), groupObj, json.getValue()));
+            result = ExecuteCommand(GroupInfo(hostAddress.getValue(), groupObj, json.getValue(), dcgmOps));
         }
         else if (addDevice.isSet())
         {
             groupObj.SetGroupInfo(addDevice.getValue());
-            result = ExecuteCommand(GroupAddTo(hostAddress.getValue(), groupObj));
+            result = ExecuteCommand(GroupAddTo(hostAddress.getValue(), groupObj, dcgmOps));
         }
         else if (removeDevice.isSet())
         {
             groupObj.SetGroupInfo(removeDevice.getValue());
-            result = ExecuteCommand(GroupDeleteFrom(hostAddress.getValue(), groupObj));
+            result = ExecuteCommand(GroupDeleteFrom(hostAddress.getValue(), groupObj, dcgmOps));
         }
     }
 
     return result;
 }
 
-dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc,
+                                                             char const *const *argv,
+                                                             DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "fieldgroup";
     DCGMOutput helpOutput;
-    FieldGroup fieldGroupObj;
+    FieldGroup fieldGroupObj(dcgmOps);
 
     DCGMSubsystemCmdLine cmd(
         std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
@@ -856,7 +1208,7 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
     /* Decide on which command to run and do argument validation */
     if (listGroup.isSet())
     {
-        result = ExecuteCommand(FieldGroupListAll(hostAddress.getValue(), json.getValue()));
+        result = ExecuteCommand(FieldGroupListAll(hostAddress.getValue(), json.getValue(), dcgmOps));
     }
     else if (infoGroup.isSet())
     {
@@ -865,7 +1217,7 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
             throw TCLAP::CmdLineParseException("No fieldGroupId given (specify with --fieldgroup)", "info");
         }
 
-        result = ExecuteCommand(FieldGroupInfo(hostAddress.getValue(), fieldGroupObj, json.getValue()));
+        result = ExecuteCommand(FieldGroupInfo(hostAddress.getValue(), fieldGroupObj, json.getValue(), dcgmOps));
     }
     else if (createFieldGroup.isSet())
     {
@@ -874,7 +1226,7 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
             throw TCLAP::CmdLineParseException("No field IDs given (specify with --fieldids)", "create");
         }
 
-        result = ExecuteCommand(FieldGroupCreate(hostAddress.getValue(), fieldGroupObj));
+        result = ExecuteCommand(FieldGroupCreate(hostAddress.getValue(), fieldGroupObj, dcgmOps));
     }
     else if (deleteFieldGroup.isSet())
     {
@@ -883,7 +1235,7 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
             throw TCLAP::CmdLineParseException("No fieldGroupId given (specify with --fieldgroup)", "delete");
         }
 
-        result = ExecuteCommand(FieldGroupDestroy(hostAddress.getValue(), fieldGroupObj));
+        result = ExecuteCommand(FieldGroupDestroy(hostAddress.getValue(), fieldGroupObj, dcgmOps));
     }
     else
     {
@@ -934,12 +1286,14 @@ dcgmWorkloadPowerProfile_t CommandLineParser::HelperProcessWorkloadPowerProfileC
     return mWorkloadPowerProfile;
 }
 
-dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc,
+                                                         char const *const *argv,
+                                                         DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "config";
     DCGMOutput helpOutput;
-    Config configObj;
+    Config configObj(dcgmOps);
 
     DCGMSubsystemCmdLine cmd(
         std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
@@ -1127,7 +1481,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
             dcgmWorkloadPowerProfile_t mWorkloadPowerProfile = HelperProcessWorkloadPowerProfileCommandLine(
                 workloadPowerProfile.getValue(), workloadPowerProfileAction.getValue(), groupId.getValue());
             configObj.SetWorkloadPowerProfileArg(&mWorkloadPowerProfile);
-            result = ExecuteCommand(SetConfigWorkloadPowerProfile(hostAddress.getValue(), configObj));
+            result = ExecuteCommand(SetConfigWorkloadPowerProfile(hostAddress.getValue(), configObj, dcgmOps));
             if (result != DCGM_ST_OK)
             {
                 return result;
@@ -1136,7 +1490,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
 
         configObj.SetArgs(groupId.getValue(), &mDeviceConfig);
 
-        result = ExecuteCommand(SetConfig(hostAddress.getValue(), configObj));
+        result = ExecuteCommand(SetConfig(hostAddress.getValue(), configObj, dcgmOps));
     }
     else if (getConfig.isSet())
     {
@@ -1146,7 +1500,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
         }
 
         configObj.SetArgs(groupId.getValue(), 0);
-        result = ExecuteCommand(GetConfig(hostAddress.getValue(), configObj, verbose.isSet(), json.isSet()));
+        result = ExecuteCommand(GetConfig(hostAddress.getValue(), configObj, verbose.isSet(), json.isSet(), dcgmOps));
     }
     else if (enforceConfig.isSet())
     {
@@ -1156,7 +1510,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
         }
 
         configObj.SetArgs(groupId.getValue(), 0); // Set the required Args (groupId in this case)
-        result = ExecuteCommand(EnforceConfig { hostAddress.getValue(), configObj });
+        result = ExecuteCommand(EnforceConfig { hostAddress.getValue(), configObj, dcgmOps });
     }
 
     return result;
@@ -1212,7 +1566,9 @@ unsigned int CommandLineParser::CheckGroupIdArgument(const std::string &groupIdS
     return groupId;
 }
 
-dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc,
+                                                         char const *const *argv,
+                                                         DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "health";
@@ -1237,6 +1593,7 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
                                             "set",
                                             "Set the watches to be monitored. [default = pm]\n a - all watches"
                                             "\n d - driver watches"
+                                            "\n e - IMEX daemon/domain watches"
                                             "\n i - infoROM watches"
                                             "\n m - memory watches (*)"
                                             "\n n - NVLink watches (*)"
@@ -1293,12 +1650,12 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
     // Process Get Command
     if (getWatches.isSet())
     {
-        result = ExecuteCommand(GetHealth(hostAddress.getValue(), groupId, json.getValue()));
+        result = ExecuteCommand(GetHealth(hostAddress.getValue(), groupId, json.getValue(), dcgmOps));
     }
     else if (clearWatches.isSet())
     {
         result = ExecuteCommand(
-            SetHealth(hostAddress.getValue(), groupId, 0, updateInterval.getValue(), maxKeepAge.getValue()));
+            SetHealth(hostAddress.getValue(), groupId, 0, updateInterval.getValue(), maxKeepAge.getValue(), dcgmOps));
     }
     else if (setWatches.isSet())
     {
@@ -1338,6 +1695,10 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
                     bitwiseWatches |= DCGM_HEALTH_WATCH_DRIVER;
                     CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
                     break;
+                case 'e':
+                    bitwiseWatches |= DCGM_HEALTH_WATCH_IMEX;
+                    CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
+                    break;
                 case 't':
                     bitwiseWatches |= DCGM_HEALTH_WATCH_THERMAL;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_POWER;
@@ -1369,6 +1730,7 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
                     bitwiseWatches |= DCGM_HEALTH_WATCH_NVSWITCH_FATAL;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_DRIVER;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_CONNECTX;
+                    bitwiseWatches |= DCGM_HEALTH_WATCH_IMEX;
 
                     if (setWatches.getValue().length() > 1)
                     {
@@ -1387,12 +1749,16 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
             throw TCLAP::CmdLineParseException("No flags detected", "set");
         }
 
-        result = ExecuteCommand(SetHealth(
-            hostAddress.getValue(), groupId, bitwiseWatches, updateInterval.getValue(), maxKeepAge.getValue()));
+        result = ExecuteCommand(SetHealth(hostAddress.getValue(),
+                                          groupId,
+                                          bitwiseWatches,
+                                          updateInterval.getValue(),
+                                          maxKeepAge.getValue(),
+                                          dcgmOps));
     }
     else if (checkWatches.isSet())
     {
-        result = ExecuteCommand(CheckHealth(hostAddress.getValue(), groupId, json.getValue()));
+        result = ExecuteCommand(CheckHealth(hostAddress.getValue(), groupId, json.getValue(), dcgmOps));
     }
 
     return result;
@@ -1553,8 +1919,13 @@ std::string CommandLineParser::ConcatenateParameters(std::vector<std::string> co
 std::string CommandLineParser::ExpandRange(std::string const &range)
 {
     std::vector<unsigned int> indices;
-    dcgmReturn_t result = DcgmNs::ParseRangeString(range, indices);
+    dcgmReturn_t result = DcgmNs::ParseRangeString(range, indices, DCGM_MAX_NUM_DEVICES);
 
+    if (result == DCGM_ST_MAX_LIMIT)
+    {
+        throw TCLAP::CmdLineParseException(
+            fmt::format("range {} exceeds maximum of {} devices", range, DCGM_MAX_NUM_DEVICES));
+    }
     if (result != DCGM_ST_OK)
     {
         throw TCLAP::CmdLineParseException(fmt::format("invalid range format: {}", range));
@@ -1660,6 +2031,58 @@ void CommandLineParser::NormalizeIpAddress(std::string &hostname, std::string_vi
     }
 }
 
+std::vector<std::string> CommandLineParser::ReadHostFile(std::string const &path)
+{
+    std::ifstream file(path);
+    if (!file.is_open())
+    {
+        throw TCLAP::CmdLineParseException(fmt::format("Cannot open hostfile: {}", path), "hostfile");
+    }
+
+    std::string combinedHosts;
+    std::string line;
+    while (std::getline(file, line))
+    {
+        // Trim leading whitespace (including \r from Windows line endings)
+        auto start = line.find_first_not_of(" \t\r");
+        if (start == std::string::npos)
+        {
+            continue; // blank line
+        }
+        line = line.substr(start);
+
+        // Skip comment lines
+        if (line[0] == '#')
+        {
+            continue;
+        }
+
+        // Trim trailing whitespace
+        auto end = line.find_last_not_of(" \t\r\n");
+        if (end == std::string::npos)
+        {
+            continue; // line contains only whitespace characters
+        }
+        else
+        {
+            line = line.substr(0, end + 1);
+        }
+
+        if (!combinedHosts.empty())
+        {
+            combinedHosts += ';';
+        }
+        combinedHosts += line;
+    }
+
+    if (combinedHosts.empty())
+    {
+        throw TCLAP::CmdLineParseException("Hostfile is empty or contains only comments/blank lines", "hostfile");
+    }
+
+    return GetHostListVector(combinedHosts);
+}
+
 std::vector<std::string> CommandLineParser::GetHostListVector(std::string_view hostList)
 {
     if (hostList.empty())
@@ -1678,10 +2101,10 @@ std::vector<std::string> CommandLineParser::GetHostListVector(std::string_view h
     dcgmTokenizeString(std::string(hostList), ";", hosts);
 
     // Check if the number of hosts exceeds the maximum allowed
-    if (hosts.size() > DCGM_MAX_NUM_HOSTS)
+    if (hosts.size() > DCGM_MNDIAG_MAX_NUM_HOSTS)
     {
         throw TCLAP::CmdLineParseException(fmt::format(
-            "The number of hosts {} exceeds the maximum allowed {}", parsedHosts.size(), DCGM_MAX_NUM_HOSTS));
+            "The number of hosts {} exceeds the maximum allowed {}", hosts.size(), DCGM_MNDIAG_MAX_NUM_HOSTS));
     }
 
     for (auto const &host : hosts)
@@ -1819,7 +2242,7 @@ void CommandLineParser::CheckTestDurationAndTimeout(const std::string &parameter
 
 void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
                                                        char const *const *argv,
-                                                       dcgmRunMnDiag_v1 &drmnd,
+                                                       dcgmRunMnDiag_v2 &drmnd,
                                                        std::string &hostEngineAddressValue,
                                                        bool &hostAddressWasOverridden,
                                                        bool &jsonOutput)
@@ -1832,7 +2255,7 @@ void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
     cmd.setOutput(&helpOutput);
 
     // ------------------------------------------------------------
-    // Required arguments
+    // Host specification (one of --hostList or --hostfile is required)
 
     // Hostlist to run diagnostic on (test nodes)
     TCLAP::ValueArg<std::string> hostAddressListArg("",
@@ -1841,11 +2264,24 @@ void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
                                                     "\nExamples:"
                                                     "\n  host1;host2 (all GPUs on both hosts)"
                                                     "\n  host1:42000;host2 (specify port, default port used is 5555)"
-                                                    "\n  host1:unix:///path/to/socket (specify Unix socket path)",
-                                                    true,
+                                                    "\n  host1:unix:///path/to/socket (specify Unix socket path)"
+                                                    "\nMutually exclusive with --hostfile.",
+                                                    false,
                                                     "", // default value
                                                     "host1:42000;host2:unix:///path/to/socket",
                                                     cmd);
+
+    // Hostfile: file containing host entries, one per line (same format as --hostList entries)
+    TCLAP::ValueArg<std::string> hostFileArg("",
+                                             "hostfile",
+                                             "\nPath to a file containing host entries, one per line."
+                                             "\nEach line uses the same format as --hostList entries."
+                                             "\nBlank lines and lines starting with '#' are ignored."
+                                             "\nMutually exclusive with --hostList.",
+                                             false,
+                                             "",
+                                             "filepath",
+                                             cmd);
 
 
     // Optional
@@ -1865,9 +2301,11 @@ void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
                                              "Run multi-node diagnostic test(s)\n"
                                              "Available tests:\n"
                                              "  mnubergemm - Multi-node UBERGEMM test\n"
+                                             "  nvloom     - Multi-node NVLink fabric test\n"
+                                             "  mnnvbandwidth - Multi-node NVBandwidth test\n"
                                              "[default: mnubergemm]",
                                              false,
-                                             "mnubergemm", // default value
+                                             "mnubergemm",
                                              "testname",
                                              cmd);
 
@@ -1888,6 +2326,7 @@ void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
     helpOutput.addDescription("mndiag -- Used to run multi-node diagnostics across a cluster of nodes.");
     helpOutput.addToGroup("1", &startMnDiag);
     helpOutput.addToGroup("1", &hostAddressListArg);
+    helpOutput.addToGroup("1", &hostFileArg);
     helpOutput.addToGroup("1", &parametersArg);
     helpOutput.addToGroup("1", &json);
     helpOutput.addToGroup("1", &hostEngineAddress);
@@ -1899,9 +2338,20 @@ void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
     // Validate and process args
     std::string runValue = startMnDiag.getValue();
     std::transform(runValue.begin(), runValue.end(), runValue.begin(), ::tolower);
-    if (runValue != "mnubergemm")
+    if (runValue != "mnubergemm" && runValue != "nvloom" && runValue != "mnnvbandwidth")
     {
-        throw TCLAP::CmdLineParseException("Invalid test name. Only 'mnubergemm' is currently supported", "run");
+        throw TCLAP::CmdLineParseException(
+            "Invalid test name. Supported tests are 'mnubergemm', 'nvloom' and 'mnnvbandwidth'", "run");
+    }
+
+    // Validate mutual exclusivity of --hostList and --hostfile
+    if (hostAddressListArg.isSet() && hostFileArg.isSet())
+    {
+        throw TCLAP::CmdLineParseException("--hostList and --hostfile are mutually exclusive");
+    }
+    if (!hostAddressListArg.isSet() && !hostFileArg.isSet())
+    {
+        throw TCLAP::CmdLineParseException("Either --hostList or --hostfile must be specified");
     }
 
     // Hostlist
@@ -1910,13 +2360,23 @@ void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
     {
         std::string hostList = hostAddressListArg.getValue();
 
-        // Check if list is empty
         if (hostList.empty())
         {
             throw TCLAP::CmdLineParseException("Host list cannot be empty");
         }
 
         hostListVector = GetHostListVector(hostList);
+    }
+    else if (hostFileArg.isSet())
+    {
+        std::string hostFilePath = hostFileArg.getValue();
+
+        if (hostFilePath.empty())
+        {
+            throw TCLAP::CmdLineParseException("Hostfile path cannot be empty", "hostfile");
+        }
+
+        hostListVector = ReadHostFile(hostFilePath);
     }
 
     // Parameters
@@ -1935,6 +2395,7 @@ void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
         }
     }
     ValidateParameters(concatenatedParams);
+    ValidateMnDiagParameterPrefixes(concatenatedParams, runValue);
 
     // Check for invalid head node address
     if (hostEngineAddress.isSet() && hostEngineAddress.getValue().empty())
@@ -1948,30 +2409,32 @@ void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
     jsonOutput               = json.getValue();
 
     // Initialize with default
-    drmnd.version = dcgmRunMnDiag_version1;
+    drmnd.version = dcgmRunMnDiag_version2;
 
-    dcgm_mn_diag_common_populate_run_mndiag(drmnd, hostListVector, concatenatedParams, runValue);
+    PopulateRunMnDiag(drmnd, hostListVector, concatenatedParams, runValue);
 }
 
-dcgmReturn_t CommandLineParser::ProcessMnDiagCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessMnDiagCommandLine(int argc,
+                                                         char const *const *argv,
+                                                         DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
-    dcgmRunMnDiag_v1 drmnd = {};
+    auto drmnd = std::make_unique<dcgmRunMnDiag_v2>();
     std::string hostEngineAddressValue;
     bool hostAddressWasOverridden;
     bool jsonOutput;
 
-    ProcessAndValidateMnDiagParams(argc, argv, drmnd, hostEngineAddressValue, hostAddressWasOverridden, jsonOutput);
+    ProcessAndValidateMnDiagParams(argc, argv, *drmnd, hostEngineAddressValue, hostAddressWasOverridden, jsonOutput);
 
-    return ExecuteCommand(StartMnDiag(hostEngineAddressValue, hostAddressWasOverridden, drmnd, jsonOutput));
+    return ExecuteCommand(StartMnDiag(hostEngineAddressValue, *drmnd, jsonOutput, dcgmOps));
 }
 
-dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     // Check for stop diag request
     char const *value = std::getenv(STOP_DIAG_ENV_VARIABLE_NAME);
     if (value != nullptr)
     {
-        AbortDiag abortDiag = AbortDiag(std::string(value));
+        AbortDiag abortDiag = AbortDiag(std::string(value), dcgmOps);
         return ExecuteCommand(abortDiag);
     }
 
@@ -2314,7 +2777,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     ValidateParameters(concatenatedParams);
 
     // Check if DCGM_DIAG_REMOVED environment variable is set
-    EnvironmentInfo envInfo = EnvironmentInfo(hostAddress.getValue(), "DCGM_DIAG_REMOVED");
+    EnvironmentInfo envInfo = EnvironmentInfo(hostAddress.getValue(), "DCGM_DIAG_REMOVED", dcgmOps);
     envInfo.CheckDiagEnabledEnvVar();
 
     dcgmRunDiag_v10 drd = {};
@@ -2367,10 +2830,13 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                       config.getValue(),
                                       json.getValue(),
                                       drd,
-                                      iterations.getValue() });
+                                      iterations.getValue(),
+                                      dcgmOps });
 }
 
-dcgmReturn_t CommandLineParser::ProcessStatsCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessStatsCommandLine(int argc,
+                                                        char const *const *argv,
+                                                        DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "stats";
@@ -2509,42 +2975,42 @@ dcgmReturn_t CommandLineParser::ProcessStatsCommandLine(int argc, char const *co
     if (enableWatches.isSet())
     {
         result = ExecuteCommand(EnableWatches(
-            hostAddress.getValue(), groupId.getValue(), updateInterval.getValue(), maxKeepAge.getValue()));
+            hostAddress.getValue(), groupId.getValue(), updateInterval.getValue(), maxKeepAge.getValue(), dcgmOps));
     }
     else if (disableWatches.isSet())
     {
-        result = ExecuteCommand(DisableWatches(hostAddress.getValue(), groupId.getValue()));
+        result = ExecuteCommand(DisableWatches(hostAddress.getValue(), groupId.getValue(), dcgmOps));
     }
     else if (pid.isSet())
     {
         result = ExecuteCommand(
-            ViewProcessStats(hostAddress.getValue(), groupId.getValue(), pid.getValue(), verbose.getValue()));
+            ViewProcessStats(hostAddress.getValue(), groupId.getValue(), pid.getValue(), verbose.getValue(), dcgmOps));
     }
     else if (jobStart.isSet())
     {
-        result = ExecuteCommand(StartJob(hostAddress.getValue(), groupId.getValue(), jobStart.getValue()));
+        result = ExecuteCommand(StartJob(hostAddress.getValue(), groupId.getValue(), jobStart.getValue(), dcgmOps));
     }
     else if (jobStop.isSet())
     {
-        result = ExecuteCommand(StopJob(hostAddress.getValue(), jobStop.getValue()));
+        result = ExecuteCommand(StopJob(hostAddress.getValue(), jobStop.getValue(), dcgmOps));
     }
     else if (jobStats.isSet())
     {
-        result = ExecuteCommand(ViewJobStats(hostAddress.getValue(), jobStats.getValue(), verbose.getValue()));
+        result = ExecuteCommand(ViewJobStats(hostAddress.getValue(), jobStats.getValue(), verbose.getValue(), dcgmOps));
     }
     else if (jobRemove.isSet())
     {
-        result = ExecuteCommand(RemoveJob(hostAddress.getValue(), jobRemove.getValue()));
+        result = ExecuteCommand(RemoveJob(hostAddress.getValue(), jobRemove.getValue(), dcgmOps));
     }
     else if (jobRemoveAll.isSet())
     {
-        result = ExecuteCommand(RemoveAllJobs(hostAddress.getValue()));
+        result = ExecuteCommand(RemoveAllJobs(hostAddress.getValue(), dcgmOps));
     }
 
     return result;
 }
 
-dcgmReturn_t CommandLineParser::ProcessTopoCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessTopoCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "topo";
@@ -2584,17 +3050,19 @@ dcgmReturn_t CommandLineParser::ProcessTopoCommandLine(int argc, char const *con
 
     if (gpuId.isSet())
     {
-        result = ExecuteCommand(GetGPUTopo(hostAddress.getValue(), gpuId.getValue(), json.getValue()));
+        result = ExecuteCommand(GetGPUTopo(hostAddress.getValue(), gpuId.getValue(), json.getValue(), dcgmOps));
     }
     else
     {
-        result = ExecuteCommand(GetGroupTopo(hostAddress.getValue(), groupId.getValue(), json.getValue()));
+        result = ExecuteCommand(GetGroupTopo(hostAddress.getValue(), groupId.getValue(), json.getValue(), dcgmOps));
     }
 
     return result;
 }
 
-dcgmReturn_t CommandLineParser::ProcessIntrospectCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessIntrospectCommandLine(int argc,
+                                                             char const *const *argv,
+                                                             DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "introspect";
@@ -2639,13 +3107,15 @@ dcgmReturn_t CommandLineParser::ProcessIntrospectCommandLine(int argc, char cons
                                                "See \"dcgmi introspect --help\"");
         }
 
-        result = ExecuteCommand(DisplayIntrospectSummary(hostAddress.getValue(), hostengineTarget.getValue()));
+        result = ExecuteCommand(DisplayIntrospectSummary(hostAddress.getValue(), hostengineTarget.getValue(), dcgmOps));
     }
 
     return result;
 }
 
-dcgmReturn_t CommandLineParser::ProcessNvlinkCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessNvlinkCommandLine(int argc,
+                                                         char const *const *argv,
+                                                         DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_NOT_CONFIGURED;
     std::string myName  = "nvlink";
@@ -2707,17 +3177,18 @@ dcgmReturn_t CommandLineParser::ProcessNvlinkCommandLine(int argc, char const *c
             throw TCLAP::CmdLineParseException("--show-entity-ids is only supported with -s (link-status)");
         }
 
-        result = ExecuteCommand(GetGpuNvlinkErrorCounts(hostAddress.getValue(), gpuId.getValue(), json.getValue()));
+        result = ExecuteCommand(
+            GetGpuNvlinkErrorCounts(hostAddress.getValue(), gpuId.getValue(), json.getValue(), dcgmOps));
     }
     else if (printLinkStatus.isSet())
     {
-        result = ExecuteCommand(GetNvLinkLinkStatuses(hostAddress.getValue(), showEntityIds.getValue()));
+        result = ExecuteCommand(GetNvLinkLinkStatuses(hostAddress.getValue(), showEntityIds.getValue(), dcgmOps));
     }
 
     return result;
 }
 
-dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     static const std::string myName = "dmon";
     DCGMOutput helpOutput;
@@ -2809,7 +3280,8 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
                                             fieldGroupId.getValue(),
                                             std::chrono::milliseconds(delay.getValue()),
                                             count.getValue(),
-                                            true));
+                                            true,
+                                            dcgmOps));
     }
 
     // Check for negative + invalid inputs
@@ -2831,10 +3303,13 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
                                         fieldGroupId.getValue(),
                                         std::chrono::milliseconds(delay.getValue()),
                                         count.getValue(),
-                                        false));
+                                        false,
+                                        dcgmOps));
 }
 
-dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc,
+                                                          char const *const *argv,
+                                                          DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     const std::string myName = "profile";
     dcgmReturn_t result      = DCGM_ST_OK;
@@ -2866,7 +3341,7 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
     /* A list of entities or a groupId could be provided. Otherwise, we assume all GPUs are desired */
     TCLAP::ValueArg<std::string> entityIds("i",
                                            "entity-id",
-                                           " Comma-seperated list of entity IDs to query. "
+                                           " Comma-separated list of entity IDs to query. "
                                            "Default is supported GPUs on the system. Run dcgmi discovery "
                                            "-l to check list of GPUs available",
                                            false,
@@ -2895,16 +3370,16 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
 
     if (pauseArg.isSet())
     {
-        result = ExecuteCommand(DcgmiProfileSetPause(hostAddress.getValue(), true));
+        result = ExecuteCommand(DcgmiProfileSetPause(hostAddress.getValue(), true, dcgmOps));
     }
     else if (resumeArg.isSet())
     {
-        result = ExecuteCommand(DcgmiProfileSetPause(hostAddress.getValue(), false));
+        result = ExecuteCommand(DcgmiProfileSetPause(hostAddress.getValue(), false, dcgmOps));
     }
     else if (list.isSet())
     {
-        result = ExecuteCommand(
-            DcgmiProfileList(hostAddress.getValue(), std::move(entityIdsStr), groupId.getValue(), json.getValue()));
+        result = ExecuteCommand(DcgmiProfileList(
+            hostAddress.getValue(), std::move(entityIdsStr), groupId.getValue(), json.getValue(), dcgmOps));
     }
     else
     {
@@ -2914,7 +3389,9 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
     return result;
 }
 
-dcgmReturn_t CommandLineParser::ProcessVersionInfoCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessVersionInfoCommandLine(int argc,
+                                                              char const *const *argv,
+                                                              DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     const std::string myName = "version";
     DCGMOutput helpOutput;
@@ -2927,10 +3404,12 @@ dcgmReturn_t CommandLineParser::ProcessVersionInfoCommandLine(int argc, char con
 
     cmd.parse(argc, argv);
 
-    return ExecuteCommand(VersionInfo(hostAddress.getValue()));
+    return ExecuteCommand(VersionInfo(hostAddress.getValue(), dcgmOps));
 }
 
-dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc,
+                                                           char const *const *argv,
+                                                           DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     const std::string myName = "set";
     DCGMOutput helpOutput;
@@ -2972,7 +3451,7 @@ dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const 
     if (targetSeverity.isSet())
     {
         return ExecuteCommand(DcgmiSettingsSetLoggingSeverity(
-            hostAddress.getValue(), targetLogger.getValue(), targetSeverity.getValue(), json.getValue()));
+            hostAddress.getValue(), targetLogger.getValue(), targetSeverity.getValue(), json.getValue(), dcgmOps));
     }
 
     if (attachDriver.isSet() && detachDriver.isSet())
@@ -2983,14 +3462,16 @@ dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const 
 
     if (attachDriver.isSet() || detachDriver.isSet())
     {
-        return ExecuteCommand(DcgmiSettingsAttachDetachDriver(hostAddress.getValue(), attachDriver.isSet()));
+        return ExecuteCommand(DcgmiSettingsAttachDetachDriver(hostAddress.getValue(), attachDriver.isSet(), dcgmOps));
     }
 
     throw TCLAP::CmdLineParseException(
         "Invalid argument provided for configuring hostengine, please refer to the help (dcgmi set --help)");
 }
 
-dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc,
+                                                         char const *const *argv,
+                                                         DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     const std::string myName = "modules";
     dcgmReturn_t result      = DCGM_ST_OK;
@@ -3016,18 +3497,21 @@ dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc, char const *c
 
     if (list.isSet())
     {
-        result = ExecuteCommand(ListModule { hostAddress.getValue(), json.getValue() });
+        result = ExecuteCommand(ListModule { hostAddress.getValue(), json.getValue(), dcgmOps });
     }
     else if (denylist.isSet())
     {
-        result = ExecuteCommand(DenylistModule { hostAddress.getValue(), denylist.getValue(), json.getValue() });
+        result
+            = ExecuteCommand(DenylistModule { hostAddress.getValue(), denylist.getValue(), json.getValue(), dcgmOps });
     }
     // No else clause since xors ensures one of list or denylist is always set
 
     return result;
 }
 
-dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *const *argv)
+dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc,
+                                                        char const *const *argv,
+                                                        DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "test";
@@ -3094,11 +3578,11 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
 
     if (pause.isSet())
     {
-        return ExecuteCommand(ModulesPauseResume(hostAddress.getValue(), true));
+        return ExecuteCommand(ModulesPauseResume(hostAddress.getValue(), true, dcgmOps));
     }
     if (resume.isSet())
     {
-        return ExecuteCommand(ModulesPauseResume(hostAddress.getValue(), false));
+        return ExecuteCommand(ModulesPauseResume(hostAddress.getValue(), false, dcgmOps));
     }
 
     if (gpuId.isSet() && groupId.isSet())
@@ -3114,7 +3598,8 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     if (introspect.isSet())
     {
         unsigned int gId = groupId.isSet() ? groupId.getValue() : gpuId.getValue();
-        result = ExecuteCommand(IntrospectCache(hostAddress.getValue(), gId, fieldId.getValue(), groupId.isSet()));
+        result           = ExecuteCommand(
+            IntrospectCache(hostAddress.getValue(), gId, fieldId.getValue(), groupId.isSet(), dcgmOps));
     }
     else if (inject.isSet())
     {
@@ -3128,14 +3613,21 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
             throw TCLAP::CmdLineParseException("The -v/--value argument is required for --inject");
         }
 
-        result = ExecuteCommand(InjectCache(
-            hostAddress.getValue(), gpuId.getValue(), fieldId.getValue(), timeVal.getValue(), injectValue.getValue()));
+        result = ExecuteCommand(InjectCache(hostAddress.getValue(),
+                                            gpuId.getValue(),
+                                            fieldId.getValue(),
+                                            timeVal.getValue(),
+                                            injectValue.getValue(),
+                                            dcgmOps));
     }
 
     return result;
 }
 
-void CommandLineParser::ValidateEnvironmentInfo(int argc, char const *const *argv, std::string const &envVarName)
+void CommandLineParser::ValidateEnvironmentInfo(int argc,
+                                                char const *const *argv,
+                                                std::string const &envVarName,
+                                                DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
     std::string host = "localhost";
 
@@ -3162,7 +3654,6 @@ void CommandLineParser::ValidateEnvironmentInfo(int argc, char const *const *arg
     {
         log_error("Failed to parse host argument. Using default host: localhost");
     }
-
-    EnvironmentInfo envInfo = EnvironmentInfo(host, envVarName);
+    EnvironmentInfo envInfo = EnvironmentInfo(host, envVarName, dcgmOps);
     envInfo.ValidateEnvVarValue();
 }

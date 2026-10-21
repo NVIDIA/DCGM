@@ -22,10 +22,18 @@
 
 #define ERR_BUF_SIZE 2048
 
-Brokenp2p::Brokenp2p(BusGrind *bg, std::vector<PluginDevice *> &gpus, size_t size)
+Brokenp2p::Brokenp2p(BusGrind *bg,
+                     std::vector<PluginDevice *> &gpus,
+                     size_t size,
+                     DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                     dcgmHandle_t handle,
+                     CudaOpsAnyPtr cudaOps)
     : m_bg(bg)
     , m_gpus(gpus)
     , m_size(size)
+    , m_dcgmOps(dcgmOps)
+    , m_handle(handle)
+    , m_cudaOps(cudaOps)
     , m_func(nullptr)
 {
     if (bg == nullptr)
@@ -34,24 +42,25 @@ Brokenp2p::Brokenp2p(BusGrind *bg, std::vector<PluginDevice *> &gpus, size_t siz
     }
 }
 
-#define CHECKRT(call)                                                                                                 \
-    do                                                                                                                \
-    {                                                                                                                 \
-        cudaError_t _status = call;                                                                                   \
-        if (_status != cudaSuccess)                                                                                   \
-        {                                                                                                             \
-            errStr = fmt::format("Error on line {} {} {}: {}", __FILE__, __LINE__, #call, cudaGetErrorName(_status)); \
-            passed = false;                                                                                           \
-            goto cleanup;                                                                                             \
-        }                                                                                                             \
+#define CHECKRT(call)                                                                                           \
+    do                                                                                                          \
+    {                                                                                                           \
+        cudaError_t _status = call;                                                                             \
+        if (_status != cudaSuccess)                                                                             \
+        {                                                                                                       \
+            errStr = fmt::format(                                                                               \
+                "Error on line {} {} {}: {}", __FILE__, __LINE__, #call, m_cudaOps->cudaGetErrorName(_status)); \
+            passed = false;                                                                                     \
+            goto cleanup;                                                                                       \
+        }                                                                                                       \
     } while (0)
 
 void Brokenp2p::ResetCudaDevices(int cudaId1, int cudaId2)
 {
-    cudaSetDevice(cudaId1);
-    cudaDeviceReset();
-    cudaSetDevice(cudaId2);
-    cudaDeviceReset();
+    m_cudaOps->cudaSetDevice(cudaId1);
+    m_cudaOps->cudaDeviceReset();
+    m_cudaOps->cudaSetDevice(cudaId2);
+    m_cudaOps->cudaDeviceReset();
 }
 
 bool Brokenp2p::PerformP2PWrite(void *bufferd1,
@@ -63,35 +72,38 @@ bool Brokenp2p::PerformP2PWrite(void *bufferd1,
                                 size_t size,
                                 std::string &errStr)
 {
-    cudaError_t status = cudaMemcpyPeer(bufferd1, cudaId1, bufferd2, cudaId2, size);
-    if (status != cudaSuccess)
-    {
-        errStr = fmt::format("Failed on cudaMemcpyPeer when copying {} bytes: {}", size, cudaGetErrorName(status));
-        return false;
-    }
-
-    status = cudaDeviceSynchronize();
+    cudaError_t status = m_cudaOps->cudaMemcpyPeer(bufferd1, cudaId1, bufferd2, cudaId2, size);
     if (status != cudaSuccess)
     {
         errStr = fmt::format(
-            "Failed on cudaDeviceSynchronize after cudaMemcpyPeer ({} bytes): {}", size, cudaGetErrorName(status));
+            "Failed on cudaMemcpyPeer when copying {} bytes: {}", size, m_cudaOps->cudaGetErrorName(status));
         return false;
     }
 
-    status = cudaMemcpy(hostBuf, bufferd1, size, cudaMemcpyDefault);
+    status = m_cudaOps->cudaDeviceSynchronize();
+    if (status != cudaSuccess)
+    {
+        errStr = fmt::format("Failed on cudaDeviceSynchronize after cudaMemcpyPeer ({} bytes): {}",
+                             size,
+                             m_cudaOps->cudaGetErrorName(status));
+        return false;
+    }
+
+    status = m_cudaOps->cudaMemcpy(hostBuf, bufferd1, size, cudaMemcpyDefault);
     if (status != cudaSuccess)
     {
         errStr = fmt::format("Failed on cudaMemcpy when reading {} bytes to host (cudaMemcpyDefault): {}",
                              size,
-                             cudaGetErrorName(status));
+                             m_cudaOps->cudaGetErrorName(status));
         return false;
     }
 
-    status = cudaDeviceSynchronize();
+    status = m_cudaOps->cudaDeviceSynchronize();
     if (status != cudaSuccess)
     {
-        errStr = fmt::format(
-            "Failed on cudaDeviceSynchronize after cudaMemcpy ({} bytes): {}", size, cudaGetErrorName(status));
+        errStr = fmt::format("Failed on cudaDeviceSynchronize after cudaMemcpy ({} bytes): {}",
+                             size,
+                             m_cudaOps->cudaGetErrorName(status));
         return false;
     }
 
@@ -105,8 +117,8 @@ bool Brokenp2p::PerformP2PWrite(void *bufferd1,
 
 bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errStr)
 {
-    cudaSetDevice(cudaId1);
-    cudaError_t status = cudaDeviceEnablePeerAccess(cudaId2, 0);
+    m_cudaOps->cudaSetDevice(cudaId1);
+    cudaError_t status = m_cudaOps->cudaDeviceEnablePeerAccess(cudaId2, 0);
     if (status != cudaSuccess)
     {
         // Peer access isn't possible - skip testing these two GPUs
@@ -116,8 +128,8 @@ bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errStr
                  cudaId2);
         return true;
     }
-    cudaSetDevice(cudaId2);
-    status = cudaDeviceEnablePeerAccess(cudaId1, 0);
+    m_cudaOps->cudaSetDevice(cudaId2);
+    status = m_cudaOps->cudaDeviceEnablePeerAccess(cudaId1, 0);
     if (status != cudaSuccess)
     {
         // Peer access isn't possible - skip testing these two GPUs
@@ -127,7 +139,7 @@ bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errStr
                  cudaId1);
         return true;
     }
-    cudaSetDevice(cudaId1);
+    m_cudaOps->cudaSetDevice(cudaId1);
 
     bool passed = true;
 
@@ -139,20 +151,20 @@ bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errStr
     size_t stride      = 64 * 1024 / sizeof(int);
     size_t offset_size = m_size / sizeof(int);
 
-    CHECKRT(cudaMalloc((void **)&bufferd1, m_size));
-    CHECKRT(cudaMemset(bufferd1, -1, m_size));
-    CHECKRT(cudaDeviceSynchronize());
+    CHECKRT(m_cudaOps->cudaMalloc(reinterpret_cast<void **>(&bufferd1), m_size));
+    CHECKRT(m_cudaOps->cudaMemset(bufferd1, -1, m_size));
+    CHECKRT(m_cudaOps->cudaDeviceSynchronize());
 
     // Initialize device 2's buffer
-    cudaSetDevice(cudaId2);
-    CHECKRT(cudaMalloc((void **)&bufferd2, m_size));
+    m_cudaOps->cudaSetDevice(cudaId2);
+    CHECKRT(m_cudaOps->cudaMalloc(reinterpret_cast<void **>(&bufferd2), m_size));
 
     for (size_t offset = 0; offset < offset_size; offset += stride)
     {
         hostBufferSrc[offset] = offset * 4;
     }
-    cudaMemcpy(bufferd2, hostBufferSrc, m_size, cudaMemcpyDefault);
-    CHECKRT(cudaDeviceSynchronize());
+    m_cudaOps->cudaMemcpy(bufferd2, hostBufferSrc, m_size, cudaMemcpyDefault);
+    CHECKRT(m_cudaOps->cudaDeviceSynchronize());
 
     // Perform a small write from device 2 to device 1.
     static const int EIGHT_BYTES = 8;
@@ -173,19 +185,20 @@ bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errStr
     ResetCudaDevices(cudaId1, cudaId2);
 
 cleanup:
-    cudaFree(bufferd1);
-    cudaFree(bufferd2);
+    m_cudaOps->cudaFree(bufferd1);
+    m_cudaOps->cudaFree(bufferd2);
     free(hostBufferSrc);
     free(hostBufferDst);
 
     return passed;
 }
 
-void GetP2PError(BusGrind *const bg,
-                 timelib64_t const &startTime,
+void GetP2PError(timelib64_t const &startTime,
                  unsigned int const &gpuId,
                  dcgmError_t &memoryError,
-                 dcgmError_t &writerError)
+                 dcgmError_t &writerError,
+                 DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                 dcgmHandle_t handle)
 {
     auto fieldId                                 = DCGM_FI_PROF_NVLINK_TX_BYTES;
     dcgmFieldSummaryRequest_t nvlinkFieldRequest = { .version         = dcgmFieldSummaryRequest_version1,
@@ -205,7 +218,7 @@ void GetP2PError(BusGrind *const bg,
     P2pLink p2pLink = P2pLink::Pcie;
 
     DCGM_LOG_DEBUG << "Requesting field summary max for field " << fieldId << " from start time " << startTime;
-    dcgmReturn_t dcgmRet = dcgmGetFieldSummary(bg->GetHandle(), &nvlinkFieldRequest);
+    dcgmReturn_t dcgmRet = dcgmOps->dcgmGetFieldSummary(handle, &nvlinkFieldRequest);
     if (dcgmRet == DCGM_ST_NOT_WATCHED)
     {
         log_debug("Field {} is not watched; cannot determine link type", fieldId);
@@ -275,7 +288,7 @@ nvvsPluginResult_t Brokenp2p::RunTest()
             if (!passed)
             {
                 dcgmError_t memoryError, writerError;
-                GetP2PError(m_bg, startTime, m_gpus[d2]->gpuId, memoryError, writerError);
+                GetP2PError(startTime, m_gpus[d2]->gpuId, memoryError, writerError, m_dcgmOps, m_handle);
 
                 log_debug("Memory device {} and p2p writer device {} failed: \"{}\"",
                           m_gpus[d1]->gpuId,

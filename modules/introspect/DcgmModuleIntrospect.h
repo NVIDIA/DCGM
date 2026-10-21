@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,27 @@ class DcgmModuleIntrospect
 public:
     /*************************************************************************/
     /* Constructor/Destructor */
+    /**
+     * Constructor.
+     *
+     * @param[in] coreCallbacks non-owning callbacks used to communicate with core. Must outlive the module.
+     */
     DcgmModuleIntrospect(dcgmCoreCallbacks_t &coreCallbacks);
+
+    /**
+     * Constructor with metadata manager injection for tests.
+     *
+     * Ownership of `metadataManager` is transferred to the module. If null, the constructor creates the default
+     * `DcgmMetadataManager`.
+     *
+     * @param[in] coreCallbacks non-owning callbacks used to communicate with core. Must outlive the module.
+     * @param[in] metadataManager metadata provider used by hostengine metadata requests.
+     */
+    DcgmModuleIntrospect(dcgmCoreCallbacks_t &coreCallbacks, std::unique_ptr<DcgmMetadataManager> metadataManager);
+
+    /**
+     * Destructor.
+     */
     ~DcgmModuleIntrospect() override;
 
     /*************************************************************************/
@@ -44,11 +64,25 @@ public:
      */
     dcgmReturn_t ProcessMessage(dcgm_module_command_header_t *moduleCommand) override;
 
+    /**
+     * Run queued module tasks until stop is requested.
+     *
+     * Called by the module task-runner thread after construction. This method is not intended to be called directly by
+     * callers and exits when stop is requested or task-runner processing fails.
+     */
     void run() override;
 
     /*************************************************************************/
 private:
     static const unsigned int DEFAULT_RUN_INTERVAL_MS;
+
+    /**
+     * Initialize task-runner state shared by constructors.
+     *
+     * Must be called after `mpMetadataManager` is initialized and before request processing. Starts the module task
+     * runner; callers should not invoke it more than once per object.
+     */
+    void Init();
 
     /*************************************************************************/
     /* Request Processing helper methods */

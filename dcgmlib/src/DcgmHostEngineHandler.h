@@ -21,6 +21,7 @@
 #define DCGMHOSTENGINEHANDLER_H
 
 #include "DcgmCacheManager.h"
+#include "DcgmCacheManagerAnyUniquePtr.hpp"
 #include "DcgmChildProcessManager.hpp"
 #include "DcgmCoreCommunication.h"
 #include "DcgmFieldGroup.h"
@@ -36,6 +37,8 @@
 #include <HangDetectMonitor.h>
 #include <core/DcgmModuleCore.h>
 #include <dcgm_core_communication.h>
+#include <memory>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -75,7 +78,7 @@ public:
 
     void run() override;
 
-    void SetCacheManager(DcgmCacheManager *cacheManager);
+    void SetCacheManager(DcgmCacheManagerAnyUniquePtr *cacheManager);
 
     void SetGroupManager(DcgmGroupManager *groupManager);
 
@@ -90,7 +93,7 @@ private:
     dcgmReturn_t AttachDriverImpl();
     dcgmReturn_t DetachDriverImpl();
 
-    DcgmCacheManager *m_cacheManager { nullptr };
+    DcgmCacheManagerAnyUniquePtr *m_cacheManager { nullptr };
     DcgmGroupManager *m_groupManager { nullptr };
     bool m_nvmlInitialized { false };
     bool m_threadReadyToGo { false };
@@ -169,10 +172,10 @@ public:
 
     /*****************************************************************************
      This method retrieves the instance of the current cache manager
-     *****************************************************************************/
-    DcgmCacheManager *GetCacheManager()
+    *****************************************************************************/
+    DcgmCacheManagerAnyUniquePtr *GetCacheManager()
     {
-        return mpCacheManager;
+        return &mpCacheManager;
     }
 
     /*****************************************************************************
@@ -193,7 +196,7 @@ public:
 
     /*****************************************************************************/
     dcgmReturn_t ProcessModuleCommandMsg(dcgm_connection_id_t connectionId, std::unique_ptr<DcgmMessage> message);
-    dcgmReturn_t ProcessModuleCommand(dcgm_module_command_header_t *moduleCommand);
+    virtual dcgmReturn_t ProcessModuleCommand(dcgm_module_command_header_t *moduleCommand);
 
     /**
      * @brief Some subcommands are required to be listed as public structs but
@@ -312,8 +315,10 @@ public:
                                                 int msgLength,
                                                 dcgmReturn_t status);
 
-    dcgmReturn_t SendMessageViaIpc(dcgm_connection_id_t connectionId, std::unique_ptr<DcgmMessage> message);
+protected:
+    virtual dcgmReturn_t SendMessageViaIpc(dcgm_connection_id_t connectionId, std::unique_ptr<DcgmMessage> message);
 
+public:
     void NotifyLoggingSeverityChange();
 
     /* Helpers to access m_persistAfterDisconnect. These all need to lock m_lock to
@@ -508,7 +513,8 @@ public:
      * Get the standard error handle of the child process.
      *
      * @param[in] handle      Handle to the ChildProcess instance
-     * @param[out] fd         File descriptor of the standard error
+     * @param[out] fd         Duplicated file descriptor of the standard error. Caller owns the descriptor and must
+     *                        close it.
      *
      * @returns DCGM_ST_OK if successful, error code otherwise
      */
@@ -518,7 +524,8 @@ public:
      * Get the standard output handle of the child process.
      *
      * @param[in] handle      Handle to the ChildProcess instance
-     * @param[out] fd         File descriptor of the standard output
+     * @param[out] fd         Duplicated file descriptor of the standard output. Caller owns the descriptor and must
+     *                        close it.
      *
      * @returns DCGM_ST_OK if successful, error code otherwise
      */
@@ -528,7 +535,8 @@ public:
      * Get the data channel handle of the child process.
      *
      * @param[in] handle      Handle to the ChildProcess instance
-     * @param[out] fd         File descriptor of the data channel
+     * @param[out] fd         Duplicated file descriptor of the data channel. Caller owns the descriptor and must
+     *                        close it.
      *
      * @returns DCGM_ST_OK if successful, error code otherwise
      */
@@ -636,7 +644,7 @@ private:
      */
     void UnloadModules(bool notLoad = false, uint32_t *loadingMask = nullptr, uint32_t *unloadedMask = nullptr);
 
-    dcgmReturn_t SendModuleMessage(dcgmModuleId_t moduleId, dcgm_module_command_header_t *moduleCommand);
+    virtual dcgmReturn_t SendModuleMessage(dcgmModuleId_t moduleId, dcgm_module_command_header_t *moduleCommand);
 
     /*****************************************************************************/
     /* Helper methods */
@@ -744,11 +752,13 @@ private:
 
     /*****************************************************************************
      Private Constructor and Destructor to achieve Singelton design
-     *****************************************************************************/
+    *****************************************************************************/
     DcgmHostEngineHandler()
+        : mpCacheManager(std::unique_ptr<DcgmCacheManager> {})
     {}
     explicit DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params);
     virtual ~DcgmHostEngineHandler();
+    void ResetCacheManager();
 
     /* This data structure is used to store user provided job id information and associates start
        and stop timestamp with the user provided start/stop notification. */
@@ -760,18 +770,18 @@ private:
 
     static DcgmHostEngineHandler *mpHostEngineHandlerInstance; // HostEngine Handler Instance
 
-    DcgmCacheManager *mpCacheManager {};
-    DcgmGroupManager *mpGroupManager {};
-    DcgmCoreCommunication m_communicator;   // The object which processes module core requests
-    dcgmCoreCallbacks_t m_coreCallbacks {}; // The callback function passed to modules for core requests
-    DcgmFieldGroupManager *mpFieldGroupManager {};
-
     /* HangDetect must appear before all monitored objects with managed lifetimes to ensure required
        destruction order. */
     bool m_hangDetectDisabled                                    = false;
     std::unique_ptr<HangDetect> m_detector                       = nullptr;
     std::unique_ptr<EngineHangDetectHandler> m_hangDetectHandler = nullptr;
     std::unique_ptr<HangDetectMonitor> m_monitor                 = nullptr;
+
+    DcgmCacheManagerAnyUniquePtr mpCacheManager;
+    DcgmGroupManager *mpGroupManager {};
+    DcgmCoreCommunication m_communicator;   // The object which processes module core requests
+    dcgmCoreCallbacks_t m_coreCallbacks {}; // The callback function passed to modules for core requests
+    DcgmFieldGroupManager *mpFieldGroupManager {};
 
     static std::chrono::seconds constexpr DEFAULT_HANG_DETECT_CHECK_INTERVAL { 60 };
     static std::chrono::seconds constexpr DEFAULT_HANG_DETECT_EXPIRY_SEC { 600 };
@@ -815,5 +825,19 @@ dcgmReturn_t ResizeMsgBufferForSubCommand(unsigned int moduleId,
                                           unsigned int subCommand,
                                           std::vector<char> &msgBytes,
                                           std::size_t maxMessageSize);
+
+/**
+ * Parse and structurally validate a LINK entity id.
+ *
+ * @param[in] entityId Packed LINK entity id.
+ *
+ * @return Parsed link when parsed.type is in { DCGM_FE_GPU, DCGM_FE_SWITCH }
+ *         and, for DCGM_FE_SWITCH, parsed.index is in range or is the packed
+ *         NVSDM management port index.
+ * @return std::nullopt when the packed link type or switch link index is invalid.
+ *
+ * @note This function does not validate gpuId or switchId existence.
+ */
+[[nodiscard]] std::optional<dcgm_link_t> ParseLinkEntityId(dcgm_field_eid_t entityId) noexcept;
 
 #endif /* DCGMHOSTENGINEHANDLER_H */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,16 +19,13 @@
 
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
+#include <DcgmOpsAnyPtr.hpp>
 
 class DcgmHandle
 {
 public:
-    DcgmHandle();
-    DcgmHandle(dcgmHandle_t handle)
-        : m_lastReturn(DCGM_ST_OK)
-        , m_handle(handle)
-        , m_ownHandle(false)
-    {}
+    explicit DcgmHandle(DcgmNs::DcgmOpsAnyPtr dcgmOps);
+    DcgmHandle(DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t handle);
 
     DcgmHandle(DcgmHandle &&other) noexcept;
     DcgmHandle(const DcgmHandle &other)            = delete;
@@ -80,7 +77,8 @@ public:
     void Cleanup();
 
 private:
-    dcgmReturn_t m_lastReturn; // The last return code from DCGM
-    dcgmHandle_t m_handle;     // The handle for the DCGM connection
-    bool m_ownHandle;          // True if we created the connection to DCGM, false otherwise
+    dcgmReturn_t m_lastReturn;       // The last return code from DCGM
+    dcgmHandle_t m_handle;           // DCGM connection handle.
+    bool m_ownHandle;                // True if we created the connection to DCGM, false otherwise
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; // DCGM API interface.
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,13 @@
  */
 #pragma once
 
+#include <memory>
 #include <vector>
 
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmRecorder.h>
 #include <IgnoreErrorCodesHelper.h>
+#include <NvvsCommon.h>
 #include <TestParameters.h>
 #include <dcgm_structs.h>
 #include <timelib.h>
@@ -28,7 +31,7 @@ class HangDetectMonitor;
 class PluginCoreFunctionality
 {
 public:
-    PluginCoreFunctionality();
+    PluginCoreFunctionality(DcgmNs::DcgmOpsAnyPtr dcgmOps, NvvsCommon *nvvsCommon);
     PluginCoreFunctionality(PluginCoreFunctionality &&other) noexcept;
 
     /********************************************************************/
@@ -92,7 +95,9 @@ public:
     void SetHangDetectMonitor(HangDetectMonitor *monitor);
 
 private:
-    DcgmRecorder m_dcgmRecorder;
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;              //!< DCGM API interface.
+    std::unique_ptr<DcgmRecorder> m_dcgmRecorder; //!< DCGM stats recording interface object.
+    NvvsCommon *m_nvvsCommon;                     //!< NVVS common state
     HangDetectMonitor *m_hangDetectMonitor = nullptr;
     std::vector<dcgmDiagPluginEntityInfo_v1> m_entityInfos;
     bool m_initialized;

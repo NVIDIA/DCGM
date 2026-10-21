@@ -1,0 +1,10 @@
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libcusparseLt.so
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libcusparseLt.so.0
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libcusparseLt.so.0.9.1.1
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/updated
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/updated/libcusparseLt.so.0
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda13-cusparselt-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda13-cusparselt-<BASEPACKAGEVERSION>/LICENSE

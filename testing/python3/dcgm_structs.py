@@ -1646,6 +1646,7 @@ class c_dcgmDeviceVgpuConfig_v1(_PrintableStructure):
 
 dcgmDeviceVgpuConfig_version1 = make_dcgm_version(c_dcgmDeviceVgpuConfig_v1, 1)
 
+# Begin deprecated legacy group-policy structures. Use field-policy APIs and structures below.
 # Structure to receive update on the list of metrics.
 
 
@@ -1666,6 +1667,8 @@ _dcgmRecvUpdates_t = c_void_p
 
 
 class c_dcgmPolicyViolation_v1(_PrintableStructure):
+    """Deprecated legacy policy violation configuration."""
+
     _fields_ = [
         # version must always be first
         ('version', c_uint),
@@ -1676,6 +1679,7 @@ class c_dcgmPolicyViolation_v1(_PrintableStructure):
 
 
 dcgmPolicyViolation_version1 = make_dcgm_version(c_dcgmPolicyViolation_v1, 1)
+# End deprecated legacy group-policy structures.
 
 
 class c_dcgmWatchFieldValue_v1(_PrintableStructure):
@@ -1701,7 +1705,7 @@ dcgmUpdateAllFields_version1 = make_dcgm_version(c_dcgmUpdateAllFields_v1, 1)
 
 dcgmGetMultipleValuesForFieldResponse_version1 = 1
 
-# policy enums (and table indices)
+# Begin deprecated legacy policy enums (and table indices).
 DCGM_POLICY_COND_IDX_DBE = 0
 DCGM_POLICY_COND_IDX_PCI = 1
 DCGM_POLICY_COND_IDX_MAX_PAGES_RETIRED = 2
@@ -1729,6 +1733,7 @@ DCGM_POLICY_ISOLATION_NONE = 0
 DCGM_POLICY_ACTION_NONE = 0
 DCGM_POLICY_ACTION_GPURESET = 1  # Deprecated
 
+# Validation values are also used by the deprecated dcgmActionValidate.
 DCGM_POLICY_VALID_NONE = 0
 DCGM_POLICY_VALID_SV_SHORT = 1
 DCGM_POLICY_VALID_SV_MED = 2
@@ -1736,6 +1741,28 @@ DCGM_POLICY_VALID_SV_LONG = 3
 DCGM_POLICY_VALID_SV_XLONG = 4
 
 DCGM_POLICY_FAILURE_NONE = 0
+# End deprecated legacy policy enums.
+
+# Field-policy limit, operator, state, and channel constants
+DCGM_POLICY_MAX_POLICIES = 1525
+DCGM_POLICY_MAX_VIOLATIONS = 128
+DCGM_POLICY_MAX_PATH = 4096
+
+DCGM_POLICY_OP_GT = 0
+DCGM_POLICY_OP_GE = 1
+DCGM_POLICY_OP_LT = 2
+DCGM_POLICY_OP_LE = 3
+DCGM_POLICY_OP_EQ = 4
+DCGM_POLICY_OP_NE = 5
+DCGM_POLICY_OP_CHANGED = 6
+DCGM_POLICY_OP_COUNT = 7
+
+DCGM_POLICY_STATE_DISABLED = 0
+DCGM_POLICY_STATE_ENABLED = 1
+
+DCGM_POLICY_CHANNEL_CONSOLE = 0x1
+DCGM_POLICY_CHANNEL_FILE = 0x2
+DCGM_POLICY_CHANNEL_CALLBACK = 0x4
 
 DCGM_DIAG_LVL_INVALID = 0
 DCGM_DIAG_LVL_SHORT = 10
@@ -1765,6 +1792,8 @@ class c_dcgmPolicyConditionParms_t(_PrintableStructure):
 
 
 class c_dcgmPolicy_v1(_PrintableStructure):
+    """Deprecated legacy group-policy configuration. Use c_dcgmPolicySpec_v1 instead."""
+
     _fields_ = [
         # version must always be first
         ('version', c_uint),
@@ -1779,6 +1808,64 @@ class c_dcgmPolicy_v1(_PrintableStructure):
 
 
 dcgmPolicy_version1 = make_dcgm_version(c_dcgmPolicy_v1, 1)
+
+
+class c_dcgmPolicySpec_v1(_PrintableStructure):
+    _fields_ = [
+        ("version", c_uint),
+        ("fieldId", c_ushort),
+        ("name", c_char * DCGM_MAX_STR_LENGTH),
+        ("threshold", c_double),
+        ("policyOperator", c_int),
+        ("entities", c_dcgmGroupEntityPair_t * DCGM_MAX_NUM_DEVICES),
+        ("entityCount", c_uint),
+        ("channelMask", c_uint),
+        ("state", c_int),
+        ("rateLimitSec", c_uint),
+    ]
+
+
+dcgmPolicySpec_version1 = make_dcgm_version(c_dcgmPolicySpec_v1, 1)
+dcgmPolicySpec_version = dcgmPolicySpec_version1
+
+
+class c_dcgmPolicyInfo_v1(_PrintableStructure):
+    _fields_ = [
+        ("version", c_uint),
+        ("policyId", c_uint64),
+        ("fieldId", c_ushort),
+        ("name", c_char * DCGM_MAX_STR_LENGTH),
+        ("currentValue", c_double),
+        ("threshold", c_double),
+        ("policyOperator", c_int),
+        ("entities", c_dcgmGroupEntityPair_t * DCGM_MAX_NUM_DEVICES),
+        ("entityCount", c_uint),
+        ("channelMask", c_uint),
+        ("state", c_int),
+        ("rateLimitSec", c_uint),
+        ("createdAt", c_int64),
+        ("violationCount", c_uint),
+        ("lastTriggeredTimestamp", c_int64),
+    ]
+
+
+dcgmPolicyInfo_version1 = make_dcgm_version(c_dcgmPolicyInfo_v1, 1)
+dcgmPolicyInfo_version = dcgmPolicyInfo_version1
+
+
+class c_dcgm_policy_violation_t(_PrintableStructure):
+    _fields_ = [
+        ("policyId", c_uint64),
+        ("policyName", c_char * DCGM_MAX_STR_LENGTH),
+        ("fieldName", c_char * DCGM_MAX_STR_LENGTH),
+        ("fieldId", c_ushort),
+        ("entity", c_dcgmGroupEntityPair_t),
+        ("currentValue", c_double),
+        ("thresholdValue", c_double),
+        ("policyOperator", c_int),
+        ("channelMask", c_uint),
+        ("timestamp", c_int64),
+    ]
 
 
 class c_dcgmPolicyConditionPci_t(_PrintableStructure):
@@ -1844,6 +1931,8 @@ class c_dcgmPolicyConditionXID_t(_PrintableStructure):
 
 
 class c_dcgmPolicyCallbackResponse_v2(_PrintableStructure):
+    """Deprecated legacy policy callback payload. Use c_dcgm_policy_violation_t instead."""
+
     class Value(DcgmUnion):
         # implement more of the fields when a test requires them
         _fields_ = [
@@ -1933,10 +2022,12 @@ DCGM_HEALTH_WATCH_DRIVER = 0x200
 DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL = 0x400
 DCGM_HEALTH_WATCH_NVSWITCH_FATAL = 0x800
 DCGM_HEALTH_WATCH_CONNECTX = 0x1000
+DCGM_HEALTH_WATCH_IMEX = 0x2000
 DCGM_HEALTH_WATCH_ALL = 0xFFFFFFFF
 DCGM_HEALTH_WATCH_COUNT_V1 = 10
 DCGM_HEALTH_WATCH_COUNT_V2 = 12
 DCGM_HEALTH_WATCH_COUNT_V3 = 13
+DCGM_HEALTH_WATCH_COUNT_V4 = 14
 
 DCGM_HEALTH_RESULT_PASS = 0
 DCGM_HEALTH_RESULT_WARN = 10
@@ -3171,8 +3262,13 @@ dcgmDiagStatus_version = dcgmDiagStatus_version1
 DCGM_MN_DIAG_RESPONSE_TESTS_MAX = 4
 # Maximum number of entities per host
 DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX = 16
-# Maximum number of hosts that can be reported
-DCGM_MN_DIAG_RESPONSE_HOSTS_MAX = 72
+# Frozen V1 constants
+DCGM_MN_DIAG_RESPONSE_HOSTS_MAX_V1 = 72
+DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1 = (
+    DCGM_MN_DIAG_RESPONSE_HOSTS_MAX_V1 *
+    DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
+# Current (v2) constants
+DCGM_MN_DIAG_RESPONSE_HOSTS_MAX = 576
 DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX = (
     DCGM_MN_DIAG_RESPONSE_HOSTS_MAX *
     DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
@@ -3188,6 +3284,7 @@ DCGM_MN_DIAG_RESPONSE_RESULTS_MAX = (
 DCGM_MN_DIAG_TEST_RUN_NAME_LEN = 32
 DCGM_MN_DIAG_AUX_DATA_LEN = 2048  # Length of auxiliary data
 DCGM_MAX_NUM_HOSTS = 72
+DCGM_MNDIAG_MAX_NUM_HOSTS = 576
 DCGM_ERR_MSG_LENGTH = 512
 
 # The target configuration values to be applied
@@ -3203,9 +3300,21 @@ class c_dcgmRunMnDiag_v1(_PrintableStructure):
     ]
 
 
-c_dcgmRunMnDiag_t = c_dcgmRunMnDiag_v1
 dcgmRunMnDiag_version1 = make_dcgm_version(c_dcgmRunMnDiag_v1, 1)
-dcgmRunMnDiag_version = dcgmRunMnDiag_version1
+
+
+class c_dcgmRunMnDiag_v2(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('hostList', (c_char * DCGM_MAX_STR_LENGTH) * DCGM_MNDIAG_MAX_NUM_HOSTS),
+        ('testName', c_char * DCGM_MAX_STR_LENGTH),
+        ('testParms', (c_char * DCGM_MAX_TEST_PARMS_LEN_V2) * DCGM_MAX_TEST_PARMS),
+    ]
+
+
+c_dcgmRunMnDiag_t = c_dcgmRunMnDiag_v2
+dcgmRunMnDiag_version2 = make_dcgm_version(c_dcgmRunMnDiag_v2, 2)
+dcgmRunMnDiag_version = dcgmRunMnDiag_version2
 
 
 class c_dcgmMnDiagHosts_v1(_PrintableStructure):
@@ -3249,15 +3358,36 @@ class c_dcgmMnDiagTestRun_v1(_PrintableStructure):
         ('_unused2', c_ubyte * 2),
         ('errorIndices', c_ubyte * DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX),
         ('infoIndices', c_ubyte * DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX),
-        ('resultIndices', c_ushort * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX),
+        ('resultIndices', c_ushort * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1),
         ('_unused3', c_ubyte * 4),
         ('auxData', c_dcgmMnDiagTestAuxData_v1)
     ]
 
 
-c_dcgmMnDiagTestRun_t = c_dcgmMnDiagTestRun_v1
 dcgmMnDiagTestRun_version1 = make_dcgm_version(c_dcgmMnDiagTestRun_v1, 1)
-dcgmMnDiagTestRun_version = dcgmMnDiagTestRun_version1
+
+
+class c_dcgmMnDiagTestRun_v2(_PrintableStructure):
+    _fields_ = [
+        ('name', c_char * DCGM_MN_DIAG_TEST_RUN_NAME_LEN),
+        ('pluginName', c_char * DCGM_MN_DIAG_TEST_RUN_NAME_LEN),
+        ('result', c_uint32),
+        ('numErrors', c_ubyte),
+        ('numInfo', c_ubyte),
+        ('categoryIndex', c_ubyte),
+        ('_unused1', c_ubyte),
+        ('numResults', c_ushort),
+        ('_unused2', c_ubyte * 2),
+        ('errorIndices', c_ubyte * DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX),
+        ('infoIndices', c_ubyte * DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX),
+        ('resultIndices', c_ushort * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX),
+        ('auxData', c_dcgmMnDiagTestAuxData_v1)
+    ]
+
+
+c_dcgmMnDiagTestRun_t = c_dcgmMnDiagTestRun_v2
+dcgmMnDiagTestRun_version2 = make_dcgm_version(c_dcgmMnDiagTestRun_v2, 2)
+dcgmMnDiagTestRun_version = dcgmMnDiagTestRun_version2
 
 
 class c_dcgmMnDiagEntity_v1(_PrintableStructure):
@@ -3321,6 +3451,10 @@ dcgmMnDiagEntityResult_version1 = make_dcgm_version(
 dcgmMnDiagEntityResult_version = dcgmMnDiagEntityResult_version1
 
 
+DCGM_MN_DIAG_RESPONSE_RESULTS_MAX_V1 = (
+    DCGM_MN_DIAG_RESPONSE_TESTS_MAX * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1)
+
+
 class c_dcgmMnDiagResponse_v1(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
@@ -3331,8 +3465,31 @@ class c_dcgmMnDiagResponse_v1(_PrintableStructure):
         ('numEntities', c_ushort),
         ('numResults', c_ushort),
         ('_unusedPad1', c_char * 2),
-        ('hosts', c_dcgmMnDiagHosts_v1 * DCGM_MN_DIAG_RESPONSE_HOSTS_MAX),
+        ('hosts', c_dcgmMnDiagHosts_v1 * DCGM_MN_DIAG_RESPONSE_HOSTS_MAX_V1),
         ('tests', c_dcgmMnDiagTestRun_v1 * DCGM_MN_DIAG_RESPONSE_TESTS_MAX),
+        ('entities', c_dcgmMnDiagEntity_v1 * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1),
+        ('errors', c_dcgmMnDiagError_v1 * DCGM_MN_DIAG_RESPONSE_ERRORS_MAX),
+        ('info', c_dcgmMnDiagInfo_v1 * DCGM_MN_DIAG_RESPONSE_INFO_MAX),
+        ('results', c_dcgmMnDiagEntityResult_v1 *
+         DCGM_MN_DIAG_RESPONSE_RESULTS_MAX_V1)
+    ]
+
+
+dcgmMnDiagResponse_version1 = make_dcgm_version(c_dcgmMnDiagResponse_v1, 1)
+
+
+class c_dcgmMnDiagResponse_v2(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('numHosts', c_ushort),
+        ('numTests', c_ubyte),
+        ('_unusedPad1', c_char),
+        ('numErrors', c_ushort),
+        ('numInfos', c_ushort),
+        ('numEntities', c_ushort),
+        ('numResults', c_ushort),
+        ('hosts', c_dcgmMnDiagHosts_v1 * DCGM_MN_DIAG_RESPONSE_HOSTS_MAX),
+        ('tests', c_dcgmMnDiagTestRun_v2 * DCGM_MN_DIAG_RESPONSE_TESTS_MAX),
         ('entities', c_dcgmMnDiagEntity_v1 * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX),
         ('errors', c_dcgmMnDiagError_v1 * DCGM_MN_DIAG_RESPONSE_ERRORS_MAX),
         ('info', c_dcgmMnDiagInfo_v1 * DCGM_MN_DIAG_RESPONSE_INFO_MAX),
@@ -3340,9 +3497,9 @@ class c_dcgmMnDiagResponse_v1(_PrintableStructure):
     ]
 
 
-c_dcgmMnDiagResponse_t = c_dcgmMnDiagResponse_v1
-dcgmMnDiagResponse_version1 = make_dcgm_version(c_dcgmMnDiagResponse_v1, 1)
-dcgmMnDiagResponse_version = dcgmMnDiagResponse_version1
+c_dcgmMnDiagResponse_t = c_dcgmMnDiagResponse_v2
+dcgmMnDiagResponse_version2 = make_dcgm_version(c_dcgmMnDiagResponse_v2, 2)
+dcgmMnDiagResponse_version = dcgmMnDiagResponse_version2
 
 DCGM_WORKLOAD_PROFILE_ACTION_SET = 0
 DCGM_WORKLOAD_PROFILE_ACTION_SET_AND_OVERWRITE = 1

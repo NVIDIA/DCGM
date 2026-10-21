@@ -17,96 +17,310 @@ set(CPACK_PACKAGE_CONTACT "dcgm-support <dcgm-support@nvidia.com>")
 set(CPACK_PACKAGE_VENDOR "NVIDIA Corp.")
 
 set(CPACK_PACKAGE_DESCRIPTION
-"This package is a component of DCGM, a userspace library and service that
-simplifies the administration of NVIDIA datacenter hardware in cluster and
-datacenter environments.
+"NVIDIA Data Center GPU Manager (DCGM) is a suite of libraries and tools
+for managing and observing NVIDIA data-center accelerators. It provides:
+    - hardware inventory and topology
+    - telemetry, health monitoring, and accounting
+    - configuration and policy management
+    - diagnostics and profiling
 
-DCGM functionality includes:
-    - Configuration management for NVIDIA GPU and NvSwitch hardware
-    - Active health diagnostics for NVIDIA GPU hardware
-    - Passive health monitoring for NVIDIA GPU and NvSwitch hardware
-    - Device-level profiling metrics for NVIDIA CPU, GPU, and NvSwitch hardware
-    - Job-level execution and performance statistic aggregation and analysis
-      for NVIDIA GPU hardware
-    - Callback registration for user-configured action and/or notification upon
-      detection of hardware faults
-")
+DCGM can run embedded in a management agent or as a standalone host
+engine shared by command-line and remote clients.")
 
 set(CORE_SUMMARY
-    "CUDA-version agnostic components of NVIDIA® Datacenter GPU Manager (DCGM)")
+    "Metapackage for the CUDA-independent DCGM host-engine runtime")
 
 set(CORE_DESCRIPTION
-"This package provides
-    - the core DCGM shared library (libdcgm.so.4)
-    - the standalone executable wrapper for the DCGM shared library
-      (nv-hostengine)
-    - a systemd service that manages an nv-hostengine process (nvidia-dcgm)
-    - plugins implementing various components of DCGM functionality
-")
+"This metapackage installs:
+    - the DCGM runtime library
+    - the standalone host engine and system service
+    - modules for configuration, diagnostics, and health monitoring
+    - modules for introspection, policy, and NVIDIA CPU telemetry
+    - NVSwitch and ConnectX monitoring
 
-set(CUDA11_SUMMARY
-    "NVIDIA® Datacenter GPU Manager (DCGM) binaries for CUDA11 systems")
-
-set(CUDA11_DESCRIPTION
-"This package provides binaries used by DCGM active health diagnostics and
-other utilities for systems with a CUDA11 user-mode driver.")
-
-set(CUDA12_SUMMARY
-    "NVIDIA® Datacenter GPU Manager (DCGM) binaries for CUDA12 systems")
-
-set(CUDA12_DESCRIPTION
-"This package provides binaries used by DCGM active health diagnostics and
-other utilities for systems with a CUDA12 user-mode driver.")
-
-set(CUDA13_SUMMARY
-    "NVIDIA® Datacenter GPU Manager (DCGM) binaries for CUDA13 systems")
-
-set(CUDA13_DESCRIPTION
-"This package provides binaries used by DCGM active health diagnostics and
-other utilities for systems with a CUDA13 user-mode driver.")
+CUDA-major-specific plugins, dcgmi, language bindings, and development
+files are packaged separately.")
 
 set(CUDA_ALL_SUMMARY
-    "Metapackage for NVIDIA® Datacenter GPU Manager (DCGM) binaries")
+    "Metapackage for all CUDA-major-specific DCGM binaries")
 
 set(CUDA_ALL_DESCRIPTION
-"Install binaries for used by DCGM active health diagnostics for all
-DCGM-supported CUDA user-mode drivers.")
+"This metapackage installs every CUDA-major-specific DCGM package
+shipped by this release, including:
+    - active diagnostic plugins
+    - profiling workload generators
+    - supporting libraries
+
+Most systems need only the package whose CUDA major version is supported
+by the installed NVIDIA driver.")
+
+set(CUDA11_SUMMARY
+    "DCGM diagnostic and profiling binaries for CUDA 11")
+
+set(CUDA11_DESCRIPTION
+"Provides the CUDA 11 variants of:
+    - DCGM active diagnostic plugins
+    - the profiling workload generator
+
+    - supporting libraries
+
+Install the package whose CUDA major version is supported by the NVIDIA
+driver.")
+
+set(CUDA11_CUBLAS_SUMMARY
+    "NVIDIA® cuBLAS runtime libraries used by DCGM CUDA11 binaries")
+
+set(CUDA11_CUBLAS_DESCRIPTION
+"This package provides the CUDA11 cuBLAS and cuBLASLt runtime libraries used
+by DCGM active health diagnostics and other utilities.")
+
+set(CUDA12_SUMMARY
+    "DCGM diagnostic and profiling binaries for CUDA 12")
+
+set(CUDA12_DESCRIPTION
+"Provides the CUDA 12 variants of:
+    - DCGM active diagnostic plugins
+    - the profiling workload generator
+    - supporting libraries
+
+Install the package whose CUDA major version is supported by the NVIDIA
+driver.")
+
+set(CUDA12_CUBLAS_SUMMARY
+    "NVIDIA® cuBLAS runtime libraries used by DCGM CUDA12 binaries")
+
+set(CUDA12_CUBLAS_DESCRIPTION
+"This package provides the CUDA12 cuBLAS and cuBLASLt runtime libraries used
+by DCGM active health diagnostics and other utilities.")
+
+set(CUDA12_CURAND_SUMMARY
+    "NVIDIA® cuRAND runtime library used by DCGM CUDA12 binaries")
+
+set(CUDA12_CURAND_DESCRIPTION
+"This package provides the CUDA12 cuRAND runtime library used by DCGM active
+health diagnostics and other utilities.")
+
+set(CUDA12_CUSPARSELT_SUMMARY
+    "NVIDIA® cuSPARSELt runtime library used by DCGM CUDA12 binaries")
+
+set(CUDA12_CUSPARSELT_DESCRIPTION
+"This package provides the CUDA12 cuSPARSELt runtime library used by DCGM
+active health diagnostics and other utilities.")
+
+set(CUDA12_NCCL_SUMMARY
+    "NVIDIA® NCCL runtime library used by DCGM CUDA12 binaries")
+
+set(CUDA12_NCCL_DESCRIPTION
+"This package provides the CUDA12 NCCL runtime library used by DCGM active
+health diagnostics and other utilities.")
+
+set(CUDA12_UBERGEMM2_SUMMARY
+    "UBERGEMM2 GPU workload for DCGM CUDA 12 diagnostics")
+
+set(CUDA12_UBERGEMM2_DESCRIPTION
+"This package provides the CUDA 12 variant of UBERGEMM2, used by DCGM
+diagnostics and workload execution.")
+
+set(CUDA13_SUMMARY
+    "DCGM diagnostic and profiling binaries for CUDA 13")
+
+set(CUDA13_DESCRIPTION
+"Provides the CUDA 13 variants of:
+    - DCGM active diagnostic plugins
+    - the profiling workload generator
+    - supporting libraries
+
+Install the package whose CUDA major version is supported by the NVIDIA
+driver.")
+
+set(CUDA13_CUBLAS_SUMMARY
+    "NVIDIA® cuBLAS runtime libraries used by DCGM CUDA13 binaries")
+
+set(CUDA13_CUBLAS_DESCRIPTION
+"This package provides the CUDA13 cuBLAS and cuBLASLt runtime libraries used
+by DCGM active health diagnostics and other utilities.")
+
+set(CUDA13_CURAND_SUMMARY
+    "NVIDIA® cuRAND runtime library used by DCGM CUDA13 binaries")
+
+set(CUDA13_CURAND_DESCRIPTION
+"This package provides the CUDA13 cuRAND runtime library used by DCGM active
+health diagnostics and other utilities.")
+
+set(CUDA13_CUSPARSELT_SUMMARY
+    "NVIDIA® cuSPARSELt runtime library used by DCGM CUDA13 binaries")
+
+set(CUDA13_CUSPARSELT_DESCRIPTION
+"This package provides the CUDA13 cuSPARSELt runtime library used by DCGM
+active health diagnostics and other utilities.")
+
+set(CUDA13_NCCL_SUMMARY
+    "NVIDIA® NCCL runtime library used by DCGM CUDA13 binaries")
+
+set(CUDA13_NCCL_DESCRIPTION
+"This package provides the CUDA13 NCCL runtime library used by DCGM active
+health diagnostics and other utilities.")
+
+set(CUDA13_UBERGEMM2_SUMMARY
+    "UBERGEMM2 GPU workload for DCGM CUDA 13 diagnostics")
+
+set(CUDA13_UBERGEMM2_DESCRIPTION
+"This package provides the CUDA 13 variant of UBERGEMM2, used by DCGM
+diagnostics and workload execution.")
+
+set(DCGMI_SUMMARY
+    "Command-line client for NVIDIA Data Center GPU Manager (DCGM)")
+
+set(DCGMI_DESCRIPTION
+"Provides dcgmi, the command-line client for sending these requests to a
+DCGM host engine:
+    - inventory, topology, and module management
+    - telemetry, health, and policy monitoring
+    - configuration, diagnostics, and profiling")
+
+set(DCGMPROFTESTERKERNELS_SUMMARY
+    "CUDA kernels for the DCGM profiling workload generators")
+
+set(DCGMPROFTESTERKERNELS_DESCRIPTION
+"Provides PTX kernels used by the CUDA-major-specific dcgmproftester
+programs to create controlled GPU activity for DCGM profiling fields.")
 
 set(DEVELOPMENT_SUMMARY
-    "Development files for NVIDIA® Datacenter GPU Manager (DCGM)")
+    "C and C++ development files and examples for DCGM")
 
 set(DEVELOPMENT_DESCRIPTION
-"This package provides
-    - C header files for the DCGM shared library (libdcgm.so.${CPACK_PACKAGE_VERSION_MAJOR})
-    - *.so symbolic links for the linker
-    - a static library of stubs allowing for lazy-loading of the DCGM shared
-      library
-    - files supporting consumption via CMake's find_package")
+"Provides:
+    - public C headers and the linker entry for libdcgm
+    - a static stub library for loading DCGM at runtime
+    - CMake package configuration
+    - the NVML injection development library
+    - sample C, C++, and Python clients")
+
+set(LIBDCGM_SUMMARY
+    "DCGM host-engine runtime library")
+
+set(LIBDCGM_DESCRIPTION
+"Provides libdcgm, which implements the host engine's core services:
+    - entity inventory and groups
+    - fields, watches, and cached telemetry
+    - topology and workload statistics
+
+The library supports embedded host-engine operation and is shared by the
+standalone host engine and loadable DCGM modules.")
+
+set(LIBDCGMMODULECONFIG_SUMMARY
+    "DCGM GPU configuration module")
+
+set(LIBDCGMMODULECONFIG_DESCRIPTION
+"Provides the DCGM configuration module, which records target GPU
+settings, applies them, reports target and current values, and can
+re-enforce the target configuration after GPU state changes.
+Configuration state lasts for the lifetime of the host engine.")
+
+set(LIBDCGMMODULEDIAG_SUMMARY
+    "DCGM single-node diagnostics module and runner")
+
+set(LIBDCGMMODULEDIAG_DESCRIPTION
+"Provides the DCGM diagnostics module and nvvs runner for active,
+single-node diagnostics covering:
+    - software deployment
+    - hardware and system integration
+    - stress testing
+
+CUDA-major-specific diagnostic plugins are packaged separately.")
+
+set(LIBDCGMMODULEHEALTH_SUMMARY
+    "DCGM passive health-monitoring module")
+
+set(LIBDCGMMODULEHEALTH_DESCRIPTION
+"Provides the DCGM health module, which passively watches telemetry for:
+    - memory and PCIe health
+    - power and thermal health
+    - NVLink and NVSwitch health")
+
+set(LIBDCGMMODULEINTROSPECT_SUMMARY
+    "DCGM host-engine introspection module")
+
+set(LIBDCGMMODULEINTROSPECT_DESCRIPTION
+"Provides the DCGM introspection module for measuring the host engine's
+own CPU and memory consumption.")
+
+set(LIBDCGMMODULENVSWITCH_SUMMARY
+    "DCGM NVSwitch and ConnectX monitoring module")
+
+set(LIBDCGMMODULENVSWITCH_DESCRIPTION
+"Provides discovery, telemetry, health inputs, and link monitoring for
+NVIDIA NVSwitch and ConnectX devices. This module observes fabric
+components; it does not configure or initialize the fabric.")
+
+set(LIBDCGMMODULEPOLICY_SUMMARY
+    "DCGM GPU policy notification module")
+
+set(LIBDCGMMODULEPOLICY_DESCRIPTION
+"Provides the DCGM policy module for watching selected GPU conditions
+and delivering callback notifications when those conditions occur.
+Legacy action and validation settings are retained for compatibility but
+are not executed by the module.")
+
+set(LIBDCGMMODULESYSMON_SUMMARY
+    "DCGM NVIDIA CPU monitoring module")
+
+set(LIBDCGMMODULESYSMON_DESCRIPTION
+"Provides discovery and telemetry for supported NVIDIA CPUs and CPU
+cores, including NVIDIA Grace CPUs.")
 
 set(MULTINODE_SUMMARY
-    "NVIDIA® Datacenter GPU Manager (DCGM) multi-node active health diagnostics")
+    "DCGM multi-node diagnostic orchestration module")
 
 set(MULTINODE_DESCRIPTION
-"This package provides the mndiag DCGM module, which implements distributed
-active health diagnostics for assessing the health of networked clusters
-of systems using NVIDIA hardware.")
+"Provides the DCGM multi-node diagnostics module and service generator.
+The module:
+    - coordinates workloads across host engines
+    - launches workloads through MPI
+    - monitors execution and collects results
+
+Workload binaries are packaged by CUDA major version.")
 
 set(MULTINODE_CUDA12_SUMMARY
-    "NVIDIA® Datacenter GPU Manager (DCGM) multi-node diagnostics for CUDA12 systems")
+    "DCGM mnubergemm multi-node workload for CUDA 12")
 
 set(MULTINODE_CUDA12_DESCRIPTION
-"This package provides binaries used by DCGM multi-node active health
-diagnostics for systems with a CUDA12 user-mode driver.")
+"Provides the CUDA 12 variant of mnubergemm, used by the DCGM multi-node
+diagnostics module to exercise GPU compute, memory, and interconnects
+across multiple hosts.")
 
 set(MULTINODE_CUDA13_SUMMARY
-    "NVIDIA® Datacenter GPU Manager (DCGM) multi-node diagnostics for CUDA13 systems")
+    "DCGM mnubergemm multi-node workload for CUDA 13")
 
 set(MULTINODE_CUDA13_DESCRIPTION
-"This package provides binaries used by DCGM multi-node active health
-diagnostics for systems with a CUDA13 user-mode driver.")
+"Provides the CUDA 13 variant of mnubergemm, used by the DCGM multi-node
+diagnostics module to exercise GPU compute, memory, and interconnects
+across multiple hosts.")
+
+set(NV-HOSTENGINE_SUMMARY
+    "Standalone DCGM host engine and system service")
+
+set(NV-HOSTENGINE_DESCRIPTION
+"Provides:
+    - nv-hostengine, the endpoint for local and remote DCGM clients
+    - the nvidia-dcgm systemd service
+    - a diagnostic log-collection script
+
+The host engine owns shared inventory, telemetry watches, cached
+samples, module state, and workload statistics.")
+
+set(PYTHON3-DCGM_SUMMARY
+    "Python 3 bindings and monitoring integrations for DCGM")
+
+set(PYTHON3-DCGM_DESCRIPTION
+"Provides:
+    - Python 3 bindings for DCGM
+    - reader and helper modules
+    - usage examples
+    - support for collectd and other monitoring agents")
 
 if (CPACK_GENERATOR MATCHES "DEB")
-    list(APPEND CPACK_COMPONENTS_ALL Cuda_All)
+    list(APPEND CPACK_COMPONENTS_ALL Core Cuda_All)
     list(REMOVE_ITEM CPACK_COMPONENTS_ALL Tests)
 
     if (CPACK_VMWARE)
@@ -131,21 +345,77 @@ if (CPACK_GENERATOR MATCHES "DEB")
     set(CPACK_DEBIAN_CORE_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-core")
     set(CPACK_DEBIAN_CUDA_ALL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda-all")
     set(CPACK_DEBIAN_CUDA11_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda11")
+    set(CPACK_DEBIAN_CUDA11_CUBLAS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda11-cublas")
     set(CPACK_DEBIAN_CUDA12_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12")
+    set(CPACK_DEBIAN_CUDA12_CUBLAS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-cublas")
+    set(CPACK_DEBIAN_CUDA12_CURAND_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-curand")
+    set(CPACK_DEBIAN_CUDA12_CUSPARSELT_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-cusparselt")
+    set(CPACK_DEBIAN_CUDA12_NCCL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-nccl")
+    set(CPACK_DEBIAN_CUDA12_UBERGEMM2_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-ubergemm2")
     set(CPACK_DEBIAN_CUDA13_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13")
+    set(CPACK_DEBIAN_CUDA13_CUBLAS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-cublas")
+    set(CPACK_DEBIAN_CUDA13_CURAND_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-curand")
+    set(CPACK_DEBIAN_CUDA13_CUSPARSELT_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-cusparselt")
+    set(CPACK_DEBIAN_CUDA13_NCCL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-nccl")
+    set(CPACK_DEBIAN_CUDA13_UBERGEMM2_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-ubergemm2")
+    set(CPACK_DEBIAN_DCGMI_PACKAGE_NAME "dcgmi")
+    set(CPACK_DEBIAN_DCGMPROFTESTERKERNELS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-dcgmproftesterkernels")
     set(CPACK_DEBIAN_DEVELOPMENT_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-dev")
+    set(CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME "libdcgm")
+    set(CPACK_DEBIAN_LIBDCGMMODULECONFIG_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-config")
+    set(CPACK_DEBIAN_LIBDCGMMODULEDIAG_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-diag")
+    set(CPACK_DEBIAN_LIBDCGMMODULEHEALTH_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-health")
+    set(CPACK_DEBIAN_LIBDCGMMODULEINTROSPECT_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-introspect")
+    set(CPACK_DEBIAN_LIBDCGMMODULENVSWITCH_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-nvswitch")
+    set(CPACK_DEBIAN_LIBDCGMMODULEPOLICY_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-policy")
+    set(CPACK_DEBIAN_LIBDCGMMODULESYSMON_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-sysmon")
     set(CPACK_DEBIAN_MULTINODE_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-multinode")
     set(CPACK_DEBIAN_MULTINODE_CUDA12_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-multinode-cuda12")
     set(CPACK_DEBIAN_MULTINODE_CUDA13_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-multinode-cuda13")
-    set(CPACK_DEBIAN_PYTHON_PACKAGE_NAME "python3-${CPACK_PACKAGE_NAME}")
+    set(CPACK_DEBIAN_NV-HOSTENGINE_PACKAGE_NAME "nv-hostengine")
+    set(CPACK_DEBIAN_PYTHON3-DCGM_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-python3")
 
-    set(CPACK_DEBIAN_CORE_DEBUGINFO_PACKAGE TRUE)
+    # In v4.7, we decomposed the core package into numerous subpackages. Inform
+    # the package manager of this decomposition.
+    #
+    # TODO: Remove for v5.0
+    set(CORE_TRANSITION_VERSION
+        "${CPACK_DEBIAN_PACKAGE_EPOCH}:4.7.0~0-1")
+    foreach(component
+            DCGMI
+            DCGMPROFTESTERKERNELS
+            LIBDCGM
+            LIBDCGMMODULECONFIG
+            LIBDCGMMODULEDIAG
+            LIBDCGMMODULEHEALTH
+            LIBDCGMMODULEINTROSPECT
+            LIBDCGMMODULENVSWITCH
+            LIBDCGMMODULEPOLICY
+            LIBDCGMMODULESYSMON
+            NV-HOSTENGINE
+            PYTHON3-DCGM)
+        set(CPACK_DEBIAN_${component}_PACKAGE_BREAKS
+            "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (<< ${CORE_TRANSITION_VERSION})")
+        set(CPACK_DEBIAN_${component}_PACKAGE_REPLACES
+            "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (<< ${CORE_TRANSITION_VERSION})")
+    endforeach()
+
+    set(CPACK_DEBIAN_CORE_DEBUGINFO_PACKAGE FALSE)
     set(CPACK_DEBIAN_CORE_PACKAGE_CONFLICTS "datacenter-gpu-manager")
-    set(CPACK_DEBIAN_CORE_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_LIST_DIR}/../scripts/deb/postinst")
-    set(CPACK_DEBIAN_CORE_PACKAGE_DEPENDS "libc6 (>= 2.27), lshw")
-    string(JOIN ", " CPACK_DEBIAN_CORE_PACKAGE_PREDEPENDS
-        "passwd"
-        "login")
+    string(JOIN ", " CPACK_DEBIAN_CORE_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_DCGMI_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_DCGMPROFTESTERKERNELS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_LIBDCGMMODULECONFIG_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_LIBDCGMMODULEDIAG_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_LIBDCGMMODULEHEALTH_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_LIBDCGMMODULEINTROSPECT_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_LIBDCGMMODULENVSWITCH_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_LIBDCGMMODULEPOLICY_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_LIBDCGMMODULESYSMON_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_NV-HOSTENGINE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_PYTHON3-DCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
 
     set(CPACK_DEBIAN_CUDA_ALL_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_DEBIAN_CUDA_ALL_PACKAGE_DEPENDS
@@ -154,44 +424,149 @@ if (CPACK_GENERATOR MATCHES "DEB")
         "${CPACK_DEBIAN_CUDA13_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
 
     set(CPACK_DEBIAN_CUDA11_DEBUGINFO_PACKAGE TRUE)
-    set(CPACK_DEBIAN_CUDA11_PACKAGE_DEPENDS
-        "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+    string(JOIN ", " CPACK_DEBIAN_CUDA11_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA11_CUBLAS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_DCGMPROFTESTERKERNELS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
     set(CPACK_DEBIAN_CUDA11_PACKAGE_PROVIDES
         "${CPACK_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
     set(CPACK_DEBIAN_CUDA11_PACKAGE_RECOMMENDS "libnuma1")
 
+    set(CPACK_DEBIAN_CUDA11_CUBLAS_DEBUGINFO_PACKAGE FALSE)
+
     set(CPACK_DEBIAN_CUDA12_DEBUGINFO_PACKAGE TRUE)
-    set(CPACK_DEBIAN_CUDA12_PACKAGE_DEPENDS
-        "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+    string(JOIN ", " CPACK_DEBIAN_CUDA12_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_CUBLAS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_CURAND_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_CUSPARSELT_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_NCCL_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_DCGMPROFTESTERKERNELS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
     set(CPACK_DEBIAN_CUDA12_PACKAGE_PROVIDES
         "${CPACK_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
     set(CPACK_DEBIAN_CUDA12_PACKAGE_RECOMMENDS "libnuma1")
 
+    set(CPACK_DEBIAN_CUDA12_CUBLAS_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_CUDA12_CURAND_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_CUDA12_CUSPARSELT_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_CUDA12_NCCL_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_CUDA12_UBERGEMM2_DEBUGINFO_PACKAGE FALSE)
+    string(JOIN ", " CPACK_DEBIAN_CUDA12_UBERGEMM2_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_CUDA12_CUBLAS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_CURAND_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_CUSPARSELT_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_NCCL_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "openmpi | libopenmpi40 | libopenmpi3 (>= 4.1.1)") # Play nice with NVIDIA DOCA repo
+
     set(CPACK_DEBIAN_CUDA13_DEBUGINFO_PACKAGE TRUE)
-    set(CPACK_DEBIAN_CUDA13_PACKAGE_DEPENDS
-        "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+    string(JOIN ", " CPACK_DEBIAN_CUDA13_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_CUBLAS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_CURAND_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_CUSPARSELT_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_NCCL_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_DCGMPROFTESTERKERNELS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
     set(CPACK_DEBIAN_CUDA13_PACKAGE_PROVIDES
         "${CPACK_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
     set(CPACK_DEBIAN_CUDA13_PACKAGE_RECOMMENDS "libnuma1")
+
+    set(CPACK_DEBIAN_CUDA13_CUBLAS_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_CUDA13_CURAND_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_CUDA13_CUSPARSELT_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_CUDA13_NCCL_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_CUDA13_UBERGEMM2_DEBUGINFO_PACKAGE FALSE)
+    string(JOIN ", " CPACK_DEBIAN_CUDA13_UBERGEMM2_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_CUDA13_CUBLAS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_CURAND_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_CUSPARSELT_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_NCCL_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "openmpi | libopenmpi40 | libopenmpi3 (>= 4.1.1)") # Play nice with NVIDIA DOCA repo
+
+    set(CPACK_DEBIAN_DCGMI_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_DEBIAN_DCGMI_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    set(CPACK_DEBIAN_DCGMPROFTESTERKERNELS_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_DCGMPROFTESTERKERNELS_PACKAGE_DEPENDS "")
 
     set(CPACK_DEBIAN_DEVELOPMENT_DEBUGINFO_PACKAGE TRUE)
     set(CPACK_DEBIAN_DEVELOPMENT_PACKAGE_DEPENDS
-        "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    set(CPACK_DEBIAN_LIBDCGM_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_DEBIAN_LIBDCGM_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_LIST_DIR}/../scripts/deb/postinst")
+    string(JOIN ", " CPACK_DEBIAN_LIBDCGM_PACKAGE_PREDEPENDS "passwd" "login")
+    set(CPACK_DEBIAN_LIBDCGM_PACKAGE_DEPENDS "libc6 (>= 2.27), lshw")
+
+    set(CPACK_DEBIAN_LIBDCGMMODULECONFIG_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_DEBIAN_LIBDCGMMODULECONFIG_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    set(CPACK_DEBIAN_LIBDCGMMODULEDIAG_DEBUGINFO_PACKAGE TRUE)
+    string(JOIN ", " CPACK_DEBIAN_LIBDCGMMODULEDIAG_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_LIBDCGMMODULECONFIG_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    set(CPACK_DEBIAN_LIBDCGMMODULEHEALTH_DEBUGINFO_PACKAGE TRUE)
+    string(JOIN ", " CPACK_DEBIAN_LIBDCGMMODULEHEALTH_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    string(JOIN ", " CPACK_DEBIAN_LIBDCGMMODULEHEALTH_PACKAGE_RECOMMENDS
+        "${CPACK_DEBIAN_LIBDCGMMODULENVSWITCH_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    set(CPACK_DEBIAN_LIBDCGMMODULEINTROSPECT_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_DEBIAN_LIBDCGMMODULEINTROSPECT_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    set(CPACK_DEBIAN_LIBDCGMMODULENVSWITCH_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_DEBIAN_LIBDCGMMODULENVSWITCH_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    set(CPACK_DEBIAN_LIBDCGMMODULEPOLICY_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_DEBIAN_LIBDCGMMODULEPOLICY_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    set(CPACK_DEBIAN_LIBDCGMMODULESYSMON_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_DEBIAN_LIBDCGMMODULESYSMON_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
 
     set(CPACK_DEBIAN_MULTINODE_DEBUGINFO_PACKAGE TRUE)
     string(JOIN ", " CPACK_DEBIAN_MULTINODE_PACKAGE_DEPENDS
-        "${CPACK_DEBIAN_CORE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
-        "openmpi | openmpi-bin (>= 4.1.1)") # Play nice with the clients using the NVIDIA DOCA package repository
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "openmpi | openmpi-bin (>= 4.1.1)" # Play nice with the clients using the NVIDIA DOCA package repository
+    )
 
     set(CPACK_DEBIAN_MULTINODE_CUDA12_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_DEBIAN_MULTINODE_CUDA12_PACKAGE_DEPENDS
         "${CPACK_DEBIAN_MULTINODE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_CUBLAS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_CURAND_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_CUSPARSELT_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA12_NCCL_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
         "openmpi | libopenmpi40 | libopenmpi3 (>= 4.1.1)") # Play nice with the clients using the NVIDIA DOCA package repository
 
     set(CPACK_DEBIAN_MULTINODE_CUDA13_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_DEBIAN_MULTINODE_CUDA13_PACKAGE_DEPENDS
         "${CPACK_DEBIAN_MULTINODE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_CUBLAS_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_CURAND_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_CUSPARSELT_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
+        "${CPACK_DEBIAN_CUDA13_NCCL_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
         "openmpi | libopenmpi40 | libopenmpi3 (>= 4.1.1)") # Play nice with the clients using the NVIDIA DOCA package repository
+
+    set(CPACK_DEBIAN_NV-HOSTENGINE_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_DEBIAN_NV-HOSTENGINE_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
+
+    set(CPACK_DEBIAN_PYTHON3-DCGM_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_DEBIAN_PYTHON3-DCGM_PACKAGE_DEPENDS
+        "${CPACK_DEBIAN_LIBDCGM_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
 
     set(SUFFIX
         "_${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE}_${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb")
@@ -221,20 +596,42 @@ elseif(CPACK_GENERATOR MATCHES "TGZ" OR CPACK_GENERATOR MATCHES "TZST")
 
     set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
 
-    set(CPACK_COMPONENT_CORE_GROUP "Amalgam")
     set(CPACK_COMPONENT_CUDA11_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA11_CUBLAS_GROUP "Amalgam")
     set(CPACK_COMPONENT_CUDA12_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA12_CUBLAS_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA12_CURAND_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA12_CUSPARSELT_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA12_NCCL_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA12_UBERGEMM2_GROUP "Amalgam")
     set(CPACK_COMPONENT_CUDA13_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA13_CUBLAS_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA13_CURAND_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA13_CUSPARSELT_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA13_NCCL_GROUP "Amalgam")
+    set(CPACK_COMPONENT_CUDA13_UBERGEMM2_GROUP "Amalgam")
+    set(CPACK_COMPONENT_DCGMI_GROUP "Amalgam")
+    set(CPACK_COMPONENT_DCGMPROFTESTERKERNELS_GROUP "Amalgam")
     set(CPACK_COMPONENT_DEVELOPMENT_GROUP "Amalgam")
+    set(CPACK_COMPONENT_LIBDCGM_GROUP "Amalgam")
+    set(CPACK_COMPONENT_LIBDCGMMODULECONFIG_GROUP "Amalgam")
+    set(CPACK_COMPONENT_LIBDCGMMODULEDIAG_GROUP "Amalgam")
+    set(CPACK_COMPONENT_LIBDCGMMODULEHEALTH_GROUP "Amalgam")
+    set(CPACK_COMPONENT_LIBDCGMMODULEINTROSPECT_GROUP "Amalgam")
+    set(CPACK_COMPONENT_LIBDCGMMODULENVSWITCH_GROUP "Amalgam")
+    set(CPACK_COMPONENT_LIBDCGMMODULEPOLICY_GROUP "Amalgam")
+    set(CPACK_COMPONENT_LIBDCGMMODULESYSMON_GROUP "Amalgam")
     set(CPACK_COMPONENT_MULTINODE_GROUP "Amalgam")
     set(CPACK_COMPONENT_MULTINODE_CUDA12_GROUP "Amalgam")
     set(CPACK_COMPONENT_MULTINODE_CUDA13_GROUP "Amalgam")
+    set(CPACK_COMPONENT_NV-HOSTENGINE_GROUP "Amalgam")
+    set(CPACK_COMPONENT_PYTHON3-DCGM_GROUP "Amalgam")
 
     set(CPACK_ARCHIVE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_TGZ_PACKAGE_VERSION}-${DCGM_TGZ_SUFFIX}")
     set(CPACK_ARCHIVE_AMALGAM_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_TGZ_PACKAGE_VERSION}-${DCGM_TGZ_SUFFIX}")
     set(CPACK_ARCHIVE_TESTS_FILE_NAME "${CPACK_PACKAGE_NAME}-tests-${CPACK_TGZ_PACKAGE_VERSION}-${DCGM_TGZ_SUFFIX}")
 elseif(CPACK_GENERATOR MATCHES "RPM")
-    list(APPEND CPACK_COMPONENTS_ALL Cuda_All)
+    list(APPEND CPACK_COMPONENTS_ALL Core Cuda_All)
     list(REMOVE_ITEM CPACK_COMPONENTS_ALL Tests)
 
     if (CPACK_VMWARE)
@@ -278,44 +675,76 @@ elseif(CPACK_GENERATOR MATCHES "RPM")
     set(CPACK_RPM_CORE_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-core")
     set(CPACK_RPM_CUDA_ALL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda-all")
     set(CPACK_RPM_CUDA11_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda11")
+    set(CPACK_RPM_CUDA11_CUBLAS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda11-cublas")
     set(CPACK_RPM_CUDA12_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12")
+    set(CPACK_RPM_CUDA12_CUBLAS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-cublas")
+    set(CPACK_RPM_CUDA12_CURAND_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-curand")
+    set(CPACK_RPM_CUDA12_CUSPARSELT_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-cusparselt")
+    set(CPACK_RPM_CUDA12_NCCL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-nccl")
+    set(CPACK_RPM_CUDA12_UBERGEMM2_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda12-ubergemm2")
     set(CPACK_RPM_CUDA13_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13")
+    set(CPACK_RPM_CUDA13_CUBLAS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-cublas")
+    set(CPACK_RPM_CUDA13_CURAND_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-curand")
+    set(CPACK_RPM_CUDA13_CUSPARSELT_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-cusparselt")
+    set(CPACK_RPM_CUDA13_NCCL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-nccl")
+    set(CPACK_RPM_CUDA13_UBERGEMM2_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13-ubergemm2")
+    set(CPACK_RPM_DCGMI_PACKAGE_NAME "dcgmi")
+    set(CPACK_RPM_DCGMPROFTESTERKERNELS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-dcgmproftesterkernels")
     set(CPACK_RPM_DEVELOPMENT_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-devel")
+    set(CPACK_RPM_LIBDCGM_PACKAGE_NAME "libdcgm")
+    set(CPACK_RPM_LIBDCGMMODULECONFIG_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-config")
+    set(CPACK_RPM_LIBDCGMMODULEDIAG_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-diag")
+    set(CPACK_RPM_LIBDCGMMODULEHEALTH_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-health")
+    set(CPACK_RPM_LIBDCGMMODULEINTROSPECT_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-introspect")
+    set(CPACK_RPM_LIBDCGMMODULENVSWITCH_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-nvswitch")
+    set(CPACK_RPM_LIBDCGMMODULEPOLICY_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-policy")
+    set(CPACK_RPM_LIBDCGMMODULESYSMON_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-module-sysmon")
     set(CPACK_RPM_MULTINODE_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-multinode")
     set(CPACK_RPM_MULTINODE_CUDA12_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-multinode-cuda12")
     set(CPACK_RPM_MULTINODE_CUDA13_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-multinode-cuda13")
-    set(CPACK_RPM_PYTHON_PACKAGE_NAME "python3-${CPACK_PACKAGE_NAME}")
+    set(CPACK_RPM_NV-HOSTENGINE_PACKAGE_NAME "nv-hostengine")
+    set(CPACK_RPM_PYTHON3-DCGM_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-python3")
 
-    set(CPACK_RPM_CORE_DEBUGINFO_PACKAGE TRUE)
+    # In v4.7, we decomposed the core package into numerous subpackages. Inform
+    # the package manager of this decomposition.
+    #
+    # TODO: Remove for v5.0
+    set(CORE_TRANSITION_VERSION
+        "${CPACK_RPM_PACKAGE_EPOCH}:4.7.0~0-1")
+    foreach(COMPONENT
+            CORE
+            DCGMI
+            DCGMPROFTESTERKERNELS
+            LIBDCGM
+            LIBDCGMMODULECONFIG
+            LIBDCGMMODULEDIAG
+            LIBDCGMMODULEHEALTH
+            LIBDCGMMODULEINTROSPECT
+            LIBDCGMMODULENVSWITCH
+            LIBDCGMMODULEPOLICY
+            LIBDCGMMODULESYSMON
+            NV-HOSTENGINE
+            PYTHON3-DCGM)
+        set(CPACK_RPM_${COMPONENT}_PACKAGE_OBSOLETES
+            "${CPACK_RPM_CORE_PACKAGE_NAME} < ${CORE_TRANSITION_VERSION}")
+    endforeach()
+
+    set(CPACK_RPM_CORE_DEBUGINFO_PACKAGE FALSE)
     set(CPACK_RPM_CORE_PACKAGE_CONFLICTS "datacenter-gpu-manager")
+    string(JOIN ", " CPACK_RPM_CORE_PACKAGE_REQUIRES
+        "${CPACK_RPM_DCGMI_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_DCGMPROFTESTERKERNELS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGMMODULECONFIG_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGMMODULEDIAG_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGMMODULEHEALTH_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGMMODULEINTROSPECT_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGMMODULENVSWITCH_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGMMODULEPOLICY_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGMMODULESYSMON_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_NV-HOSTENGINE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_PYTHON3-DCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
 
-    # The CPack RPM generator doesn't support the Recommends spec file header.
-    # As a work-around, we abuse the substitution of another header.
-    #
-    # Note that weak dependency spec file headers are only supported in rpm
-    # version 4.12.0 or later. The Linux distribution shipping with a
-    # sufficiently recent rpm version include:
-    # - Red Hat Enterprise Linux >= 8,
-    # - SUSE Linux Enterprise Server >= 10
-    # - Fedora Linux >= 24
-    #
-    set(CPACK_RPM_CORE_PACKAGE_REQUIRES "glibc >= 2.27, lshw")
-
-    # The RPM post-installation script configures an unprivileged user account,
-    # `nvidia-dcgm`, to satisfy the principle of least privilege. In RPM
-    # packages, this account is created via the `useradd` command. The name of
-    # the package varies between SUSE Linux Enterprise Server (SLES) and Red
-    # Hat Enterprise Linux (RHEL).
-    #
-    # Fortunately, the name 'shadow' refers to an appropriate package on SLES
-    # and to an appropriate virtual package on RHEL 9. An alternative referring
-    # to the concrete package has been added to support RHEL 8
-    string(JOIN ", " CPACK_RPM_CORE_PACKAGE_REQUIRES_PRE
-        "(shadow or shadow-utils)"
-        "(/usr/sbin/nologin or /sbin/nologin)")
-
-    set(CPACK_RPM_CORE_POST_INSTALL_SCRIPT_FILE
-        "${CMAKE_CURRENT_LIST_DIR}/../scripts/rpm/postinstall")
 
     set(CPACK_RPM_CUDA_ALL_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_RPM_CUDA_ALL_PACKAGE_REQUIRES
@@ -326,48 +755,144 @@ elseif(CPACK_GENERATOR MATCHES "RPM")
     set(CPACK_RPM_CUDA11_DEBUGINFO_PACKAGE TRUE)
     set(CPACK_RPM_CUDA11_PACKAGE_PROVIDES
         "${CPACK_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
-    # The CPack RPM generator doesn't support the Recommends spec file header.
-    # As a work-around, we abuse the substitution of another header
-    set(CPACK_RPM_CUDA11_PACKAGE_REQUIRES
-        "${CPACK_RPM_CORE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}
-Recommends: libnuma.so.1()(64bit)")
+
+    string(JOIN ", " CPACK_RPM_CUDA11_PACKAGE_REQUIRES
+        "${CPACK_RPM_CORE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA11_CUBLAS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_DCGMPROFTESTERKERNELS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+
+    set(CPACK_RPM_CUDA11_PACKAGE_RECOMMENDS "libnuma.so.1()(64bit)")
+
+    set(CPACK_RPM_CUDA11_CUBLAS_DEBUGINFO_PACKAGE FALSE)
 
     set(CPACK_RPM_CUDA12_DEBUGINFO_PACKAGE TRUE)
     set(CPACK_RPM_CUDA12_PACKAGE_PROVIDES
         "${CPACK_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
-    # The CPack RPM generator doesn't support the Recommends spec file header.
-    # As a work-around, we abuse the substitution of another header
-    set(CPACK_RPM_CUDA12_PACKAGE_REQUIRES
-        "${CPACK_RPM_CORE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}
-Recommends: libnuma.so.1()(64bit)")
+
+    string(JOIN ", " CPACK_RPM_CUDA12_PACKAGE_REQUIRES
+        "${CPACK_RPM_CORE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_CUBLAS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_CURAND_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_CUSPARSELT_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_NCCL_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_DCGMPROFTESTERKERNELS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+
+    set(CPACK_RPM_CUDA12_PACKAGE_RECOMMENDS "libnuma.so.1()(64bit)")
+    set(CPACK_RPM_CUDA12_CUBLAS_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_CUDA12_CURAND_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_CUDA12_CUSPARSELT_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_CUDA12_NCCL_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_CUDA12_UBERGEMM2_DEBUGINFO_PACKAGE FALSE)
+    string(JOIN ", " CPACK_RPM_CUDA12_UBERGEMM2_PACKAGE_REQUIRES
+        "${CPACK_RPM_CUDA12_CUBLAS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_CURAND_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_CUSPARSELT_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_NCCL_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "(openmpi >= 4.1.1 or openmpi4 >= 4.1.1)")
 
     set(CPACK_RPM_CUDA13_DEBUGINFO_PACKAGE TRUE)
     set(CPACK_RPM_CUDA13_PACKAGE_PROVIDES
         "${CPACK_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
-    # The CPack RPM generator doesn't support the Recommends spec file header.
-    # As a work-around, we abuse the substitution of another header
-    set(CPACK_RPM_CUDA13_PACKAGE_REQUIRES
-        "${CPACK_RPM_CORE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}
-Recommends: libnuma.so.1()(64bit)")
 
-    set(CPACK_RPM_DEVELOPMENT_DEBUGINFO_PACKAGE TRUE)
-    set(CPACK_RPM_DEVELOPMENT_PACKAGE_DEPENDS
-        "${CPACK_RPM_CORE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
-
-    set(CPACK_RPM_MULTINODE_DEBUGINFO_PACKAGE TRUE)
-    string(JOIN ", " CPACK_RPM_MULTINODE_PACKAGE_DEPENDS
+    string(JOIN ", " CPACK_RPM_CUDA13_PACKAGE_REQUIRES
         "${CPACK_RPM_CORE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_CUBLAS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_CURAND_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_CUSPARSELT_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_NCCL_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_DCGMPROFTESTERKERNELS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+
+    set(CPACK_RPM_CUDA13_PACKAGE_RECOMMENDS "libnuma.so.1()(64bit)")
+
+    set(CPACK_RPM_CUDA13_CUBLAS_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_CUDA13_CURAND_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_CUDA13_CUSPARSELT_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_CUDA13_NCCL_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_CUDA13_UBERGEMM2_DEBUGINFO_PACKAGE FALSE)
+    string(JOIN ", " CPACK_RPM_CUDA13_UBERGEMM2_PACKAGE_REQUIRES
+        "${CPACK_RPM_CUDA13_CUBLAS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_CURAND_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_CUSPARSELT_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_NCCL_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
         "(openmpi >= 4.1.1 or openmpi4 >= 4.1.1)")
 
+    set(CPACK_RPM_DCGMI_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_RPM_DCGMI_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_DCGMPROFTESTERKERNELS_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_DCGMPROFTESTERKERNELS_PACKAGE_REQUIRES "")
+
+    set(CPACK_RPM_DEVELOPMENT_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_RPM_DEVELOPMENT_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_LIBDCGM_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_RPM_LIBDCGM_PACKAGE_REQUIRES "glibc >= 2.27, lshw")
+
+    # The RPM post-installation script configures an unprivileged user account,
+    # `nvidia-dcgm`, to satisfy the principle of least privilege. In RPM
+    # packages, this account is created via the `useradd` command. The name of
+    # the package varies between SUSE Linux Enterprise Server (SLES) and Red
+    # Hat Enterprise Linux (RHEL).
+    #
+    # Fortunately, the name 'shadow' refers to an appropriate package on SLES
+    # and to an appropriate virtual package on RHEL 9. An alternative referring
+    # to the concrete package has been added to support RHEL 8
+    string(JOIN ", " CPACK_RPM_LIBDCGM_PACKAGE_REQUIRES_PRE
+        "(shadow or shadow-utils)"
+        "(/usr/sbin/nologin or /sbin/nologin)")
+
+    set(CPACK_RPM_LIBDCGM_POST_INSTALL_SCRIPT_FILE
+        "${CMAKE_CURRENT_LIST_DIR}/../scripts/rpm/postinstall")
+
+    set(CPACK_RPM_LIBDCGMMODULECONFIG_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_RPM_LIBDCGMMODULECONFIG_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_LIBDCGMMODULEDIAG_DEBUGINFO_PACKAGE TRUE)
+    string(JOIN ", " CPACK_RPM_LIBDCGMMODULEDIAG_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGMMODULECONFIG_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_LIBDCGMMODULEHEALTH_DEBUGINFO_PACKAGE TRUE)
+    string(JOIN ", " CPACK_RPM_LIBDCGMMODULEHEALTH_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_LIBDCGMMODULENVSWITCH_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_LIBDCGMMODULEINTROSPECT_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_RPM_LIBDCGMMODULEINTROSPECT_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_LIBDCGMMODULENVSWITCH_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_RPM_LIBDCGMMODULENVSWITCH_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_LIBDCGMMODULEPOLICY_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_RPM_LIBDCGMMODULEPOLICY_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_LIBDCGMMODULESYSMON_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_RPM_LIBDCGMMODULESYSMON_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_MULTINODE_DEBUGINFO_PACKAGE TRUE)
+    string(JOIN ", " CPACK_RPM_MULTINODE_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "(openmpi >= 4.1.1 or openmpi4 >= 4.1.1)")
     set(CPACK_RPM_MULTINODE_CUDA12_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_RPM_MULTINODE_CUDA12_PACKAGE_REQUIRES
         "${CPACK_RPM_MULTINODE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_CUBLAS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_CURAND_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_CUSPARSELT_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA12_NCCL_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
         "(openmpi >= 4.1.1 or openmpi4 >= 4.1.1)")
-
     set(CPACK_RPM_MULTINODE_CUDA13_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_RPM_MULTINODE_CUDA13_PACKAGE_REQUIRES
         "${CPACK_RPM_MULTINODE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_CUBLAS_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_CURAND_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_CUSPARSELT_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
+        "${CPACK_RPM_CUDA13_NCCL_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
         "(openmpi >= 4.1.1 or openmpi4 >= 4.1.1)")
+    set(CPACK_RPM_NV-HOSTENGINE_DEBUGINFO_PACKAGE TRUE)
+    set(CPACK_RPM_NV-HOSTENGINE_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
+    set(CPACK_RPM_PYTHON3-DCGM_DEBUGINFO_PACKAGE FALSE)
+    set(CPACK_RPM_PYTHON3-DCGM_PACKAGE_REQUIRES
+        "${CPACK_RPM_LIBDCGM_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
 
     foreach(component IN LISTS CPACK_COMPONENTS_ALL)
         string(TOUPPER "${component}" component)

@@ -62,3 +62,67 @@ def test_dcgm_mndiag_multinode_mixed_pass_fail():
 
 def test_dcgm_mndiag_multinode_validate_mnubergemm_path():
     trampoline()
+
+
+def test_dcgm_mndiag_mnnvbandwidth_text_success():
+    trampoline()
+
+
+def test_dcgm_mndiag_mnnvbandwidth_uses_required_defaults():
+    trampoline()
+
+
+def test_dcgm_mndiag_mnnvbandwidth_gpu_pairs_all():
+    trampoline()
+
+
+def test_dcgm_mndiag_mnnvbandwidth_text_testcase_failure():
+    trampoline()
+
+
+def test_dcgm_mndiag_mnnvbandwidth_text_rank_failure():
+    trampoline()
+
+
+def test_dcgm_mndiag_mnnvbandwidth_text_mpi_failure():
+    trampoline()
+
+
+def test_dcgm_mndiag_mnnvbandwidth_multinode_remote_exit_failure():
+    trampoline()
+
+
+def test_dcgm_mndiag_mnnvbandwidth_multinode_text_success():
+    trampoline()
+
+
+def test_dcgm_mndiag_mnnvbandwidth_multinode_text_failure():
+    trampoline()
+
+
+def test_dcgm_nvloom_basic_success():
+    trampoline()
+
+
+def test_dcgm_nvloom_basic_failure():
+    trampoline()
+
+
+def test_dcgm_nvloom_multinode_basic_success():
+    trampoline()
+
+
+def test_dcgm_nvloom_multinode_basic_failure_1():
+    trampoline()
+
+
+def test_dcgm_nvloom_multinode_basic_failure_2():
+    trampoline()
+
+
+def test_dcgm_nvloom_multinode_basic_failure_3():
+    trampoline()
+
+
+def test_dcgm_nvloom_validate_duration():
+    trampoline()

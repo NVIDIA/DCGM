@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,17 @@
 
 #include "MockDcgmSystem.h"
 
-// Overrides
-void MockDcgmSystem::Init(dcgmHandle_t handle)
-{
-    m_handle = handle;
-}
-
 dcgmReturn_t MockDcgmSystem::GetAllDevices(std::vector<unsigned int> &gpuIdList)
 {
     gpuIdList.clear();
-
+    if (m_getAllDevicesReturn != DCGM_ST_OK)
+    {
+        return m_getAllDevicesReturn;
+    }
     for (auto const &[entity, _] : m_entities)
     {
         gpuIdList.push_back(entity.entityId);
     }
-
     return DCGM_ST_OK;
 }
 
@@ -44,4 +40,9 @@ void MockDcgmSystem::AddMockedEntity(DcgmNs::MockDcgmEntity const &mockedEntity)
             fmt::format("Duplicated mocked entity group [{}] with id [{}].", entity.entityGroupId, entity.entityId));
     }
     m_entities.emplace(entity, mockedEntity);
+}
+
+void MockDcgmSystem::SetGetAllDevicesReturn(dcgmReturn_t ret)
+{
+    m_getAllDevicesReturn = ret;
 }

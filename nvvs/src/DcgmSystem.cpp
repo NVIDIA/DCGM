@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,7 @@
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 
-// DcgmSystemBase default implementations
-void DcgmSystemBase::Init(dcgmHandle_t)
-{}
+#include <DcgmOpsAnyPtr.hpp>
 
 dcgmReturn_t DcgmSystemBase::GetDeviceAttributes(unsigned int, dcgmDeviceAttributes_t &)
 {
@@ -79,19 +77,15 @@ DcgmResult<dcgmChipArchitecture_t> DcgmSystemBase::GetGpuChipArchitecture(unsign
     return std::unexpected(DCGM_ST_NOT_SUPPORTED);
 }
 
-DcgmSystem::DcgmSystem()
-    : m_handle(0)
+DcgmSystem::DcgmSystem(DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t handle)
+    : m_handle(handle)
+    , m_dcgmOps(dcgmOps)
     , m_cudaMajorVersion(0)
     , m_cudaMinorVersion(0)
 {}
 
 DcgmSystem::~DcgmSystem()
 {}
-
-void DcgmSystem::Init(dcgmHandle_t handle)
-{
-    m_handle = handle;
-}
 
 dcgmReturn_t DcgmSystem::GetDeviceAttributes(unsigned int gpuId, dcgmDeviceAttributes_t &deviceAttr)
 {
@@ -107,7 +101,7 @@ dcgmReturn_t DcgmSystem::GetDeviceAttributes(unsigned int gpuId, dcgmDeviceAttri
         return DCGM_ST_BADPARAM;
     }
 
-    return dcgmGetDeviceAttributes(m_handle, gpuId, &deviceAttr);
+    return m_dcgmOps->dcgmGetDeviceAttributes(m_handle, gpuId, &deviceAttr);
 }
 
 dcgmReturn_t DcgmSystem::GetGpuStatus(unsigned int gpuId, DcgmEntityStatus_t *gpuStatus)
@@ -124,7 +118,13 @@ dcgmReturn_t DcgmSystem::GetGpuStatus(unsigned int gpuId, DcgmEntityStatus_t *gp
         return DCGM_ST_BADPARAM;
     }
 
-    return dcgmGetGpuStatus(m_handle, gpuId, gpuStatus);
+    if (gpuStatus == nullptr)
+    {
+        log_error("Cannot get gpu status with a null status pointer");
+        return DCGM_ST_BADPARAM;
+    }
+
+    return m_dcgmOps->dcgmGetGpuStatus(m_handle, gpuId, gpuStatus);
 }
 
 dcgmReturn_t DcgmSystem::GetAllSupportedDevices(std::vector<unsigned int> &gpuIdList)
@@ -138,7 +138,7 @@ dcgmReturn_t DcgmSystem::GetAllSupportedDevices(std::vector<unsigned int> &gpuId
     unsigned int gpuIds[DCGM_MAX_NUM_DEVICES] = { 0 };
     int count                                 = 0;
 
-    dcgmReturn_t ret = dcgmGetAllSupportedDevices(m_handle, gpuIds, &count);
+    dcgmReturn_t ret = m_dcgmOps->dcgmGetAllSupportedDevices(m_handle, gpuIds, &count);
 
     if (ret != DCGM_ST_OK)
     {
@@ -165,7 +165,7 @@ dcgmReturn_t DcgmSystem::GetAllDevices(std::vector<unsigned int> &gpuIdList)
     unsigned int gpuIds[DCGM_MAX_NUM_DEVICES] = { 0 };
     int count                                 = 0;
 
-    dcgmReturn_t ret = dcgmGetAllDevices(m_handle, gpuIds, &count);
+    dcgmReturn_t ret = m_dcgmOps->dcgmGetAllDevices(m_handle, gpuIds, &count);
 
     if (ret != DCGM_ST_OK)
     {
@@ -206,7 +206,7 @@ dcgmReturn_t DcgmSystem::GetGpuLatestValue(unsigned int gpuId,
     fieldIds[0]               = fieldId;
 
     dcgmReturn_t ret
-        = dcgmEntitiesGetLatestValues(m_handle, entities, entityCount, fieldIds, fieldCount, flags, values);
+        = m_dcgmOps->dcgmEntitiesGetLatestValues(m_handle, entities, entityCount, fieldIds, fieldCount, flags, values);
 
     if (ret != DCGM_ST_OK)
         return ret;
@@ -228,6 +228,12 @@ dcgmReturn_t DcgmSystem::GetLatestValuesForGpus(const std::vector<unsigned int> 
         return DCGM_ST_BADPARAM;
     }
 
+    if (checker == nullptr)
+    {
+        log_error("Cannot get the latest values with a null enumeration callback");
+        return DCGM_ST_BADPARAM;
+    }
+
     unsigned int entityCount = gpuIds.size();
     unsigned int fieldCount  = fieldIds.size();
     unsigned int numValues   = entityCount * fieldCount;
@@ -246,7 +252,7 @@ dcgmReturn_t DcgmSystem::GetLatestValuesForGpus(const std::vector<unsigned int> 
         entities.push_back(entityPair);
     }
 
-    dcgmReturn_t ret = dcgmEntitiesGetLatestValues(
+    dcgmReturn_t ret = m_dcgmOps->dcgmEntitiesGetLatestValues(
         m_handle, entities.data(), entityCount, fieldIds.data(), fieldCount, flags, values.data());
 
     if (ret != DCGM_ST_OK)
@@ -357,7 +363,7 @@ DcgmResult<dcgmChipArchitecture_t> DcgmSystem::GetGpuChipArchitecture(unsigned i
     }
 
     dcgmChipArchitecture_t chipArchitecture;
-    dcgmReturn_t ret = dcgmGetGpuChipArchitecture(m_handle, gpuId, &chipArchitecture);
+    dcgmReturn_t ret = m_dcgmOps->dcgmGetGpuChipArchitecture(m_handle, gpuId, &chipArchitecture);
     if (ret != DCGM_ST_OK)
     {
         return std::unexpected(ret);

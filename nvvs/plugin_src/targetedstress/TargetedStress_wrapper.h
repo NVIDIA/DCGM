@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +17,27 @@
 #define _NVVS_NVVS_TargetedStress_H_
 
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "CudaCommon.h"
+#include "CudaCommonAnyPtr.hpp"
+#include "CudaCommonAnyUniquePtr.hpp"
 #include "DcgmError.h"
 #include "DcgmRecorder.h"
 #include "Plugin.h"
 #include "PluginCommon.h"
 #include "PluginDevice.h"
 
+#include <CublasOpsAnyUniquePtr.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <DcgmRecorder.h>
 #include <NvvsStructs.h>
 #include <PluginInterface.h>
-#include <cublas_proxy.hpp>
 #include <cuda.h>
 
 #define TS_TEST_DIMENSION 1280 /* Test single dimension */
@@ -60,7 +66,7 @@ typedef struct cperf_stream_t
     void *deviceB;
     void *deviceC;
 
-    /* Arrays for cublasDgemm. Allocated at MAX_DIMENSION^2 * sizeof(double) */
+    /* Arrays for cublasDgemm_v2. Allocated at MAX_DIMENSION^2 * sizeof(double) */
     void *hostA;
     void *hostB;
     void *hostC;
@@ -93,18 +99,26 @@ typedef struct cperf_stream_t
 class CPerfDevice : public PluginDevice
 {
 public:
+    CublasOpsAnyPtr cublasOps;
     int Nstreams; /* Number of stream[] entries that are valid */
     cperf_stream_t streams[TS_MAX_STREAMS_PER_DEVICE];
 
     int allocatedCublasHandle;   /* Have we allocated cublasHandle yet? */
     cublasHandle_t cublasHandle; /* Handle to cuBlas */
-
     /* Timing accumulators */
     double usecInCopies; /* How long (microseconds) have we spent copying data to and from the GPU */
     double usecInGemm;   /* How long (microseconds) have we spent running gemm */
 
-    CPerfDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(testName, ndi, pciBusId, p)
+    CPerfDevice(std::string const &testName,
+                unsigned int ndi,
+                const char *pciBusId,
+                Plugin *p,
+                DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                dcgmHandle_t handle,
+                CudaOpsAnyPtr cudaOps,
+                CublasOpsAnyPtr cublasOps)
+        : PluginDevice(testName, ndi, pciBusId, p, dcgmOps, handle, cudaOps)
+        , cublasOps(cublasOps)
         , Nstreams(0)
         , allocatedCublasHandle(0)
         , cublasHandle(0)
@@ -116,10 +130,9 @@ public:
 
     ~CPerfDevice()
     {
-        using namespace Dcgm;
         if (allocatedCublasHandle)
         {
-            CublasProxy::CublasDestroy(cublasHandle);
+            cublasOps->cublasDestroy_v2(cublasHandle);
             cublasHandle          = 0;
             allocatedCublasHandle = 0;
         }
@@ -128,51 +141,51 @@ public:
         {
             cperf_stream_p cpStream = &streams[i];
 
-            cudaError_t cuSt = cudaStreamDestroy(cpStream->cudaStream);
+            cudaError_t cuSt = cudaOps->cudaStreamDestroy(cpStream->cudaStream);
             if (cuSt != cudaSuccess)
             {
-                DCGM_LOG_ERROR << "cudaStreamDestroy returned " << cudaGetErrorString(cuSt);
+                DCGM_LOG_ERROR << "cudaStreamDestroy returned " << cudaOps->cudaGetErrorString(cuSt);
             }
 
 
             if (cpStream->hostA)
             {
-                cudaFreeHost(cpStream->hostA);
+                cudaOps->cudaFreeHost(cpStream->hostA);
                 cpStream->hostA = 0;
             }
             if (cpStream->hostB)
             {
-                cudaFreeHost(cpStream->hostB);
+                cudaOps->cudaFreeHost(cpStream->hostB);
                 cpStream->hostB = 0;
             }
             if (cpStream->hostC)
             {
-                cudaFreeHost(cpStream->hostC);
+                cudaOps->cudaFreeHost(cpStream->hostC);
                 cpStream->hostC = 0;
             }
 
             if (cpStream->deviceA)
             {
-                cudaFree(cpStream->deviceA);
+                cudaOps->cudaFree(cpStream->deviceA);
                 cpStream->deviceA = 0;
             }
             if (cpStream->deviceB)
             {
-                cudaFree(cpStream->deviceB);
+                cudaOps->cudaFree(cpStream->deviceB);
                 cpStream->deviceB = 0;
             }
             if (cpStream->deviceC)
             {
-                cudaFree(cpStream->deviceC);
+                cudaOps->cudaFree(cpStream->deviceC);
                 cpStream->deviceC = 0;
             }
 
             for (int j = 0; j < cpStream->NeventsInitalized; j++)
             {
-                cudaEventDestroy(cpStream->beforeCopyH2D[j]);
-                cudaEventDestroy(cpStream->beforeGemm[j]);
-                cudaEventDestroy(cpStream->beforeCopyD2H[j]);
-                cudaEventDestroy(cpStream->afterCopyD2H[j]);
+                cudaOps->cudaEventDestroy(cpStream->beforeCopyH2D[j]);
+                cudaOps->cudaEventDestroy(cpStream->beforeGemm[j]);
+                cudaOps->cudaEventDestroy(cpStream->beforeCopyD2H[j]);
+                cudaOps->cudaEventDestroy(cpStream->afterCopyD2H[j]);
             }
         }
         Nstreams = 0;
@@ -184,7 +197,12 @@ public:
 class ConstantPerf : public Plugin
 {
 public:
-    ConstantPerf(dcgmHandle_t handle);
+    ConstantPerf(dcgmHandle_t handle,
+                 DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                 CudaOpsAnyUniquePtr cudaOps,
+                 CublasOpsAnyUniquePtr cublasOps,
+                 CudaCommonAnyUniquePtr cudaCommon,
+                 NvvsCommon *nvvsCommon);
     virtual ~ConstantPerf();
 
     /*************************************************************************/
@@ -223,9 +241,7 @@ public:
 
     std::string GetTargetedStressTestName() const;
 
-#ifndef TARGETED_STRESS_TESTS
-private:
-#endif
+protected:
     /*************************************************************************/
     /*
      * Initialize the parts of cuda and cublas needed for this plugin to run
@@ -276,12 +292,16 @@ private:
 
     /*************************************************************************/
     /* Variables */
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique;      /* Owned DCGM API interface */
     std::unique_ptr<TestParameters> m_testParameters; /* Parameters for this test, passed in from the framework. */
     std::unique_ptr<TestParameters> m_defaultTestParameters; /* Owned default parameters for infoStruct */
     bool m_dcgmCommErrorOccurred;                            /* Has there been a communication error with DCGM? */
     bool m_dcgmRecorderInitialized;                          /* Has DcgmRecorder been initialized? */
-    DcgmRecorder m_dcgmRecorder;                             /* DCGM stats recording interfact object */
-    std::vector<CPerfDevice *> m_device;                     /* Per-device data */
+    CudaOpsAnyUniquePtr m_cudaOps;                           //!< CUDA API interface.
+    CublasOpsAnyUniquePtr m_cublasOps;                       //!< cuBLAS API interface.
+    CudaCommonAnyUniquePtr m_cudaCommon;
+    DcgmRecorder m_dcgmRecorder;         /* DCGM stats recording interfact object */
+    std::vector<CPerfDevice *> m_device; /* Per-device data */
 
     /* Cached parameters read from testParameters */
     double m_testDuration;        /* Test duration in seconds */

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +13,14 @@
 # limitations under the License.
 
 if(BUILD_TESTING)
-  add_library(hostengine_lib STATIC src/HostEngineCommandLine.cpp src/HostEngineOutput.cpp)
-  target_link_libraries(hostengine_lib PRIVATE common_interface TCLAP::TCLAP)
+  add_library(hostengine_lib STATIC)
+  target_sources(hostengine_lib
+                 PRIVATE
+                 src/HostEngineCommandLine.cpp
+                 src/HostEngineMainHelpers.cpp
+                 src/HostEngineOutput.cpp)
   target_include_directories(hostengine_lib PUBLIC src)
-  target_compile_definitions(hostengine_lib PRIVATE HOSTENGINE_TESTS)
+  target_link_libraries(hostengine_lib PRIVATE common_interface TCLAP::TCLAP)
 
   add_subdirectory(src/tests)
 endif()
@@ -25,20 +29,24 @@ target_sources(nv-hostengine
    PRIVATE
        src/HostEngineCommandLine.cpp
        src/HostEngineCommandLine.h
+       src/HostEngineMainHelpers.cpp
+       src/HostEngineMainHelpers.h
        src/HostEngineOutput.cpp
        src/HostEngineOutput.h
        src/main.cpp)
 
 target_link_libraries(nv-hostengine
-    PRIVATE 
+    PRIVATE
         common_interface
-        dcgm_interface dcgm
+        dcgm_interface
+        dcgm
         buildinfo_objects
         dcgm_common
         TCLAP::TCLAP
         transport_objects
         dcgm_logging
     PUBLIC
-        ${LIBEVENT_STATIC_LIBS})
+        libevent::extra
+        libevent::pthreads)
 
 target_link_options(nv-hostengine PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/hostengine.linux_def)

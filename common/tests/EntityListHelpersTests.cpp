@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "DcgmStringHelpers.h"
-#include "MigIdParser.hpp"
-#include "dcgm_fields.h"
-#include "dcgm_structs.h"
+#include <DcgmStringHelpers.h>
+#include <EntityListHelpers.h>
+#include <MigIdParser.hpp>
+#include <MockDcgmOps.h>
+#include <dcgm_fields.h>
+#include <dcgm_structs.h>
+
 #include <catch2/catch_all.hpp>
 
-#include <EntityListHelpers.h>
-
+#include <fmt/format.h>
 #include <limits>
+#include <numeric>
+#include <vector>
 
 namespace
 {
@@ -63,6 +67,46 @@ dcgmMigHierarchy_v2 CreateFakeMigHierachy(std::string const &uuid)
     migHierarchy.entityList[1] = CreateOneMigHierachyInfo(0, DCGM_FE_GPU_CI, 0, DCGM_FE_GPU_I, uuid, 0, 5, 0, 7, 1);
 
     return migHierarchy;
+}
+
+dcgmHandle_t ConnectMockDcgmOps(DcgmNs::MockDcgmOps &mockDcgmOps)
+{
+    dcgmHandle_t dcgmHandle {};
+    REQUIRE(mockDcgmOps.dcgmConnect_v2(nullptr, nullptr, &dcgmHandle) == DCGM_ST_OK);
+    return dcgmHandle;
+}
+
+dcgmDeviceAttributes_t MakeGpuAttributes(std::string const &uuid)
+{
+    dcgmDeviceAttributes_t attributes {};
+    attributes.version = dcgmDeviceAttributes_version3;
+    SafeCopyTo(attributes.identifiers.uuid, uuid.c_str());
+    return attributes;
+}
+
+void AddMockedGpu(DcgmNs::MockDcgmOps &mockDcgmOps, dcgm_field_eid_t gpuId, std::string const &uuid)
+{
+    DcgmNs::MockDcgmEntity mockedGpu({ DCGM_FE_GPU, gpuId });
+    mockedGpu.SetDevAttr(MakeGpuAttributes(uuid));
+    mockDcgmOps.AddMockedEntity(mockedGpu);
+}
+
+std::string ParseEntityList(DcgmNs::MockDcgmOps &mockDcgmOps,
+                            dcgmHandle_t dcgmHandle,
+                            std::string const &entityIds,
+                            std::vector<dcgmGroupEntityPair_t> &entityList)
+{
+    return DcgmNs::EntityListWithMigAndUuidParser(dcgmHandle, entityIds, entityList, &mockDcgmOps);
+}
+
+std::vector<dcgmGroupEntityPair_t> ParseEntityList(DcgmNs::MockDcgmOps &mockDcgmOps,
+                                                   dcgmHandle_t dcgmHandle,
+                                                   std::string const &entityIds)
+{
+    std::vector<dcgmGroupEntityPair_t> entityList;
+    auto err = ParseEntityList(mockDcgmOps, dcgmHandle, entityIds, entityList);
+    CHECK(err.empty());
+    return entityList;
 }
 
 } //namespace
@@ -256,6 +300,24 @@ TEST_CASE("TryParseEntityList")
         REQUIRE(rejectedId == entityId);
     }
 
+    SECTION("Hostengine query uses supplied DCGM API")
+    {
+        std::string const gpuUuid = "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5";
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        auto const dcgmHandle = ConnectMockDcgmOps(mockDcgmOps);
+
+        AddMockedGpu(mockDcgmOps, 3, gpuUuid);
+
+        auto [entityList, rejectedId] = DcgmNs::TryParseEntityList(dcgmHandle, gpuUuid, &mockDcgmOps);
+
+        REQUIRE(entityList.size() == 1);
+        REQUIRE(entityList[0].entityId == 3);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(rejectedId.empty());
+        REQUIRE(mockDcgmOps.m_migHierarchyState.callCount == 1);
+        REQUIRE(mockDcgmOps.m_entityListState.callCount == 1);
+    }
+
     SECTION("Entity map with GPU ID & UUID")
     {
         std::vector<std::pair<unsigned, std::string>> gpuIdUuids {
@@ -371,7 +433,8 @@ TEST_CASE("ParseEntityIdsAndFilterGpu")
     SECTION("Empty input")
     {
         auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, "");
-        REQUIRE(gpuIds.empty());
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->empty());
     }
 
     SECTION("With GPU ID & UUID")
@@ -382,34 +445,40 @@ TEST_CASE("ParseEntityIdsAndFilterGpu")
         };
         std::string entityId = "gpu:0,gpu:1,cpu:0";
         auto gpuIds          = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityId);
-        REQUIRE(gpuIds.size() == 2);
-        REQUIRE(gpuIds[0] == 0);
-        REQUIRE(gpuIds[1] == 1);
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->size() == 2);
+        REQUIRE((*gpuIds)[0] == 0);
+        REQUIRE((*gpuIds)[1] == 1);
 
         entityId = "GPU-57fba5ae-c3e2-8cfb-0905-b0cb3d279a45,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityId);
-        REQUIRE(gpuIds.size() == 1);
-        REQUIRE(gpuIds[0] == 1);
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->size() == 1);
+        REQUIRE((*gpuIds)[0] == 1);
 
         entityId = "0,1,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityId);
-        REQUIRE(gpuIds.size() == 2);
-        REQUIRE(gpuIds[0] == 0);
-        REQUIRE(gpuIds[1] == 1);
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->size() == 2);
+        REQUIRE((*gpuIds)[0] == 0);
+        REQUIRE((*gpuIds)[1] == 1);
 
         entityId = "*,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityId);
-        REQUIRE(gpuIds.size() == 2);
-        REQUIRE(gpuIds[0] == 0);
-        REQUIRE(gpuIds[1] == 1);
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->size() == 2);
+        REQUIRE((*gpuIds)[0] == 0);
+        REQUIRE((*gpuIds)[1] == 1);
 
         entityId = "*/*,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityId);
-        REQUIRE(gpuIds.empty());
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->empty());
 
         entityId = "*/*/*,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityId);
-        REQUIRE(gpuIds.empty());
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->empty());
     }
 
     SECTION("With MIG hierachy")
@@ -418,37 +487,177 @@ TEST_CASE("ParseEntityIdsAndFilterGpu")
         dcgmMigHierarchy_v2 migHierarchy = CreateFakeMigHierachy(gpuUuid);
         std::string entityId             = "gpu:0,gpu:1,cpu:0";
         auto gpuIds                      = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, {}, entityId);
-        REQUIRE(gpuIds.size() == 2);
-        REQUIRE(gpuIds[0] == 0);
-        REQUIRE(gpuIds[1] == 1);
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->size() == 2);
+        REQUIRE((*gpuIds)[0] == 0);
+        REQUIRE((*gpuIds)[1] == 1);
 
         entityId = "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, {}, entityId);
-        REQUIRE(gpuIds.size() == 1);
-        REQUIRE(gpuIds[0] == 0);
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->size() == 1);
+        REQUIRE((*gpuIds)[0] == 0);
 
         entityId = "GPU-00000000-0000-0000-0000-000000000000,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, {}, entityId);
-        REQUIRE(gpuIds.empty());
+        REQUIRE_FALSE(gpuIds.has_value());
+        CHECK(gpuIds.error() == DCGM_ST_BADPARAM);
 
         entityId = "0,1,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, {}, entityId);
-        REQUIRE(gpuIds.size() == 2);
-        REQUIRE(gpuIds[0] == 0);
-        REQUIRE(gpuIds[1] == 1);
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->size() == 2);
+        REQUIRE((*gpuIds)[0] == 0);
+        REQUIRE((*gpuIds)[1] == 1);
 
         entityId = "*,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, {}, entityId);
-        REQUIRE(gpuIds.size() == 1);
-        REQUIRE(gpuIds[0] == 0);
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->size() == 1);
+        REQUIRE((*gpuIds)[0] == 0);
 
         entityId = "*/*,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, {}, entityId);
-        REQUIRE(gpuIds.empty());
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->empty());
 
         entityId = "*/*/*,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, {}, entityId);
-        REQUIRE(gpuIds.empty());
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->empty());
+    }
+
+    SECTION("Brace range at group max succeeds")
+    {
+        auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, "gpu:{0-1023}");
+        REQUIRE(gpuIds.has_value());
+        REQUIRE(gpuIds->size() == DCGM_GROUP_MAX_ENTITIES_V2);
+        CHECK(gpuIds->front() == 0);
+        CHECK(gpuIds->back() == DCGM_GROUP_MAX_ENTITIES_V2 - 1);
+    }
+
+    SECTION("Wildcard plus brace range shares maxTotalEntities")
+    {
+        std::vector<std::pair<unsigned, std::string>> gpuIdUuids = {
+            { 0, "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5" },
+            { 1, "GPU-57fba5ae-c3e2-8cfb-0905-b0cb3d279a45" },
+        };
+
+        SECTION("Wildcard plus overlapping brace is first-seen unique")
+        {
+            std::string_view const entityIds = "*,gpu:{0-1}";
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityIds);
+            REQUIRE(gpuIds.has_value());
+            CHECK(*gpuIds == std::vector<std::uint32_t> { 0, 1 });
+        }
+
+        SECTION("At parse budget the unique GPU list is 0 through 1021")
+        {
+            auto const entityIds = fmt::format("*,gpu:{{0-{}}}", DCGM_GROUP_MAX_ENTITIES_V2 - 3);
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityIds);
+            REQUIRE(gpuIds.has_value());
+            std::vector<std::uint32_t> expected(DCGM_GROUP_MAX_ENTITIES_V2 - 2);
+            std::iota(expected.begin(), expected.end(), 0);
+            CHECK(*gpuIds == expected);
+        }
+
+        SECTION("Wildcard plus full brace range still exceeds parse budget")
+        {
+            std::string_view const entityIds = "*,gpu:{0-1023}";
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityIds);
+            REQUIRE_FALSE(gpuIds.has_value());
+            CHECK(gpuIds.error() == DCGM_ST_MAX_LIMIT);
+        }
+    }
+
+    SECTION("Oversized brace range fails closed")
+    {
+        auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, "gpu:{0-4294967295}");
+        REQUIRE_FALSE(gpuIds.has_value());
+        CHECK(gpuIds.error() == DCGM_ST_MAX_LIMIT);
+
+        gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, "gpu:{0-1024}");
+        REQUIRE_FALSE(gpuIds.has_value());
+        CHECK(gpuIds.error() == DCGM_ST_MAX_LIMIT);
+    }
+
+    SECTION("Malformed range fails closed")
+    {
+        auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, "gpu:{0-4294967296}");
+        REQUIRE_FALSE(gpuIds.has_value());
+        CHECK(gpuIds.error() == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Duplicate GPU ids keep first-seen order")
+    {
+        SECTION("Repeated singleton")
+        {
+            std::string_view const entityIds = "0,0";
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, entityIds);
+            REQUIRE(gpuIds.has_value());
+            CHECK(*gpuIds == std::vector<std::uint32_t> { 0 });
+        }
+
+        SECTION("Later id then repeat")
+        {
+            std::string_view const entityIds = "gpu:1,gpu:0,gpu:1";
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, entityIds);
+            REQUIRE(gpuIds.has_value());
+            CHECK(*gpuIds == std::vector<std::uint32_t> { 1, 0 });
+        }
+
+        SECTION("Interleaved repeats")
+        {
+            std::string_view const entityIds = "2,1,2,0,1";
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, entityIds);
+            REQUIRE(gpuIds.has_value());
+            CHECK(*gpuIds == std::vector<std::uint32_t> { 2, 1, 0 });
+        }
+
+        SECTION("Same GPU via numeric and gpu: prefix")
+        {
+            std::string_view const entityIds = "gpu:0,0,gpu:0";
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, entityIds);
+            REQUIRE(gpuIds.has_value());
+            CHECK(*gpuIds == std::vector<std::uint32_t> { 0 });
+        }
+
+        SECTION("Same GPU via UUID and numeric")
+        {
+            std::vector<std::pair<unsigned, std::string>> gpuIdUuids {
+                { 0, "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5" },
+            };
+            std::string_view const entityIds = "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5,0";
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, gpuIdUuids, entityIds);
+            REQUIRE(gpuIds.has_value());
+            CHECK(*gpuIds == std::vector<std::uint32_t> { 0 });
+        }
+
+        SECTION("Non-GPU tokens are dropped and do not create GPU duplicates")
+        {
+            std::string_view const entityIds = "0,cpu:1,0";
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, entityIds);
+            REQUIRE(gpuIds.has_value());
+            CHECK(*gpuIds == std::vector<std::uint32_t> { 0 });
+        }
+
+        SECTION("Duplicate expansion still consumes parse budget")
+        {
+            std::string_view const entityIds = "gpu:{0-1023},gpu:{0-1023}";
+            CAPTURE(entityIds);
+            auto gpuIds = DcgmNs::ParseEntityIdsAndFilterGpu({}, {}, entityIds);
+            REQUIRE_FALSE(gpuIds.has_value());
+            CHECK(gpuIds.error() == DCGM_ST_MAX_LIMIT);
+        }
     }
 }
 
@@ -456,18 +665,23 @@ TEST_CASE("EntityListWithMigAndUuidParser")
 {
     SECTION("Empty input")
     {
-        auto entityList = DcgmNs::EntityListWithMigAndUuidParser({}, {}, "");
-        REQUIRE(entityList.empty());
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        auto const dcgmHandle = ConnectMockDcgmOps(mockDcgmOps);
+
+        auto entityList = ParseEntityList(mockDcgmOps, dcgmHandle, "");
+        CHECK(entityList.empty());
     }
 
     SECTION("With GPU ID & UUID")
     {
-        std::vector<std::pair<unsigned, std::string>> gpuIdUuids {
-            { 0, "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5" },
-            { 1, "GPU-57fba5ae-c3e2-8cfb-0905-b0cb3d279a45" },
-        };
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        auto const dcgmHandle = ConnectMockDcgmOps(mockDcgmOps);
+
+        AddMockedGpu(mockDcgmOps, 0, "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5");
+        AddMockedGpu(mockDcgmOps, 1, "GPU-57fba5ae-c3e2-8cfb-0905-b0cb3d279a45");
+
         std::string entityId = "gpu:0,gpu:1,cpu:0";
-        auto entityList      = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        auto entityList      = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 3);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
@@ -477,7 +691,7 @@ TEST_CASE("EntityListWithMigAndUuidParser")
         REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
 
         entityId   = "GPU-57fba5ae-c3e2-8cfb-0905-b0cb3d279a45,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 2);
         REQUIRE(entityList[0].entityId == 1);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
@@ -485,7 +699,7 @@ TEST_CASE("EntityListWithMigAndUuidParser")
         REQUIRE(entityList[1].entityGroupId == DCGM_FE_CPU);
 
         entityId   = "0,1,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 3);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
@@ -495,7 +709,7 @@ TEST_CASE("EntityListWithMigAndUuidParser")
         REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
 
         entityId   = "*,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 3);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
@@ -505,12 +719,13 @@ TEST_CASE("EntityListWithMigAndUuidParser")
         REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
 
         entityId   = "*/*,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 1);
         REQUIRE(entityList[0].entityId == 1);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_CPU);
 
-        entityId = "*/*/*,cpu:1";
+        entityId   = "*/*/*,cpu:1";
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 1);
         REQUIRE(entityList[0].entityId == 1);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_CPU);
@@ -520,8 +735,14 @@ TEST_CASE("EntityListWithMigAndUuidParser")
     {
         std::string const gpuUuid        = "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5";
         dcgmMigHierarchy_v2 migHierarchy = CreateFakeMigHierachy(gpuUuid);
-        std::string entityId             = "gpu:0,gpu:1,cpu:0";
-        auto entityList                  = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        auto const dcgmHandle = ConnectMockDcgmOps(mockDcgmOps);
+
+        mockDcgmOps.m_migHierarchyState.hierarchy = migHierarchy;
+        AddMockedGpu(mockDcgmOps, 0, gpuUuid);
+
+        std::string entityId = "gpu:0,gpu:1,cpu:0";
+        auto entityList      = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 3);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
@@ -531,19 +752,21 @@ TEST_CASE("EntityListWithMigAndUuidParser")
         REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
 
         entityId   = "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 2);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
         REQUIRE(entityList[1].entityId == 1);
         REQUIRE(entityList[1].entityGroupId == DCGM_FE_CPU);
 
-        entityId   = "GPU-00000000-0000-0000-0000-000000000000,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
-        REQUIRE(entityList.size() == 0);
+        entityId = "GPU-00000000-0000-0000-0000-000000000000,cpu:1";
+        entityList.clear();
+        auto err = ParseEntityList(mockDcgmOps, dcgmHandle, entityId, entityList);
+        CHECK_FALSE(err.empty());
+        CHECK(entityList.empty());
 
         entityId   = "0,1,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 3);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
@@ -553,7 +776,7 @@ TEST_CASE("EntityListWithMigAndUuidParser")
         REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
 
         entityId   = "*,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 2);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
@@ -561,7 +784,7 @@ TEST_CASE("EntityListWithMigAndUuidParser")
         REQUIRE(entityList[1].entityGroupId == DCGM_FE_CPU);
 
         entityId   = "*/*,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 2);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU_I);
@@ -569,7 +792,7 @@ TEST_CASE("EntityListWithMigAndUuidParser")
         REQUIRE(entityList[1].entityGroupId == DCGM_FE_CPU);
 
         entityId   = "*/*/*,cpu:1";
-        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        entityList = ParseEntityList(mockDcgmOps, dcgmHandle, entityId);
         REQUIRE(entityList.size() == 2);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU_CI);
@@ -645,6 +868,100 @@ TEST_CASE("ParseExpectedNumEntitiesForGpus")
         err                 = DcgmNs::ParseExpectedNumEntitiesForGpus(expectedNumEntities, gpuCount);
         CHECK(gpuCount == 0);
         CHECK(!err.empty());
+    }
+}
+
+
+SCENARIO("Entity prefixes classify non-GPU entity tokens")
+{
+    GIVEN("tokens with explicit non-GPU prefixes")
+    {
+        auto const token = GENERATE(std::string_view("cpu:0"),
+                                    std::string_view("core:1"),
+                                    std::string_view("instance:0"),
+                                    std::string_view("i:0"),
+                                    std::string_view("compute_instance:0"),
+                                    std::string_view("c:0"),
+                                    std::string_view("nvswitch:0"),
+                                    std::string_view("n:0"),
+                                    std::string_view("cx:0"),
+                                    std::string_view("vgpu:0"),
+                                    std::string_view("v:0"),
+                                    std::string_view("link:0"),
+                                    std::string_view("l:0"));
+
+        WHEN("the token is classified")
+        {
+            auto const result = DcgmNs::EntityPrefixes::IsNonGpuPrefix(token);
+
+            THEN("it is treated as a non-GPU-prefixed token")
+            {
+                CHECK(result);
+            }
+        }
+    }
+
+    GIVEN("tokens with a GPU prefix")
+    {
+        auto const token = GENERATE(std::string_view("gpu:0"),
+                                    std::string_view("g:0"),
+                                    std::string_view("GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5"));
+
+        WHEN("the token is classified")
+        {
+            auto const result = DcgmNs::EntityPrefixes::IsNonGpuPrefix(token);
+
+            THEN("it is treated as a gpu-prefixed token")
+            {
+                CHECK_FALSE(result);
+            }
+        }
+    }
+
+    GIVEN("tokens without an entity prefix")
+    {
+        auto const token = GENERATE(std::string_view("0"), std::string_view(""), std::string_view("unknown:0"));
+
+        WHEN("the token is classified")
+        {
+            auto const result = DcgmNs::EntityPrefixes::IsNonGpuPrefix(token);
+
+            THEN("it is not treated as a non-GPU-prefixed token")
+            {
+                CHECK_FALSE(result);
+            }
+        }
+    }
+}
+
+SCENARIO("Entity group formatting exposes stable display names")
+{
+    GIVEN("known entity groups and their display names")
+    {
+        struct ExpectedName
+        {
+            dcgm_field_entity_group_t entityGroup;
+            std::string_view name;
+        };
+        std::array constexpr expectedNames {
+            ExpectedName { DCGM_FE_GPU, "GPU" },       ExpectedName { DCGM_FE_VGPU, "vGPU" },
+            ExpectedName { DCGM_FE_SWITCH, "Switch" }, ExpectedName { DCGM_FE_GPU_I, "GPU-I" },
+            ExpectedName { DCGM_FE_GPU_CI, "GPU-CI" }, ExpectedName { DCGM_FE_LINK, "LINK" },
+            ExpectedName { DCGM_FE_CPU, "CPU" },       ExpectedName { DCGM_FE_CPU_CORE, "CPU Core" },
+            ExpectedName { DCGM_FE_CONNECTX, "CX" },   ExpectedName { DCGM_FE_NONE, "UNKNOWN" },
+        };
+
+        WHEN("each entity group is formatted")
+        {
+            THEN("the public display name is returned")
+            {
+                for (auto const &expected : expectedNames)
+                {
+                    CAPTURE(expected.entityGroup);
+                    CHECK(fmt::format("{}", expected.entityGroup) == expected.name);
+                }
+            }
+        }
     }
 }
 
@@ -1060,5 +1377,162 @@ TEST_CASE("EntityListParser switch_link format")
         CHECK(last.parsed.type == DCGM_FE_SWITCH);
         CHECK(last.parsed.switchId == 1);
         CHECK(last.parsed.index == 5);
+    }
+}
+
+TEST_CASE("EntityListParser rejects oversized expansions")
+{
+    SECTION("Brace range at group max is accepted")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("{0-1023}", entityGroups);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == DCGM_GROUP_MAX_ENTITIES_V2);
+    }
+
+    SECTION("Brace range one over group max is rejected")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("{0-1024}", entityGroups);
+        CHECK_FALSE(err.empty());
+        CHECK(err.find("too many entities") != std::string::npos);
+        CHECK(err.find("malformed") == std::string::npos);
+        CHECK(entityGroups.empty());
+    }
+
+    SECTION("Large payload gpu:{0-4294967295} is rejected without materializing")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("gpu:{0-4294967295}", entityGroups);
+        CHECK_FALSE(err.empty());
+        CHECK(err.find("too many entities") != std::string::npos);
+        CHECK(err.find("malformed") == std::string::npos);
+        CHECK(entityGroups.empty());
+    }
+
+    SECTION("Endpoints above UINT_MAX are rejected as malformed")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("{0-4294967296}", entityGroups);
+        CHECK_FALSE(err.empty());
+        CHECK(err.find("malformed") != std::string::npos);
+        CHECK(entityGroups.empty());
+    }
+
+    SECTION("gpu_link product over maxTotalEntities is rejected")
+    {
+        // 32 GPUs * 36 links = 1152 > DCGM_GROUP_MAX_ENTITIES_V2
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("gpu_link:{0-31}:{0-35}", entityGroups);
+        CHECK_FALSE(err.empty());
+        CHECK(entityGroups.empty());
+    }
+
+    SECTION("switch_link product over maxTotalEntities is rejected")
+    {
+        // 12 switches * 256 links = 3072 > DCGM_GROUP_MAX_ENTITIES_V2
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("switch_link:{0-11}:{0-255}", entityGroups);
+        CHECK_FALSE(err.empty());
+        CHECK(entityGroups.empty());
+    }
+
+    SECTION("Multi-token list exceeding maxTotalEntities is rejected")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("{0-1023},0", entityGroups);
+        CHECK_FALSE(err.empty());
+        // Must not accept more entities than the total budget.
+        CHECK(entityGroups.size() <= DCGM_GROUP_MAX_ENTITIES_V2);
+    }
+
+    SECTION("Pre-filled entityGroups counts toward maxTotalEntities")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups(DCGM_GROUP_MAX_ENTITIES_V2,
+                                                        dcgmGroupEntityPair_t { DCGM_FE_GPU, 0 });
+        std::string err = DcgmNs::EntityListParser("1", entityGroups);
+        CHECK_FALSE(err.empty());
+        CHECK(entityGroups.size() == DCGM_GROUP_MAX_ENTITIES_V2);
+    }
+
+    SECTION("Custom maxLinkProduct rejects product under default total")
+    {
+        DcgmNs::EntityListParseLimits limits {};
+        limits.maxLinkProduct    = 4;
+        limits.maxTotalEntities  = 1024;
+        limits.maxRangeExpansion = 1024;
+
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        // 2 GPUs * 3 links = 6 > maxLinkProduct 4
+        std::string err = DcgmNs::EntityListParser("gpu_link:{0-1}:{0-2}", entityGroups, limits);
+        CHECK_FALSE(err.empty());
+        CHECK(entityGroups.empty());
+    }
+
+    SECTION("Link component expansion respects remaining total capacity")
+    {
+        DcgmNs::EntityListParseLimits limits {};
+        limits.maxTotalEntities  = 5;
+        limits.maxRangeExpansion = 1024;
+        limits.maxLinkProduct    = 1024;
+
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        // Component span 10 exceeds remaining total 5; must fail at component budget
+        // (same remaining clip as brace), not only after allocating then product-check.
+        std::string err = DcgmNs::EntityListParser("gpu_link:{0-9}:0", entityGroups, limits);
+        REQUIRE_FALSE(err.empty());
+        CHECK(err.find("too many entities") != std::string::npos);
+        CHECK(err.find("gpuId") != std::string::npos);
+        CHECK(entityGroups.empty());
+    }
+
+    SECTION("Custom maxTotalEntities below default rejects smaller brace range")
+    {
+        DcgmNs::EntityListParseLimits limits {};
+        limits.maxTotalEntities  = 5;
+        limits.maxRangeExpansion = 1024;
+        limits.maxLinkProduct    = 1024;
+
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("{0-5}", entityGroups, limits);
+        CHECK_FALSE(err.empty());
+        CHECK(entityGroups.empty());
+
+        entityGroups.clear();
+        err = DcgmNs::EntityListParser("{0-4}", entityGroups, limits);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 5);
+    }
+
+    SECTION("Custom maxRangeExpansion is the binding limit")
+    {
+        DcgmNs::EntityListParseLimits limits {};
+        limits.maxRangeExpansion = 3;
+        limits.maxTotalEntities  = 1024;
+        limits.maxLinkProduct    = 1024;
+
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("{0-5}", entityGroups, limits);
+        CHECK_FALSE(err.empty());
+        CHECK(entityGroups.empty());
+
+        entityGroups.clear();
+        err = DcgmNs::EntityListParser("{0-2}", entityGroups, limits);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 3);
+    }
+
+    SECTION("Custom maxLinkProduct accepts exact product boundary")
+    {
+        DcgmNs::EntityListParseLimits limits {};
+        limits.maxLinkProduct    = 4;
+        limits.maxTotalEntities  = 1024;
+        limits.maxRangeExpansion = 1024;
+
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        // 2 GPUs * 2 links = 4 == maxLinkProduct
+        std::string err = DcgmNs::EntityListParser("gpu_link:{0-1}:{0-1}", entityGroups, limits);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 4);
     }
 }

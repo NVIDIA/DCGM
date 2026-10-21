@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,9 @@
 
 #include "Command.h"
 #include "CommandOutputController.h"
+
+#include <DcgmOpsAnyPtr.hpp>
+
 #include <string.h>
 
 using std::string;
@@ -29,12 +32,14 @@ using std::string;
 class Introspect
 {
 public:
-    Introspect();
+    explicit Introspect(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~Introspect();
 
     dcgmReturn_t DisplayStats(dcgmHandle_t handle, bool forHostengine);
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
+
     string readableMemory(long long bytes);
     string readablePercent(double p);
 
@@ -48,7 +53,7 @@ private:
 class DisplayIntrospectSummary : public Command
 {
 public:
-    DisplayIntrospectSummary(string hostname, bool forHostengine);
+    DisplayIntrospectSummary(string hostname, bool forHostengine, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

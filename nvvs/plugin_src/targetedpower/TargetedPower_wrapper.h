@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,13 @@
 #include "PluginCommon.h"
 #include "PluginDevice.h"
 #include <CudaCommon.h>
+#include <CudaCommonAnyPtr.hpp>
+#include <CudaCommonAnyUniquePtr.hpp>
 
+#include <CublasOpsAnyUniquePtr.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <NvvsStructs.h>
-#include <cublas_proxy.hpp>
 #include <cuda.h>
 #include <cuda_fp16.h>
 
@@ -51,6 +55,7 @@
 class CPDevice : public PluginDevice
 {
 public:
+    CublasOpsAnyPtr cublasOps;
     /* Power details */
     double maxPowerTarget; /* Maximum power we can target in watts */
 
@@ -63,7 +68,6 @@ public:
 
     int allocatedCublasHandle;   /* Have we allocated cublasHandle yet? */
     cublasHandle_t cublasHandle; /* Handle to cuBlas */
-
     /* Minimum adjusted value for our matrix dimension. 1 <= X <= MAX_DIMENSION */
     int minMatrixDim;
 
@@ -90,8 +94,9 @@ public:
 
     bool m_lowPowerLimit;
 
-    CPDevice()
-        : PluginDevice()
+    CPDevice(DcgmNs::DcgmOpsAnyPtr dcgmOps, CudaOpsAnyPtr cudaOps, CublasOpsAnyPtr cublasOps)
+        : PluginDevice(dcgmOps, cudaOps)
+        , cublasOps(cublasOps)
         , maxPowerTarget(0)
         , NcudaStreams(0)
         , allocatedCublasHandle(0)
@@ -108,8 +113,16 @@ public:
         memset(deviceC_fp16, 0, sizeof(deviceC_fp16));
     }
 
-    CPDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(testName, ndi, pciBusId, p)
+    CPDevice(std::string const &testName,
+             unsigned int ndi,
+             const char *pciBusId,
+             Plugin *p,
+             DcgmNs::DcgmOpsAnyPtr dcgmOps,
+             dcgmHandle_t handle,
+             CudaOpsAnyPtr cudaOps,
+             CublasOpsAnyPtr cublasOps)
+        : PluginDevice(testName, ndi, pciBusId, p, dcgmOps, handle, cudaOps)
+        , cublasOps(cublasOps)
         , maxPowerTarget(0)
         , NcudaStreams(0)
         , allocatedCublasHandle(0)
@@ -128,20 +141,20 @@ public:
 
     ~CPDevice()
     {
-        using namespace Dcgm;
         if (allocatedCublasHandle)
         {
-            CublasProxy::CublasDestroy(cublasHandle);
+            cublasOps->cublasDestroy_v2(cublasHandle);
             cublasHandle          = 0;
             allocatedCublasHandle = 0;
         }
 
         for (int i = 0; i < NcudaStreams; i++)
         {
-            cudaError_t cuSt = cudaStreamDestroy(cudaStream[i]);
+            cudaError_t cuSt = cudaOps->cudaStreamDestroy(cudaStream[i]);
             if (cuSt != cudaSuccess)
             {
-                DCGM_LOG_ERROR << "cudaStreamDestroy returned " << cudaGetErrorString(cuSt) << " at index " << i;
+                DCGM_LOG_ERROR << "cudaStreamDestroy returned " << cudaOps->cudaGetErrorString(cuSt) << " at index "
+                               << i;
             }
         }
 
@@ -149,12 +162,12 @@ public:
 
         if (deviceA)
         {
-            cudaFree(deviceA);
+            cudaOps->cudaFree(deviceA);
             deviceA = 0;
         }
         if (deviceB)
         {
-            cudaFree(deviceB);
+            cudaOps->cudaFree(deviceB);
             deviceB = 0;
         }
 
@@ -162,19 +175,19 @@ public:
         {
             if (deviceC[i])
             {
-                cudaFree(deviceC[i]);
+                cudaOps->cudaFree(deviceC[i]);
                 deviceC[i] = 0;
             }
         }
 
         if (deviceA_fp16)
         {
-            cudaFree(deviceA_fp16);
+            cudaOps->cudaFree(deviceA_fp16);
             deviceA_fp16 = 0;
         }
         if (deviceB_fp16)
         {
-            cudaFree(deviceB_fp16);
+            cudaOps->cudaFree(deviceB_fp16);
             deviceB_fp16 = 0;
         }
 
@@ -182,7 +195,7 @@ public:
         {
             if (deviceC_fp16[i])
             {
-                cudaFree(deviceC_fp16[i]);
+                cudaOps->cudaFree(deviceC_fp16[i]);
                 deviceC_fp16[i] = 0;
             }
         }
@@ -194,7 +207,12 @@ public:
 class ConstantPower : public Plugin
 {
 public:
-    ConstantPower(dcgmHandle_t handle);
+    ConstantPower(dcgmHandle_t handle,
+                  DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                  CudaOpsAnyUniquePtr cudaOps,
+                  CublasOpsAnyUniquePtr cublasOps,
+                  CudaCommonAnyUniquePtr cudaCommon,
+                  NvvsCommon *nvvsCommon);
     ~ConstantPower();
 
     /*************************************************************************/
@@ -294,13 +312,17 @@ private:
 
     /*************************************************************************/
     /* Variables */
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique;             /* Owned DCGM API interface */
     std::unique_ptr<TestParameters> m_testParameters;        /* Parameters for this test */
     std::unique_ptr<TestParameters> m_defaultTestParameters; /* Owned default parameters for infoStruct */
     bool m_dcgmCommErrorOccurred;                            /* Has there been a communication error with DCGM? */
     bool m_dcgmRecorderInitialized;                          /* Has DcgmRecorder been initialized? */
-    DcgmRecorder m_dcgmRecorder;                             /* DCGM stats recording interfact object */
-    dcgmHandle_t m_handle;                                   /* Handle to communicate with DCGM */
-    std::vector<std::unique_ptr<CPDevice>> m_device;         /* Per-device data */
+    CudaOpsAnyUniquePtr m_cudaOps;                           //!< CUDA API interface.
+    CublasOpsAnyUniquePtr m_cublasOps;                       //!< cuBLAS API interface.
+    CudaCommonAnyUniquePtr m_cudaCommon;
+    DcgmRecorder m_dcgmRecorder;                     /* DCGM stats recording interfact object */
+    dcgmHandle_t m_handle;                           /* Handle to communicate with DCGM */
+    std::vector<std::unique_ptr<CPDevice>> m_device; /* Per-device data */
 
     /* Cached parameters read from testParameters */
     double m_testDuration; /* Test duration in seconds */
@@ -310,7 +332,7 @@ private:
     double m_targetPower;         /* Target power for the test in watts */
     double m_sbeFailureThreshold; /* how many SBEs constitutes a failure */
 
-    /* Arrays for cublasDgemm. Allocated at MAX_DIMENSION^2 * sizeof(double) */
+    /* Arrays for cublasDgemm_v2. Allocated at MAX_DIMENSION^2 * sizeof(double) */
     void *m_hostA;
     void *m_hostB;
     void *m_hostC;

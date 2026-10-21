@@ -24,3 +24,7 @@ def test_nvvs_plugin_software_total_page_retirements_standalone():
 
 def test_nvvs_plugin_software_pending_page_retirements_standalone():
     trampoline()
+
+
+def test_nvvs_plugins_required_symbols():
+    trampoline()

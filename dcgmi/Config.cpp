@@ -18,11 +18,14 @@
  */
 
 #include "Config.h"
+
 #include "CommandOutputController.h"
 #include "DcgmiOutput.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
 #include "dcgmi_common.h"
+
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
+
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -46,6 +49,11 @@
 
 
 /*****************************************************************************/
+Config::Config(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+{}
+
+/*****************************************************************************/
 dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool json)
 {
     std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
@@ -56,7 +64,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
     dcgmReturn_t result;
     dcgmReturn_t targetResult;
     dcgmDeviceAttributes_t stDeviceAttributes;
-    GPUErrorOutputController gpuErrView;
+    GPUErrorOutputController gpuErrView(m_dcgmOps);
     DcgmiOutputFieldSelector fieldSelector   = DcgmiOutputFieldSelector().child(FIELD);
     DcgmiOutputFieldSelector currentSelector = DcgmiOutputFieldSelector().child(CURRENT);
     DcgmiOutputFieldSelector targetSelector  = DcgmiOutputFieldSelector().child(TARGET);
@@ -66,7 +74,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
     stDeviceAttributes.version = dcgmDeviceAttributes_version;
 
     /* Add config watches for the newly created group */
-    result = dcgmUpdateAllFields(pNvcmHandle, 1);
+    result = m_dcgmOps->dcgmUpdateAllFields(pNvcmHandle, 1);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to update fields. Return: " << errorString(result) << std::endl;
@@ -75,7 +83,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
     }
 
     stNvcmGroupInfo->version = dcgmGroupInfo_version;
-    result                   = dcgmGroupGetInfo(pNvcmHandle, mGroupId, stNvcmGroupInfo.get());
+    result                   = m_dcgmOps->dcgmGroupGetInfo(pNvcmHandle, mGroupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -85,7 +93,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
     }
 
     /* Create Status handler */
-    result = dcgmStatusCreate(&stHandle);
+    result = m_dcgmOps->dcgmStatusCreate(&stHandle);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to create status handler. Return:" << errorString(result) << std::endl;
@@ -107,10 +115,10 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
         pNvcmTargetConfig[i].gpuId   = DCGM_INT32_BLANK;
     }
 
-    result = dcgmConfigGet(
+    result = m_dcgmOps->dcgmConfigGet(
         pNvcmHandle, mGroupId, DCGM_CONFIG_CURRENT_STATE, stNvcmGroupInfo->count, pNvcmCurrentConfig, stHandle);
 
-    targetResult = dcgmConfigGet(
+    targetResult = m_dcgmOps->dcgmConfigGet(
         pNvcmHandle, mGroupId, DCGM_CONFIG_TARGET_STATE, stNvcmGroupInfo->count, pNvcmTargetConfig, stHandle);
 
     // Populate information in displayInfo for each GPU and print
@@ -145,7 +153,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
             ss << "GPU ID: " << pNvcmCurrentConfig[i].gpuId;
             out.addHeader(ss.str());
             // Get device name
-            dcgmGetDeviceAttributes(pNvcmHandle, pNvcmCurrentConfig[i].gpuId, &stDeviceAttributes);
+            m_dcgmOps->dcgmGetDeviceAttributes(pNvcmHandle, pNvcmCurrentConfig[i].gpuId, &stDeviceAttributes);
             out.addHeader(stDeviceAttributes.identifiers.deviceName);
         }
         else
@@ -334,7 +342,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
 
     if (!verbose)
     {
-        std::cout << "**** Non-homogenous settings across group. Use with –v flag to see details.\n";
+        std::cout << "**** Non-homogenous settings across group. Use with -v flag to see details.\n";
     }
 
     /**
@@ -355,7 +363,7 @@ cleanup_local:
     /* Destroy Status message */
     if (stHandle)
     {
-        result = dcgmStatusDestroy(stHandle);
+        result = m_dcgmOps->dcgmStatusDestroy(stHandle);
         if (DCGM_ST_OK != result)
         {
             std::cout << "Unable to destroy status handler. Return: " << std::to_underlying(result) << std::endl;
@@ -381,10 +389,10 @@ dcgmReturn_t Config::RunSetConfig(dcgmHandle_t pNvcmHandle)
     dcgmReturn_t ret = DCGM_ST_OK;
     dcgmReturn_t result;
     dcgmStatus_t stHandle = 0;
-    GPUErrorOutputController gpuErrView;
+    GPUErrorOutputController gpuErrView(m_dcgmOps);
 
     /* Add config watches for the newly created group */
-    result = dcgmUpdateAllFields(pNvcmHandle, 1);
+    result = m_dcgmOps->dcgmUpdateAllFields(pNvcmHandle, 1);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to update fields. Return: " << errorString(result) << std::endl;
@@ -393,7 +401,7 @@ dcgmReturn_t Config::RunSetConfig(dcgmHandle_t pNvcmHandle)
     }
 
     /* Create Status handler */
-    result = dcgmStatusCreate(&stHandle);
+    result = m_dcgmOps->dcgmStatusCreate(&stHandle);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to create status handler. Return:" << errorString(result) << std::endl;
@@ -403,7 +411,7 @@ dcgmReturn_t Config::RunSetConfig(dcgmHandle_t pNvcmHandle)
 
     mConfigVal.version = dcgmConfig_version;
 
-    result = dcgmConfigSet(pNvcmHandle, mGroupId, &mConfigVal, stHandle);
+    result = m_dcgmOps->dcgmConfigSet(pNvcmHandle, mGroupId, &mConfigVal, stHandle);
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -439,7 +447,7 @@ cleanup_local:
     /* Destroy Status message */
     if (stHandle)
     {
-        result = dcgmStatusDestroy(stHandle);
+        result = m_dcgmOps->dcgmStatusDestroy(stHandle);
         if (DCGM_ST_OK != result)
         {
             std::cout << "Error: Unable to destroy status handler. Return: " << errorString(result) << std::endl;
@@ -456,9 +464,9 @@ dcgmReturn_t Config::RunEnforceConfig(dcgmHandle_t pNvcmHandle)
     dcgmStatus_t stHandle                            = 0;
     dcgmReturn_t ret                                 = DCGM_ST_OK;
     dcgmReturn_t result;
-    GPUErrorOutputController gpuErrView;
+    GPUErrorOutputController gpuErrView(m_dcgmOps);
     /* Add config watches for the newly created group */
-    result = dcgmUpdateAllFields(pNvcmHandle, 1);
+    result = m_dcgmOps->dcgmUpdateAllFields(pNvcmHandle, 1);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to update fields. Return: " << errorString(result) << std::endl;
@@ -467,7 +475,7 @@ dcgmReturn_t Config::RunEnforceConfig(dcgmHandle_t pNvcmHandle)
     }
 
     stNvcmGroupInfo->version = dcgmGroupInfo_version;
-    result                   = dcgmGroupGetInfo(pNvcmHandle, mGroupId, stNvcmGroupInfo.get());
+    result                   = m_dcgmOps->dcgmGroupGetInfo(pNvcmHandle, mGroupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -477,7 +485,7 @@ dcgmReturn_t Config::RunEnforceConfig(dcgmHandle_t pNvcmHandle)
     }
 
     /* Create Status handler */
-    result = dcgmStatusCreate(&stHandle);
+    result = m_dcgmOps->dcgmStatusCreate(&stHandle);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to create status handler. Return:" << errorString(result) << std::endl;
@@ -485,7 +493,7 @@ dcgmReturn_t Config::RunEnforceConfig(dcgmHandle_t pNvcmHandle)
         goto cleanup_local;
     }
 
-    result = dcgmConfigEnforce(pNvcmHandle, mGroupId, stHandle);
+    result = m_dcgmOps->dcgmConfigEnforce(pNvcmHandle, mGroupId, stHandle);
 
     /**
      * Check for errors (if any)
@@ -514,7 +522,7 @@ cleanup_local:
     /* Destroy Status message */
     if (stHandle)
     {
-        result = dcgmStatusDestroy(stHandle);
+        result = m_dcgmOps->dcgmStatusDestroy(stHandle);
         if (DCGM_ST_OK != result)
         {
             std::cout << "Error: Unable to destroy status handler. Return: " << errorString(result) << std::endl;
@@ -529,7 +537,7 @@ dcgmReturn_t Config::RunSetConfigWorkloadPowerProfile(dcgmHandle_t pNvcmHandle)
 {
     dcgmReturn_t result = DCGM_ST_OK;
 
-    result = dcgmConfigSetWorkloadPowerProfile(pNvcmHandle, &mWorkloadPowerProfile);
+    result = m_dcgmOps->dcgmConfigSetWorkloadPowerProfile(pNvcmHandle, &mWorkloadPowerProfile);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to set workload power profile. Return:" << errorString(result) << std::endl;
@@ -779,8 +787,8 @@ std::string Config::HelperDisplayBool(unsigned int val)
  *****************************************************************************/
 
 /*****************************************************************************/
-SetConfig::SetConfig(std::string hostname, Config obj)
-    : Command()
+SetConfig::SetConfig(std::string hostname, Config obj, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
     , configObj(std::move(obj))
 {
     m_hostName = std::move(hostname);
@@ -802,8 +810,8 @@ dcgmReturn_t SetConfig::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-GetConfig::GetConfig(std::string hostname, Config obj, bool verbose, bool json)
-    : Command()
+GetConfig::GetConfig(std::string hostname, Config obj, bool verbose, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
     , configObj(std::move(obj))
     , verbose(verbose)
 {
@@ -826,8 +834,8 @@ dcgmReturn_t GetConfig::DoExecuteConnected()
  *****************************************************************************
  *****************************************************************************/
 
-EnforceConfig::EnforceConfig(std::string hostname, Config obj)
-    : Command()
+EnforceConfig::EnforceConfig(std::string hostname, Config obj, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
     , configObj(std::move(obj))
 {
     m_hostName = std::move(hostname);
@@ -847,8 +855,10 @@ dcgmReturn_t EnforceConfig::DoExecuteConnected()
  *****************************************************************************
  *****************************************************************************/
 
-SetConfigWorkloadPowerProfile::SetConfigWorkloadPowerProfile(std::string hostname, Config obj)
-    : Command()
+SetConfigWorkloadPowerProfile::SetConfigWorkloadPowerProfile(std::string hostname,
+                                                             Config obj,
+                                                             DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
     , configObj(std::move(obj))
 {
     m_hostName = std::move(hostname);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 
 #include <ChildProcess/ChildProcess.hpp>
 #include <DcgmUtilities.h>
+#include <Defer.hpp>
+#include <FileHandle/FileHandle.hpp>
 #include <dcgm_structs_internal.h>
 
 #include <boost/filesystem/exception.hpp>
@@ -399,6 +401,7 @@ namespace detail
                 log_error("Failed to spawn ssh child process for {}:{}: {}", remoteHostname, remoteAddress, ret);
                 return TunnelState::GenericFailure;
             }
+            auto destroyOnExit = DcgmNs::Defer([&] { static_cast<void>(m_childProcessFuncs->Destroy(procHandle, 1)); });
 
             fmt::memory_buffer stderrBuf;
             std::string debugString;
@@ -406,16 +409,17 @@ namespace detail
             // sometimes.
             dcgmChildProcessStatus_t status = {};
             status.version                  = dcgmChildProcessStatus_version1;
-            int errFd                       = -1;
-            if (auto ret = m_childProcessFuncs->GetStdErrHandle(procHandle, errFd); ret != DCGM_ST_OK)
+            int rawErrFd                    = -1;
+            if (auto ret = m_childProcessFuncs->GetStdErrHandle(procHandle, rawErrFd); ret != DCGM_ST_OK)
             {
                 log_error("Failed to get stderr handle: {}", ret);
                 return TunnelState::GenericFailure;
             }
+            DcgmNs::Utils::FileHandle errFd(rawErrFd);
             dcgmReturn_t statusRet = DCGM_ST_OK;
             while ((statusRet = m_childProcessFuncs->GetStatus(procHandle, status)) == DCGM_ST_OK && status.running)
             {
-                if (auto ret = ReadNonBlocking(errFd, debugString); ret != std::unexpected(std::string()))
+                if (auto ret = ReadNonBlocking(errFd.Get(), debugString); ret.has_value())
                 {
                     if (debugString.find(CONNECTION_SUCCESS_MSG) != std::string::npos)
                     {
@@ -433,7 +437,7 @@ namespace detail
             if ((statusRet = m_childProcessFuncs->GetStatus(procHandle, status)) == DCGM_ST_OK && !status.running)
             {
                 // Block and ensure all stderr is read until pipe is closed by the child process
-                if (auto ret = ReadBlocking(errFd, debugString); ret != std::unexpected(std::string()))
+                if (auto ret = ReadBlocking(errFd.Get(), debugString); ret.has_value())
                 {
                     auto retCode = TunnelState::GenericFailure;
                     if (debugString.find(ADDRESS_IN_USE_MSG) != std::string::npos)
@@ -442,7 +446,6 @@ namespace detail
                         retCode     = TunnelState::AddressInUse;
                     }
                     log_debug("Ssh error: {}", debugString);
-                    close(errFd);
                     return retCode;
                 }
                 else
@@ -493,10 +496,10 @@ namespace detail
                           remoteHostname,
                           remoteAddress,
                           localAddress);
-                // Destroy the newly spawned child process since it is no longer needed
-                m_childProcessFuncs->Destroy(procHandle, 1);
+                return TunnelState::Active;
             }
 
+            destroyOnExit.Disarm();
             return TunnelState::Active;
         }
 
@@ -618,9 +621,7 @@ namespace detail
             m_nextLocalPort = m_minPort;
         }
 
-#ifndef DCGM_SSH_TUNNEL_MANAGER_TEST // Allow tests to peek in
-    private:
-#endif
+    protected:
         inline std::string GetSSHAddressForwardingString(uint16_t const &localPort,
                                                          uint16_t const &remotePort) const override
         {

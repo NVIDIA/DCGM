@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "DcgmAccountingManager.h"
 #include "DcgmDiscovery.h"
 #include "DcgmFvBuffer.h"
 #include "DcgmGpmManager.hpp"
@@ -43,12 +44,17 @@
 
 #include <bitset>
 #include <condition_variable>
+#include <cstdint>
 #include <dcgm_nvml.h>
 #include <list>
 #include <map>
+#include <memory>
 #include <set>
+#include <span>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 /*****************************************************************************/
 /* Enum of Bandwidth direction types (ALL, TX, RX) */
@@ -102,6 +108,303 @@ typedef struct dcgmcm_sample_t /* This is made to look similar to timeseries_val
 } dcgmcm_sample_t, *dcgmcm_sample_p;
 
 /*****************************************************************************/
+uint8_t constexpr DcgmNvLinkBandwidthDirectionRx = 1U << 0U; //!< Requests the raw NVLink RX field.
+uint8_t constexpr DcgmNvLinkBandwidthDirectionTx = 1U << 1U; //!< Requests the raw NVLink TX field.
+uint8_t constexpr DcgmNvLinkBerFieldSymbol       = 1U << 0U; //!< Requests the raw NVLink symbol BER field.
+uint8_t constexpr DcgmNvLinkBerFieldEffective    = 1U << 1U; //!< Requests the raw NVLink effective BER field.
+
+/**
+ * Key for a raw NVLink BER read.
+ */
+struct DcgmNvLinkBerReadKey
+{
+    unsigned int gpuId; //!< DCGM GPU ID whose NVML handle should be queried.
+
+    auto operator<=>(DcgmNvLinkBerReadKey const &) const = default;
+};
+
+/*****************************************************************************/
+/**
+ * Result from a raw NVLink BER read.
+ *
+ * `nvmlReturn` is the top-level backend call status. If it is not
+ * `NVML_SUCCESS`, `symbol` and `effective` are not valid for append fan-out.
+ * When `hasDeviceHandle` is true and `nvmlReturn` is `NVML_SUCCESS`, each field
+ * value is valid only if its bit was requested by the field mask passed to
+ * `DcgmNvLinkBerReader::Read`; each field's own `nvmlReturn` still determines
+ * per-field success.
+ */
+struct DcgmNvLinkBerRawResult
+{
+    nvmlReturn_t nvmlReturn = NVML_ERROR_UNKNOWN; //!< Top-level backend call status.
+    nvmlFieldValue_t symbol {};                   //!< Raw symbol BER field value when requested and valid.
+    nvmlFieldValue_t effective {};                //!< Raw effective BER field value when requested and valid.
+    bool hasDeviceHandle = true;                  //!< False when no usable NVML device handle was available.
+};
+
+/*****************************************************************************/
+/**
+ * Reads raw NVLink BER fields for deferred cache-manager fan-out.
+ */
+class DcgmNvLinkBerReader
+{
+public:
+    virtual ~DcgmNvLinkBerReader() = default;
+
+    /**
+     * Return whether deferred raw NVLink BER reads are available.
+     *
+     * @param[in] nvmlLoaded Whether NVML is loaded.
+     * @param[in] skipDriverCalls Whether driver calls are temporarily suppressed.
+     * @return True when the cache manager may use this reader for deferred reads.
+     * @note Implementations must not call back into DcgmCacheManager.
+     */
+    virtual bool CanRead(bool nvmlLoaded, bool skipDriverCalls) const = 0;
+
+    /**
+     * Read the requested raw NVLink BER fields.
+     *
+     * The field mask uses `DcgmNvLinkBerFieldSymbol` and
+     * `DcgmNvLinkBerFieldEffective`. Implementations must populate only the
+     * requested fields.
+     *
+     * @param[in] nvmlDriver NVML task runner used for backend calls.
+     * @param[in] safeNvmlDevice NVML device handle to query.
+     * @param[in] key GPU identity for the raw read.
+     * @param[in] isNvLink5OrNewer Whether aggregate NVLink5+ scope should be used.
+     * @param[in] fieldMask Bitmask of requested raw BER fields.
+     * @return Raw read result and status metadata.
+     */
+    virtual DcgmNvLinkBerRawResult Read(NvmlTaskRunner &nvmlDriver,
+                                        SafeNvmlHandle safeNvmlDevice,
+                                        DcgmNvLinkBerReadKey key,
+                                        bool isNvLink5OrNewer,
+                                        uint8_t fieldMask) = 0;
+};
+
+/*****************************************************************************/
+/**
+ * Key for a raw NVLink state read.
+ */
+struct DcgmNvLinkStateReadKey
+{
+    unsigned int gpuId;   //!< DCGM GPU ID whose NVML handle should be queried.
+    unsigned int scopeId; //!< NVML field-value scope ID for the link state read.
+
+    auto operator<=>(DcgmNvLinkStateReadKey const &) const = default;
+};
+
+/**
+ * Requested raw NVLink state field for one GPU/scope key.
+ */
+struct DcgmNvLinkStateReadSpec
+{
+    DcgmNvLinkStateReadKey key {}; //!< GPU and NVML scope identity for the raw read.
+};
+
+/*****************************************************************************/
+/**
+ * Result from a raw NVLink state read.
+ */
+struct DcgmNvLinkStateRawResult
+{
+    nvmlReturn_t nvmlReturn = NVML_ERROR_UNKNOWN; //!< Top-level backend call status.
+    nvmlFieldValue_t state {};                    //!< Raw state field value when valid.
+    bool hasDeviceHandle = true;                  //!< False when no usable NVML device handle was available.
+};
+
+/**
+ * Key for a raw NVLink error-counter read.
+ */
+struct DcgmNvLinkErrorCounterReadKey
+{
+    unsigned int gpuId;       //!< DCGM GPU ID whose NVML handle should be queried.
+    unsigned int scopeId;     //!< NVML field-value scope ID for the link error-counter read.
+    unsigned int nvmlFieldId; //!< NVML field-value ID for the requested error counter.
+
+    auto operator<=>(DcgmNvLinkErrorCounterReadKey const &) const = default;
+};
+
+/**
+ * Requested raw NVLink error-counter field for one GPU/scope/field key.
+ */
+struct DcgmNvLinkErrorCounterReadSpec
+{
+    DcgmNvLinkErrorCounterReadKey key {}; //!< GPU, scope, and NVML field identity for the raw read.
+};
+
+/*****************************************************************************/
+/**
+ * Result from a raw NVLink error-counter read.
+ */
+struct DcgmNvLinkErrorCounterRawResult
+{
+    nvmlReturn_t nvmlReturn = NVML_ERROR_UNKNOWN; //!< Top-level backend call status.
+    nvmlFieldValue_t value {};                    //!< Raw error-counter field value when valid.
+    bool hasDeviceHandle = true;                  //!< False when no usable NVML device handle was available.
+};
+
+/*****************************************************************************/
+/**
+ * Reads raw NVLink state fields for deferred cache-manager fan-out.
+ */
+class DcgmNvLinkStateReader
+{
+public:
+    virtual ~DcgmNvLinkStateReader() = default;
+
+    /**
+     * Return whether deferred raw NVLink state reads are available.
+     *
+     * @param[in] nvmlLoaded Whether NVML is loaded.
+     * @param[in] skipDriverCalls Whether driver calls are temporarily suppressed.
+     * @return True when the cache manager may use this reader for deferred reads.
+     * @note Production implementations must not call back into DcgmCacheManager.
+     */
+    virtual bool CanRead(bool nvmlLoaded, bool skipDriverCalls) const = 0;
+
+    /**
+     * Read the requested raw NVLink state fields.
+     *
+     * @param[in] nvmlDriver NVML task runner used for backend calls.
+     * @param[in] safeNvmlDevice NVML device handle to query.
+     * @param[in] readSpecs GPU/scope keys to request.
+     * @return Raw read results keyed by GPU and scope identity.
+     */
+    virtual std::map<DcgmNvLinkStateReadKey, DcgmNvLinkStateRawResult> ReadBatch(
+        NvmlTaskRunner &nvmlDriver,
+        SafeNvmlHandle safeNvmlDevice,
+        std::span<DcgmNvLinkStateReadSpec const> readSpecs) = 0;
+};
+
+/*****************************************************************************/
+/**
+ * Reads raw NVLink error-counter fields for deferred cache-manager fan-out.
+ */
+class DcgmNvLinkErrorCounterReader
+{
+public:
+    virtual ~DcgmNvLinkErrorCounterReader() = default;
+
+    /**
+     * Return whether deferred raw NVLink error-counter reads are available.
+     *
+     * @param[in] nvmlLoaded Whether NVML is loaded.
+     * @param[in] skipDriverCalls Whether driver calls are temporarily suppressed.
+     * @return True when the cache manager may use this reader for deferred reads.
+     * @note Production implementations must not call back into DcgmCacheManager.
+     */
+    virtual bool CanRead(bool nvmlLoaded, bool skipDriverCalls) const = 0;
+
+    /**
+     * Read the requested raw NVLink error-counter fields.
+     *
+     * @param[in] nvmlDriver NVML task runner used for backend calls.
+     * @param[in] safeNvmlDevice NVML device handle to query.
+     * @param[in] readSpecs GPU/scope/field keys to request.
+     * @return Raw read results keyed by GPU, scope, and NVML field identity.
+     */
+    virtual std::map<DcgmNvLinkErrorCounterReadKey, DcgmNvLinkErrorCounterRawResult> ReadBatch(
+        NvmlTaskRunner &nvmlDriver,
+        SafeNvmlHandle safeNvmlDevice,
+        std::span<DcgmNvLinkErrorCounterReadSpec const> readSpecs) = 0;
+};
+
+/**
+ * Key for a raw NVLink bandwidth read.
+ */
+struct DcgmNvLinkBandwidthReadKey
+{
+    unsigned int gpuId;   //!< DCGM GPU ID whose NVML handle should be queried.
+    unsigned int scopeId; //!< NVML field-value scope ID for the raw read.
+
+    auto operator<=>(DcgmNvLinkBandwidthReadKey const &) const = default;
+};
+
+/**
+ * Requested raw NVLink bandwidth directions for one GPU/scope key.
+ */
+struct DcgmNvLinkBandwidthReadSpec
+{
+    DcgmNvLinkBandwidthReadKey key {}; //!< GPU and NVML scope identity for the raw read.
+    uint8_t directionMask = 0;         //!< Raw directions to request for this key.
+};
+
+/*****************************************************************************/
+/**
+ * Result from a raw NVLink bandwidth read.
+ *
+ * `nvmlReturn` is the top-level backend call status. If it is not `NVML_SUCCESS`,
+ * `rx` and `tx` are not valid for append fan-out. If `hasDeviceHandle` is false,
+ * neither field value is valid. When `hasDeviceHandle` is true and `nvmlReturn`
+ * is `NVML_SUCCESS`, each field value is valid only if its direction was
+ * requested by the direction mask passed to `DcgmNvLinkBandwidthReader::Read`;
+ * each field's own `nvmlReturn` still determines per-field success.
+ */
+struct DcgmNvLinkBandwidthRawResult
+{
+    nvmlReturn_t nvmlReturn = NVML_ERROR_UNKNOWN; //!< Top-level backend call status.
+    nvmlFieldValue_t rx {};                       //!< Raw RX throughput field value when requested and valid.
+    nvmlFieldValue_t tx {};                       //!< Raw TX throughput field value when requested and valid.
+    bool hasDeviceHandle = true;                  //!< False when no usable NVML device handle was available.
+};
+
+/*****************************************************************************/
+/**
+ * Reads raw NVLink bandwidth counters for deferred cache-manager fan-out.
+ */
+class DcgmNvLinkBandwidthReader
+{
+public:
+    virtual ~DcgmNvLinkBandwidthReader() = default;
+
+    /**
+     * Return whether deferred raw NVLink bandwidth reads are available.
+     *
+     * @param[in] driverIsR450OrNewer Whether the loaded driver supports required field-value APIs.
+     * @param[in] nvmlLoaded Whether NVML is loaded.
+     * @param[in] skipDriverCalls Whether driver calls are temporarily suppressed.
+     * @return True when the cache manager may use this reader for deferred reads.
+     * @note Production implementations must not call back into DcgmCacheManager.
+     */
+    virtual bool CanRead(bool driverIsR450OrNewer, bool nvmlLoaded, bool skipDriverCalls) const = 0;
+
+    /**
+     * Read the requested raw NVLink bandwidth directions.
+     *
+     * The direction mask uses `DcgmNvLinkBandwidthDirectionRx` and
+     * `DcgmNvLinkBandwidthDirectionTx`. Implementations must populate only the
+     * requested directions.
+     *
+     * @param[in] nvmlDriver NVML task runner used for backend calls.
+     * @param[in] safeNvmlDevice NVML device handle to query.
+     * @param[in] key GPU and scope identity for the raw read.
+     * @param[in] directionMask Bitmask of requested raw directions.
+     * @return Raw read result and status metadata.
+     */
+    virtual DcgmNvLinkBandwidthRawResult Read(NvmlTaskRunner &nvmlDriver,
+                                              SafeNvmlHandle safeNvmlDevice,
+                                              DcgmNvLinkBandwidthReadKey key,
+                                              uint8_t directionMask) = 0;
+
+    /**
+     * Read the requested raw NVLink bandwidth directions for multiple scopes.
+     *
+     * Implementations may use one backend query when the API supports it. The
+     * returned map must contain one entry for each requested key.
+     *
+     * @param[in] nvmlDriver NVML task runner used for backend calls.
+     * @param[in] safeNvmlDevice NVML device handle to query.
+     * @param[in] readSpecs GPU/scope keys and raw direction masks to request.
+     * @return Raw read results keyed by GPU and scope identity.
+     */
+    virtual std::map<DcgmNvLinkBandwidthReadKey, DcgmNvLinkBandwidthRawResult> ReadBatch(
+        NvmlTaskRunner &nvmlDriver,
+        SafeNvmlHandle safeNvmlDevice,
+        std::span<DcgmNvLinkBandwidthReadSpec const> readSpecs) = 0;
+};
+
+/*****************************************************************************/
 /* Details for a single watcher of a field. Each fieldId has a vector of these */
 typedef struct dcgm_watch_watcher_info_t
 {
@@ -114,13 +417,13 @@ typedef struct dcgm_watch_watcher_info_t
 } dcgm_watch_watcher_info_t, *dcgm_watch_watcher_info_p;
 
 /*****************************************************************************/
-/*
- * Struct to hold a single watch and its field values
+/**
+ * Struct to hold a single watch and its field values.
  *
  * IMPORTANT: If you add fields to this struct, update AllocWatchInfo() to
  *            initialize those fields properly. Because we are allocating the
  *            struct with new() and the struct has classes (watchers), we can't
- *            simply memset the struct to zero
+ *            simply memset the struct to zero.
  */
 typedef struct dcgmcm_watch_info_t
 {
@@ -145,6 +448,7 @@ typedef struct dcgmcm_watch_info_t
                                            field since the cache manager started */
     long long fetchCount;                            /* Number of times that this field has been
                                            fetched from the driver */
+    uint64_t watchGeneration;                        //!< Incremented when deferred-read snapshot validity can change.
     timeseries_p timeSeries;                         /* Time-series of values for this watch */
     std::vector<dcgm_watch_watcher_info_t> watchers; /* Info for each watcher of this
                                                        field. monitorIntervalUsec and
@@ -536,6 +840,21 @@ class DcgmCacheManager : public DcgmTaskRunner
 public:
     /* Constructor/destructor */
     DcgmCacheManager();
+
+    /**
+     * Construct with injected raw NVLink readers.
+     *
+     * Null reader arguments use the matching production default reader.
+     *
+     * @param[in] nvLinkBandwidthReader Reader used for cached-watch raw NVLink bandwidth reads.
+     * @param[in] nvLinkBerReader Reader used for cached-watch raw NVLink BER reads.
+     * @param[in] nvLinkStateReader Reader used for cached-watch raw NVLink state reads.
+     * @param[in] nvLinkErrorCounterReader Reader used for cached-watch raw NVLink error-counter reads.
+     */
+    DcgmCacheManager(std::unique_ptr<DcgmNvLinkBandwidthReader> nvLinkBandwidthReader,
+                     std::unique_ptr<DcgmNvLinkBerReader> nvLinkBerReader,
+                     std::unique_ptr<DcgmNvLinkStateReader> nvLinkStateReader,
+                     std::unique_ptr<DcgmNvLinkErrorCounterReader> nvLinkErrorCounterReader);
     ~DcgmCacheManager();
 
     /*************************************************************************/
@@ -585,6 +904,15 @@ public:
      *
      */
     dcgmReturn_t Start();
+
+    /*************************************************************************/
+    /*
+     * Stop the task runner used by the cache manager.
+     */
+    void Stop()
+    {
+        DcgmNs::TaskRunner::Stop();
+    }
 
     /*************************************************************************/
     /*
@@ -642,7 +970,7 @@ public:
      * Returns: 0 on success
      *          DCGM_ST_? #define on error
      */
-    dcgmReturn_t GetGpuIds(int activeOnly, std::vector<unsigned int> &gpuIds);
+    virtual dcgmReturn_t GetGpuIds(int activeOnly, std::vector<unsigned int> &gpuIds);
 
     /*************************************************************************/
     /*
@@ -675,9 +1003,9 @@ public:
      *          DCGM_ST_? #define on error
      */
 
-    dcgmReturn_t GetAllEntitiesOfEntityGroup(int activeOnly,
-                                             dcgm_field_entity_group_t entityGroupId,
-                                             std::vector<dcgmGroupEntityPair_t> &entities);
+    virtual dcgmReturn_t GetAllEntitiesOfEntityGroup(int activeOnly,
+                                                     dcgm_field_entity_group_t entityGroupId,
+                                                     std::vector<dcgmGroupEntityPair_t> &entities);
 
     /*************************************************************************/
     /*
@@ -689,7 +1017,7 @@ public:
      * Returns a GPU status enum
      *
      */
-    DcgmEntityStatus_t GetEntityStatus(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId);
+    virtual DcgmEntityStatus_t GetEntityStatus(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId);
 
     /*************************************************************************/
     /*
@@ -721,7 +1049,7 @@ public:
      *          DCGM_ST_? #define on error
      *
      */
-    dcgmReturn_t GetGpuArch(unsigned int gpuId, dcgmChipArchitecture_t &arch);
+    virtual dcgmReturn_t GetGpuArch(unsigned int gpuId, dcgmChipArchitecture_t &arch);
 
     /*************************************************************************/
     /*
@@ -774,7 +1102,7 @@ public:
      *         DCGM_ST_? #define on error.
      *
      */
-    dcgmReturn_t UpdateAllFields(int waitForUpdate);
+    virtual dcgmReturn_t UpdateAllFields(int waitForUpdate);
 
 
     /*************************************************************************/
@@ -812,16 +1140,16 @@ public:
      *        <0 on error. See DCGM_ST_? #defines
      *
      */
-    dcgmReturn_t AddFieldWatch(dcgm_field_entity_group_t entityGroupId,
-                               dcgm_field_eid_t entityId,
-                               unsigned short dcgmFieldId,
-                               timelib64_t monitorIntervalUsec,
-                               double maxSampleAge,
-                               int maxKeepSamples,
-                               DcgmWatcher watcher,
-                               bool subscribeForUpdates,
-                               bool updateOnFirstWatch,
-                               bool &wereFirstWatcher);
+    virtual dcgmReturn_t AddFieldWatch(dcgm_field_entity_group_t entityGroupId,
+                                       dcgm_field_eid_t entityId,
+                                       unsigned short dcgmFieldId,
+                                       timelib64_t monitorIntervalUsec,
+                                       double maxSampleAge,
+                                       int maxKeepSamples,
+                                       DcgmWatcher watcher,
+                                       bool subscribeForUpdates,
+                                       bool updateOnFirstWatch,
+                                       bool &wereFirstWatcher);
 
     /*************************************************************************/
     /*
@@ -862,11 +1190,11 @@ public:
      *        <0 on error. See DCGM_ST_? #defines
      *
      */
-    dcgmReturn_t RemoveFieldWatch(dcgm_field_entity_group_t entityGroupId,
-                                  dcgm_field_eid_t entityId,
-                                  unsigned short dcgmFieldId,
-                                  int clearCache,
-                                  DcgmWatcher watcher);
+    virtual dcgmReturn_t RemoveFieldWatch(dcgm_field_entity_group_t entityGroupId,
+                                          dcgm_field_eid_t entityId,
+                                          unsigned short dcgmFieldId,
+                                          int clearCache,
+                                          DcgmWatcher watcher);
 
     /*************************************************************************/
     /*
@@ -992,26 +1320,26 @@ public:
      * userData        IN: User provided data to be passed to the callback function
      *
      */
-    dcgmReturn_t GetInt64SummaryData(dcgm_field_entity_group_t entityGroupId,
-                                     dcgm_field_eid_t entityId,
-                                     unsigned short dcgmFieldId,
-                                     int numSummaryTypes,
-                                     DcgmcmSummaryType_t *summaryTypes,
-                                     long long *summaryValues,
-                                     timelib64_t startTime,
-                                     timelib64_t endTime,
-                                     pfUseEntryForSummary enumCB,
-                                     void *userData);
-    dcgmReturn_t GetFp64SummaryData(dcgm_field_entity_group_t entityGroupId,
-                                    dcgm_field_eid_t entityId,
-                                    unsigned short dcgmFieldId,
-                                    int numSummaryTypes,
-                                    DcgmcmSummaryType_t *summaryTypes,
-                                    double *summaryValues,
-                                    timelib64_t startTime,
-                                    timelib64_t endTime,
-                                    pfUseEntryForSummary enumCB,
-                                    void *userData);
+    virtual dcgmReturn_t GetInt64SummaryData(dcgm_field_entity_group_t entityGroupId,
+                                             dcgm_field_eid_t entityId,
+                                             unsigned short dcgmFieldId,
+                                             int numSummaryTypes,
+                                             DcgmcmSummaryType_t *summaryTypes,
+                                             long long *summaryValues,
+                                             timelib64_t startTime,
+                                             timelib64_t endTime,
+                                             pfUseEntryForSummary enumCB,
+                                             void *userData);
+    virtual dcgmReturn_t GetFp64SummaryData(dcgm_field_entity_group_t entityGroupId,
+                                            dcgm_field_eid_t entityId,
+                                            unsigned short dcgmFieldId,
+                                            int numSummaryTypes,
+                                            DcgmcmSummaryType_t *summaryTypes,
+                                            double *summaryValues,
+                                            timelib64_t startTime,
+                                            timelib64_t endTime,
+                                            pfUseEntryForSummary enumCB,
+                                            void *userData);
 
     /*************************************************************************/
     /*
@@ -1067,11 +1395,11 @@ public:
      * Returns 0 on success
      *        <0 on error. See DCGM_ST_? #defines
      */
-    dcgmReturn_t GetLatestSample(dcgm_field_entity_group_t entityGroupId,
-                                 dcgm_field_eid_t entityId,
-                                 unsigned short dcgmFieldId,
-                                 dcgmcm_sample_p sample,
-                                 DcgmFvBuffer *fvBuffer);
+    virtual dcgmReturn_t GetLatestSample(dcgm_field_entity_group_t entityGroupId,
+                                         dcgm_field_eid_t entityId,
+                                         unsigned short dcgmFieldId,
+                                         dcgmcm_sample_p sample,
+                                         DcgmFvBuffer *fvBuffer);
 
     /*************************************************************************/
     /*
@@ -1090,9 +1418,9 @@ public:
     dcgmReturn_t GetMultipleLatestSamples(std::vector<dcgmGroupEntityPair_t> &entities,
                                           std::vector<unsigned short> &fieldIds,
                                           DcgmFvBuffer *fvBuffer);
-    dcgmReturn_t GetMultipleLatestLiveSamples(std::vector<dcgmGroupEntityPair_t> &entities,
-                                              std::vector<unsigned short> &fieldIds,
-                                              DcgmFvBuffer *fvBuffer);
+    virtual dcgmReturn_t GetMultipleLatestLiveSamples(std::vector<dcgmGroupEntityPair_t> &entities,
+                                                      std::vector<unsigned short> &fieldIds,
+                                                      DcgmFvBuffer *fvBuffer);
 
     /*************************************************************************/
     /*
@@ -1231,7 +1559,7 @@ public:
     /*
      * Returns whether a given entityId is valid or not
      */
-    bool GetIsValidEntityId(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId);
+    virtual bool GetIsValidEntityId(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId);
 
     /*************************************************************************/
     /*
@@ -1252,7 +1580,7 @@ public:
      *         could not be created
      *
      */
-    unsigned int AddFakeGpu(void);
+    virtual unsigned int AddFakeGpu(void);
 
     /*************************************************************************/
     /*
@@ -1262,7 +1590,7 @@ public:
      *         could not be created
      *
      */
-    dcgm_field_eid_t AddFakeComputeInstance(dcgm_field_eid_t parentId);
+    virtual dcgm_field_eid_t AddFakeComputeInstance(dcgm_field_eid_t parentId);
 
     /*************************************************************************/
     /*
@@ -1272,7 +1600,7 @@ public:
      *         could not be created
      *
      */
-    dcgm_field_eid_t AddFakeInstance(dcgm_field_eid_t parentId);
+    virtual dcgm_field_eid_t AddFakeInstance(dcgm_field_eid_t parentId);
 
     /*************************************************************************/
     /*
@@ -1336,7 +1664,9 @@ public:
      * Returns 0 if OK
      *        <0 DCGM_ST_* on module error
      */
-    dcgmReturn_t SelectGpusByTopology(std::vector<unsigned int> &gpuIds, uint32_t numGpus, uint64_t &outputGpus);
+    virtual dcgmReturn_t SelectGpusByTopology(std::vector<unsigned int> &gpuIds,
+                                              uint32_t numGpus,
+                                              uint64_t &outputGpus);
 
     /*************************************************************************/
     /*
@@ -1421,7 +1751,7 @@ public:
      *                         should be serviced by perfworks will remain after
      *                         this call.
      */
-    void GetProfModuleServicedEntities(std::vector<dcgmGroupEntityPair_t> &entities);
+    virtual void GetProfModuleServicedEntities(std::vector<dcgmGroupEntityPair_t> &entities);
 
     /*************************************************************************/
     /**
@@ -1564,18 +1894,18 @@ public:
     /*
      * Add a field to the meta group watched fields list
      */
-    void AddMetaGroupWatchedField(dcgmGpuGrp_t groupId,
-                                  unsigned short fieldId,
-                                  timelib64_t monitorIntervalUsec,
-                                  double maxSampleAge,
-                                  int maxKeepSamples,
-                                  DcgmWatcher watcher);
+    virtual void AddMetaGroupWatchedField(dcgmGpuGrp_t groupId,
+                                          unsigned short fieldId,
+                                          timelib64_t monitorIntervalUsec,
+                                          double maxSampleAge,
+                                          int maxKeepSamples,
+                                          DcgmWatcher watcher);
 
     /*************************************************************************/
     /*
      * Remove a field from the meta group watched fields list
      */
-    void RemoveMetaGroupWatchedField(dcgmGpuGrp_t groupId, unsigned short fieldId, DcgmWatcher watcher);
+    virtual void RemoveMetaGroupWatchedField(dcgmGpuGrp_t groupId, unsigned short fieldId, DcgmWatcher watcher);
 
     /*************************************************************************/
     /*
@@ -1583,10 +1913,7 @@ public:
      */
     void RecordBindUnbindEvent(dcgmBindUnbindEventState_t state);
 
-#ifndef TEST_DCGMCACHEMANAGER
-private:
-#endif
-
+protected:
     template <typename NvLinkStatus>
     dcgmReturn_t PopulateNvLinkLinkStatusImpl(NvLinkStatus &nvLinkStatus, unsigned int version);
 
@@ -1627,10 +1954,7 @@ private:
        Is a hash of dcgm_entity_key_t -> entity_watch_table_t */
     hashtable_t *m_entityWatchHashTable;
 
-    /* Cache of which PIDs we have already saved to the cache with which start times
-     * This saves us having to scan the entire accounting data structure to find
-     * which PIDs we have already saved */
-    keyedvector_p m_accountingPidsSeen;
+    DcgmAccountingManager m_accountingManager;
 
     /* NVML events */
 
@@ -1692,6 +2016,15 @@ private:
     std::atomic<bool> m_skipDriverCalls;
 
     std::unique_ptr<NvmlTaskRunner> m_nvmlDriver; /* NVML driver that is used to invoke NVML functions */
+    std::unique_ptr<DcgmNvLinkBandwidthReader>
+        m_nvLinkBandwidthReader; //!< Raw NVLink bandwidth reader for deferred cache-manager fan-out.
+    std::unique_ptr<DcgmNvLinkBerReader>
+        m_nvLinkBerReader; //!< Raw NVLink BER reader for deferred cache-manager fan-out.
+    std::unique_ptr<DcgmNvLinkStateReader>
+        m_nvLinkStateReader; //!< Raw NVLink state reader for deferred cache-manager fan-out.
+    std::unique_ptr<DcgmNvLinkErrorCounterReader>
+        m_nvLinkErrorCounterReader; //!< Raw NVLink error-counter reader for deferred cache-manager fan-out.
+    bool m_nvLinkErrorCounterFieldValuesUnsupported; //!< Avoid repeated unsupported Hopper field-values probes.
 
     /*************************************************************************/
     /*
@@ -1867,38 +2200,6 @@ private:
                                            unsigned int fieldId,
                                            int createIfNotExists);
     dcgmcm_watch_info_p GetGlobalWatchInfo(unsigned int fieldId, int createIfNotExists);
-
-    /*************************************************************************/
-    /*
-     * Check to see if an accounting PID has already been cached at a given timestamp
-     *
-     * @note This function must be called with the cache manager mutex locked.
-     *
-     * RETURNS: 1 if PID has been cached
-     *          0 if not
-     */
-    int HasAccountingPidBeenSeen(unsigned int pid, timelib64_t timestamp);
-
-    /*************************************************************************/
-    /*
-     * Mark a PID as having been cached
-     *
-     * @note This function must be called with the cache manager mutex locked.
-     *
-     * RETURNS: 0 if OK
-     *         <0 on error. See DCGM_ST_? enumerations for details.
-     *
-     */
-    dcgmReturn_t CacheAccountingPid(unsigned int pid, timelib64_t timestamp);
-
-    /*************************************************************************/
-    /*
-     * Clear all values from the accounting PID cache
-     *
-     * RETURNS: Nothing
-     *
-     */
-    void EmptyAccountingPidCache();
 
     /*************************************************************************/
     /*
@@ -2298,16 +2599,40 @@ private:
      */
     dcgmReturn_t ReadAndCacheNvLinkFields(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
 
+    using DeferredWatchGenerationSnapshot = std::pair<unsigned short, uint64_t>;
+    using LiveRequestedFieldCounts        = std::map<unsigned short, size_t>;
+
     /**
-     * Read and cache NvLink PRM data for a specific link
+     * Read and cache NvLink PRM TLV data for a specific link.
      *
-     * This function reads PRM data for NvLink using NVML's nvmlDeviceReadWritePRM_v1 API.
+     * This overload caches all fields covered by the PRM register group selected by fieldMeta.
      *
-     * @param[in] threadCtx Thread context
-     * @param[in] fieldMeta Field metadata containing field ID and entity information
-     * @return DCGM_ST_OK on success, error code on failure
+     * @param[in,out] threadCtx Thread context containing the link entity and cache/buffer targets.
+     * @param[in] fieldMeta Field metadata for the representative PRM TLV field.
+     * @return DCGM_ST_OK on success, error code on failure.
      */
     dcgmReturn_t ReadAndCacheNvLinkPrm(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
+
+    /**
+     * Read and cache or buffer NvLink PRM TLV data for a specific link.
+     *
+     * This overload is used by live reads that request only a subset of fields in a PRM register group. It still reads
+     * the whole PRM group once, but only buffers fields listed in liveRequestedFieldCounts. Watched sibling fields are
+     * cached when present. Deferred cached reads pass expectedGenerations so values are applied only to watches whose
+     * generation still matches after the lock was released for the NVML call.
+     *
+     * @param[in,out] threadCtx Thread context containing the link entity and cache/buffer targets.
+     * @param[in] fieldMeta Field metadata for the representative PRM TLV field.
+     * @param[in] liveRequestedFieldCounts Optional field ID counts to buffer for live responses.
+     * @param[in] expectedGenerations Optional field ID/generation snapshots for deferred cached reads.
+     * @param[out] readNvmlReturn Optional NVML status observed during the read.
+     * @return DCGM_ST_OK on success, error code on failure.
+     */
+    dcgmReturn_t ReadAndCacheNvLinkPrm(dcgmcm_update_thread_t &threadCtx,
+                                       dcgm_field_meta_p fieldMeta,
+                                       LiveRequestedFieldCounts const *liveRequestedFieldCounts,
+                                       std::span<DeferredWatchGenerationSnapshot const> expectedGenerations = {},
+                                       nvmlReturn_t *readNvmlReturn                                         = nullptr);
 
     /**
      * Cache and/or buffer the value for a PRM field whose link entity port is outside that field's PRM contract.
@@ -2369,8 +2694,9 @@ private:
     /**
      * Read and cache a per-link NVLink GPM throughput byte counter keyed by a dcgm_link_t entity
      * (DCGM_FE_LINK). Decodes the GPU from the entity, takes a GPM sample on that GPU and lets the
-     * GPM manager select the per-link metric from the link index. Covers
-     * DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK and DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK.
+     * GPM manager select the per-link metric from the link index. Covers the canonical
+     * DCGM_FI_PROF_NVLINK_TX_BYTES and DCGM_FI_PROF_NVLINK_RX_BYTES fields and the DCGM 4.7
+     * compatibility IDs.
      *
      * @param[in] threadCtx Thread context
      * @param[in] fieldMeta Field metadata containing field ID and entity information
@@ -2379,35 +2705,93 @@ private:
     dcgmReturn_t ReadAndCacheNvLinkGpmBytes(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
 
     /**
-     * @brief Read and cache NVLink COUNT field values for per-link queries (NVLink5+ only).
+     * Read and cache NVLink COUNT field values for per-link queries.
      *
-     * Extracts gpuId and linkIndex from the dcgm_link_t entity ID and queries NVML
-     * with scopeId = linkIndex to retrieve per-link statistics.
+     * Extracts GPU ID and link index from the `dcgm_link_t` entity ID and queries NVML with `scopeId` set to
+     * the link index to retrieve per-link NVLink5+ statistics.
      *
-     * @param threadCtx The update thread context containing entity and watch information.
-     * @param fieldMeta Metadata for the field being queried.
-     * @return DCGM_ST_OK on success, appropriate error code on failure.
+     * @param[in] threadCtx Update thread context containing entity and watch information.
+     * @param[in] fieldMeta Metadata for the field being queried.
+     * @return `DCGM_ST_OK` on success, or an error code on failure.
      */
     dcgmReturn_t ReadAndCacheNvLinkCountField(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
 
     /**
-     * Read and cache PRM counter values using the counter-based API
+     * Read and cache or buffer PRM counter values using the counter-based API.
      *
-     * @param[in] threadCtx Thread context
-     * @param[in] fieldMeta Field metadata containing field ID and entity information
-     * @return DCGM_ST_OK on success, error code on failure
+     * The counter API returns one counter value for the field/entity pair represented by threadCtx and fieldMeta. When
+     * liveRequestedFieldCounts is provided, matching fields are buffered once for each original live request. Deferred
+     * cached reads pass expectedWatchGeneration so values are applied only to watches whose generation still matches
+     * after the lock was released for the NVML call.
+     *
+     * @param[in,out] threadCtx Thread context containing the link entity and cache/buffer targets.
+     * @param[in] fieldMeta Field metadata for the representative PRM counter field.
+     * @param[in] liveRequestedFieldCounts Optional field ID counts to buffer for live responses.
+     * @param[in] expectedWatchGeneration Optional expected generation for a deferred cached watch.
+     * @return DCGM_ST_OK on success, error code on failure.
      */
-    dcgmReturn_t ReadAndCacheNvLinkPrmCounters(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
+    dcgmReturn_t ReadAndCacheNvLinkPrmCounters(dcgmcm_update_thread_t &threadCtx,
+                                               dcgm_field_meta_p fieldMeta,
+                                               LiveRequestedFieldCounts const *liveRequestedFieldCounts = nullptr,
+                                               std::optional<uint64_t> expectedWatchGeneration          = std::nullopt);
 
-    /*
-     * @note This function must be called with the cache manager mutex locked.
+    /**
+     * Cache and/or buffer one value from a PRM TLV register group.
+     *
+     * For cached update paths, this caches watched fields and only buffers the representative requested field. For live
+     * reads, liveRequestedFieldCounts controls which fields are buffered and how many rows each field contributes while
+     * still allowing watched sibling fields to be refreshed from the same PRM group read.
+     *
+     * @param[in,out] threadCtx Update thread context that supplies the optional field-value buffer and receives
+     *                          subscriber notifications.
+     * @param[in] linkEntityId Link entity ID for the PRM field.
+     * @param[in] fieldId Field ID whose value is being cached or buffered.
+     * @param[in] requestedFieldId Representative field ID that triggered the PRM group read.
+     * @param[in] value Field value decoded from the PRM group payload.
+     * @param[in] now Timestamp to use for the cached/buffered sample.
+     * @param[in] liveRequestedFieldCounts Optional field ID counts to buffer for live responses.
+     * @param[in] expectedGenerations Optional field ID/generation snapshots for deferred cached reads.
+     *
+     * @note The caller must hold m_mutex. This function does not release m_mutex.
      */
     void CachePrmField(dcgmcm_update_thread_t &threadCtx,
                        dcgm_field_eid_t linkEntityId,
                        unsigned short fieldId,
                        unsigned short requestedFieldId,
                        uint64_t value,
-                       timelib64_t now);
+                       timelib64_t now,
+                       LiveRequestedFieldCounts const *liveRequestedFieldCounts             = nullptr,
+                       std::span<DeferredWatchGenerationSnapshot const> expectedGenerations = {});
+
+    /**
+     * Cache and/or buffer one PRM counter value.
+     *
+     * For cached update paths, this caches the watched counter field and buffers it when a field-value buffer is
+     * present. For live reads, liveRequestedFieldCounts controls which fields are buffered and how many rows each field
+     * contributes.
+     *
+     * @param[in,out] threadCtx Update thread context that supplies the optional field-value buffer and receives
+     *                          subscriber notifications.
+     * @param[in] linkEntityId Link entity ID for the PRM counter field.
+     * @param[in] fieldId Field ID whose counter value is being cached or buffered.
+     * @param[in] value Counter value to cache or buffer.
+     * @param[in] now Timestamp to use for the cached/buffered sample.
+     * @param[in] liveRequestedFieldCounts Optional field ID counts to buffer for live responses.
+     * @param[in] nvmlStatus NVML status represented by the cached value.
+     * @param[in] liveStatus DCGM status to write into live field-value rows.
+     * @param[in] expectedWatchGeneration Optional expected generation for a deferred cached watch.
+     *
+     * @note The caller must hold m_mutex. This function does not release m_mutex.
+     */
+    void CachePrmCounterField(dcgmcm_update_thread_t &threadCtx,
+                              dcgm_field_eid_t linkEntityId,
+                              unsigned short fieldId,
+                              int64_t value,
+                              timelib64_t now,
+                              LiveRequestedFieldCounts const *liveRequestedFieldCounts = nullptr,
+                              nvmlReturn_t nvmlStatus                                  = NVML_SUCCESS,
+                              dcgmReturn_t liveStatus                                  = DCGM_ST_OK,
+                              std::optional<uint64_t> expectedWatchGeneration          = std::nullopt);
 
     /*************************************************************************/
     /*
@@ -2495,12 +2879,128 @@ private:
      */
     DcgmResult<bool> ResumeGpu(unsigned int gpuId);
 
+    /**
+     * Read a deferred PRM TLV field and capture the elapsed read window.
+     *
+     * This helper prepares a temporary thread context for the deferred read. The caller handles releasing and
+     * reacquiring m_mutex around the call.
+     *
+     * @param[in] linkEntityId Link entity to read.
+     * @param[in] fieldId Representative DCGM field ID for the deferred PRM TLV read.
+     * @param[in] fvBuffer Optional field-value buffer used for subscriber notifications.
+     * @param[in] expectedGenerations Field ID/generation snapshots that must still match before applying values.
+     * @param[out] threadCtx Thread context populated for the deferred read.
+     * @param[out] readStart Timestamp captured immediately before the PRM TLV read.
+     * @param[out] readEnd Timestamp captured immediately after the PRM TLV read.
+     * @param[out] readNvmlReturn NVML status observed during the PRM TLV read.
+     * @return DCGM_ST_OK on success, or the read/setup error.
+     *
+     * @note The caller must not hold m_mutex. This function locks only while applying decoded results and otherwise
+     *       leaves m_mutex released during the NVML call.
+     */
+    dcgmReturn_t ReadDeferredPrmTlv(dcgm_field_eid_t linkEntityId,
+                                    unsigned short fieldId,
+                                    DcgmFvBuffer *fvBuffer,
+                                    std::span<DeferredWatchGenerationSnapshot const> expectedGenerations,
+                                    dcgmcm_update_thread_t &threadCtx,
+                                    timelib64_t &readStart,
+                                    timelib64_t &readEnd,
+                                    nvmlReturn_t &readNvmlReturn);
+
+    /**
+     * Read a deferred PRM counter field and capture the elapsed read window.
+     *
+     * This helper prepares a temporary thread context for the deferred read. The caller handles releasing and
+     * reacquiring m_mutex around the call.
+     *
+     * @param[in] linkEntityId Link entity to read.
+     * @param[in] fieldId Representative DCGM field ID for the deferred PRM counter read.
+     * @param[in] fvBuffer Optional field-value buffer used for subscriber notifications.
+     * @param[in] expectedWatchGeneration Expected generation that must still match before applying values.
+     * @param[out] threadCtx Thread context populated for the deferred read.
+     * @param[out] readStart Timestamp captured immediately before the PRM counter read.
+     * @param[out] readEnd Timestamp captured immediately after the PRM counter read.
+     * @return DCGM_ST_OK on success, or the read/setup error.
+     *
+     * @note The caller must not hold m_mutex. This function locks only while applying decoded results and otherwise
+     *       leaves m_mutex released during the NVML call.
+     */
+    dcgmReturn_t ReadDeferredPrmCounter(dcgm_field_eid_t linkEntityId,
+                                        unsigned short fieldId,
+                                        DcgmFvBuffer *fvBuffer,
+                                        uint64_t expectedWatchGeneration,
+                                        dcgmcm_update_thread_t &threadCtx,
+                                        timelib64_t &readStart,
+                                        timelib64_t &readEnd);
+
+    /**
+     * Apply a deferred PRM TLV read failure to watched fields that are still current.
+     *
+     * @param[in] linkEntityId Link entity that owns the watched fields.
+     * @param[in] snapshots Field IDs and watch generations captured before the PRM TLV read.
+     * @param[in,out] threadCtx Update thread context that receives subscriber notifications.
+     * @param[in] readEnd Timestamp captured after the deferred PRM TLV read completed.
+     * @param[in] execTimeUsec Elapsed time spent in the deferred PRM TLV read.
+     * @param[in] nvmlStatus NVML status to apply to each still-current watch.
+     *
+     * @note The caller must hold m_mutex. This function does not release m_mutex.
+     * @note The PRM TLV read being applied was performed before this call while m_mutex was released.
+     */
+    void ApplyDeferredPrmTlvErrorLocked(dcgm_field_eid_t linkEntityId,
+                                        std::span<DeferredWatchGenerationSnapshot const> snapshots,
+                                        dcgmcm_update_thread_t &threadCtx,
+                                        timelib64_t readEnd,
+                                        timelib64_t execTimeUsec,
+                                        nvmlReturn_t nvmlStatus);
+
+    /**
+     * Apply accounting for a successful deferred PRM TLV read to watched fields that are still current.
+     *
+     * @param[in] linkEntityId Link entity that owns the watched fields.
+     * @param[in] snapshots Field IDs and watch generations captured before the PRM TLV read.
+     * @param[in] readEnd Timestamp captured after the deferred PRM TLV read completed.
+     * @param[in] execTimeUsec Elapsed time spent in the deferred PRM TLV read.
+     *
+     * @note The caller must hold m_mutex. This function does not release m_mutex.
+     * @note The PRM TLV read being accounted was performed before this call while m_mutex was released.
+     */
+    void ApplyDeferredPrmTlvAccountingLocked(dcgm_field_eid_t linkEntityId,
+                                             std::span<DeferredWatchGenerationSnapshot const> snapshots,
+                                             timelib64_t readEnd,
+                                             timelib64_t execTimeUsec);
+
+    /**
+     * Apply one deferred PRM-counter result to a still-current watch.
+     *
+     * @param[in,out] threadCtx Update thread context that receives subscriber notifications.
+     * @param[in] linkEntityId Link entity that owns the watch.
+     * @param[in] fieldId DCGM field ID to apply.
+     * @param[in] value Raw NVML counter value (milliseconds for the recovery last-gap field).
+     * @param[in] nvmlStatus NVML status represented by the cached value.
+     * @param[in] liveStatus DCGM status for live field-value rows.
+     * @param[in] readStart Timestamp captured before the deferred PRM counter read.
+     * @param[in] readEnd Timestamp captured after the deferred PRM counter read completed.
+     * @param[in] expectedGeneration Watch generation captured before the deferred read.
+     *
+     * @note The caller must hold m_mutex. This function does not release m_mutex.
+     */
+    void ApplyDeferredPrmCounterWatchResultLocked(dcgmcm_update_thread_t &threadCtx,
+                                                  dcgm_field_eid_t linkEntityId,
+                                                  unsigned short fieldId,
+                                                  int64_t value,
+                                                  nvmlReturn_t nvmlStatus,
+                                                  dcgmReturn_t liveStatus,
+                                                  timelib64_t readStart,
+                                                  timelib64_t readEnd,
+                                                  uint64_t expectedGeneration);
+
     /*************************************************************************/
     /*
      * Do the actual work of updating all fields, looking to see if the fields
      * should be updated. Call this from the DcgmCacheThread.
      *
-     * @note This function must be called with the cache manager mutex locked.
+     * @note The caller must hold m_mutex; this function may unlock and reacquire internally but must return with
+     * m_mutex held.
      *
      * threadCtx           IO: Update thread context
      * earliestNextUpdate OUT: Timestamp in usec since 1970 of the next time

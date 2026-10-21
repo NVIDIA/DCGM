@@ -18,6 +18,7 @@
 #include "dcgm_diag_structs.h"
 
 #include <DcgmConfigManager.h>
+#include <DcgmDiagCommon.h>
 #include <DcgmDiagResponseWrapper.h>
 #include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
@@ -28,96 +29,6 @@
 
 namespace
 {
-void CustomRunDiagSettings(void const *legacyDrd, unsigned int legacyDrdVersion, dcgmRunDiag_v10 &newDrd)
-{
-    auto setGroupAndEntityIds = [&](auto legacyDrdPtr) {
-        // In drd7 and drd8, gpuList takes precedence over groupId. Conversely, in drd9 and drd10,
-        // groupId has higher priority than entityId. To maintain legacy drd's prioritization scheme,
-        // we set groupId to DCGM_GROUP_NULL unless the gpuList is empty.
-        newDrd.groupId = DCGM_GROUP_NULL;
-        if (legacyDrdPtr->gpuList[0] == '\0')
-        {
-            newDrd.groupId = legacyDrdPtr->groupId;
-        }
-        SafeCopyTo<sizeof(newDrd.entityIds), sizeof(legacyDrdPtr->gpuList)>(newDrd.entityIds, legacyDrdPtr->gpuList);
-    };
-    auto setExpectedNumEntities = [&](auto legacyDrdPtr) {
-        // expectedNumEntities exists in runDiag_v8, runDiag_v9, and runDiag_v10 only.
-        SafeCopyTo<sizeof(newDrd.expectedNumEntities), sizeof(legacyDrdPtr->expectedNumEntities)>(
-            newDrd.expectedNumEntities, legacyDrdPtr->expectedNumEntities);
-    };
-    auto setEntityIds = [&](auto legacyDrdPtr) {
-        SafeCopyTo<sizeof(newDrd.entityIds), sizeof(legacyDrdPtr->entityIds)>(newDrd.entityIds,
-                                                                              legacyDrdPtr->entityIds);
-    };
-    auto setWatchFrequency = [&](auto legacyDrdPtr) {
-        newDrd.watchFrequency = legacyDrdPtr->watchFrequency;
-    };
-
-    switch (legacyDrdVersion)
-    {
-        case dcgmRunDiag_version7:
-        {
-            auto legacyDrdPtr = static_cast<const dcgmRunDiag_v7 *>(legacyDrd);
-            setGroupAndEntityIds(legacyDrdPtr);
-            break;
-        }
-        break;
-        case dcgmRunDiag_version8:
-        {
-            auto legacyDrdPtr = static_cast<const dcgmRunDiag_v8 *>(legacyDrd);
-            setGroupAndEntityIds(legacyDrdPtr);
-            setExpectedNumEntities(legacyDrdPtr);
-        }
-        break;
-        case dcgmRunDiag_version9:
-        {
-            auto legacyDrdPtr = static_cast<const dcgmRunDiag_v9 *>(legacyDrd);
-            setExpectedNumEntities(legacyDrdPtr);
-            setEntityIds(legacyDrdPtr);
-            setWatchFrequency(legacyDrdPtr);
-        }
-        break;
-        default:
-            log_debug("RunDiag version {} not supported in this function.", legacyDrdVersion);
-    }
-}
-
-template <typename T>
-dcgmRunDiag_v10 ProduceLatestDcgmRunDiag(const T &legacyDrd)
-    requires std::is_same_v<T, dcgmRunDiag_v9> || std::is_same_v<T, dcgmRunDiag_v8> || std::is_same_v<T, dcgmRunDiag_v7>
-{
-    dcgmRunDiag_v10 newDrd {};
-
-    newDrd.version    = dcgmRunDiag_version10;
-    newDrd.flags      = legacyDrd.flags;
-    newDrd.debugLevel = legacyDrd.debugLevel;
-    newDrd.groupId    = legacyDrd.groupId;
-    newDrd.validate   = legacyDrd.validate;
-    std::memcpy(&newDrd.testNames, &legacyDrd.testNames, sizeof(newDrd.testNames));
-    for (unsigned int i = 0; i < DCGM_MAX_TEST_PARMS; ++i)
-    {
-        SafeCopyTo(newDrd.testParms[i], legacyDrd.testParms[i]);
-    }
-    SafeCopyTo<sizeof(newDrd.fakeGpuList), sizeof(legacyDrd.fakeGpuList)>(newDrd.fakeGpuList, legacyDrd.fakeGpuList);
-    SafeCopyTo<sizeof(newDrd.debugLogFile), sizeof(legacyDrd.debugLogFile)>(newDrd.debugLogFile,
-                                                                            legacyDrd.debugLogFile);
-    SafeCopyTo<sizeof(newDrd.statsPath), sizeof(legacyDrd.statsPath)>(newDrd.statsPath, legacyDrd.statsPath);
-    SafeCopyTo<sizeof(newDrd.configFileContents), sizeof(legacyDrd.configFileContents)>(newDrd.configFileContents,
-                                                                                        legacyDrd.configFileContents);
-    std::memcpy(&newDrd.clocksEventMask,
-                &legacyDrd.clocksEventMask,
-                std::min(sizeof(newDrd.clocksEventMask), sizeof(legacyDrd.clocksEventMask)));
-    SafeCopyTo<sizeof(newDrd.pluginPath), sizeof(legacyDrd.pluginPath)>(newDrd.pluginPath, legacyDrd.pluginPath);
-    newDrd.currentIteration  = legacyDrd.currentIteration;
-    newDrd.totalIterations   = legacyDrd.totalIterations;
-    newDrd.timeoutSeconds    = legacyDrd.timeoutSeconds;
-    newDrd.failCheckInterval = legacyDrd.failCheckInterval;
-
-    CustomRunDiagSettings(&legacyDrd, legacyDrd.version, newDrd);
-    return newDrd;
-}
-
 void DiagRunTerminateCharBuffer(dcgmRunDiag_v10 &drd)
 {
     dcgmTerminateCharBuffer(drd.fakeGpuList);
@@ -227,13 +138,14 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v10(dcgm_diag_msg_run_v10 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v10 drd = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version10);
     if (DCGM_ST_OK != dcgmReturn)
     {
         return dcgmReturn; /* Logging handled by helper method */
     }
+
+    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
 
     // Upgrade v10 -> v11
     drw.SetVersion<dcgmDiagResponse_v11>(std::bit_cast<dcgmDiagResponse_v11 *>(&msg->diagResponse));
@@ -260,13 +172,14 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v9(dcgm_diag_msg_run_v9 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v10 drd = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version9);
     if (DCGM_ST_OK != dcgmReturn)
     {
         return dcgmReturn; /* Logging handled by helper method */
     }
+
+    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
 
     // Upgrade to v10
     drw.SetVersion<dcgmDiagResponse_v10>(std::bit_cast<dcgmDiagResponse_v10 *>(&msg->diagResponse));
@@ -293,19 +206,17 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v8(dcgm_diag_msg_run_v8 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v10 drd = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version8);
     if (DCGM_ST_OK != dcgmReturn)
     {
         return dcgmReturn; /* Logging handled by helper method */
     }
-    else
-    {
-        // Upgrade to v10
-        drw.SetVersion<dcgmDiagResponse_v10>(std::bit_cast<dcgmDiagResponse_v10 *>(&msg->diagResponse));
-    }
 
+    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
+
+    // Upgrade to v10
+    drw.SetVersion<dcgmDiagResponse_v10>(std::bit_cast<dcgmDiagResponse_v10 *>(&msg->diagResponse));
     DiagRunTerminateCharBuffer(drd);
 
     /* Run the diag */
@@ -329,19 +240,17 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v7(dcgm_diag_msg_run_v7 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v10 drd = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version7);
     if (DCGM_ST_OK != dcgmReturn)
     {
         return dcgmReturn; /* Logging handled by helper method */
     }
-    else
-    {
-        // Upgrade to v9
-        drw.SetVersion<dcgmDiagResponse_v9>(std::bit_cast<dcgmDiagResponse_v9 *>(&msg->diagResponse));
-    }
 
+    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
+
+    // Upgrade to v9
+    drw.SetVersion<dcgmDiagResponse_v9>(std::bit_cast<dcgmDiagResponse_v9 *>(&msg->diagResponse));
     DiagRunTerminateCharBuffer(drd);
     /* Run the diag */
     dcgmReturn = mpDiagManager->RunDiagAndAction(&drd, msg->action, drw, msg->header.connectionId);
@@ -364,19 +273,17 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v6(dcgm_diag_msg_run_v6 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v10 drd = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version6);
     if (DCGM_ST_OK != dcgmReturn)
     {
         return dcgmReturn; /* Logging handled by helper method */
     }
-    else
-    {
-        // Upgrade to v8
-        drw.SetVersion<dcgmDiagResponse_v8>(std::bit_cast<dcgmDiagResponse_v8 *>(&msg->diagResponse));
-    }
 
+    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
+
+    // Upgrade to v8
+    drw.SetVersion<dcgmDiagResponse_v8>(std::bit_cast<dcgmDiagResponse_v8 *>(&msg->diagResponse));
     DiagRunTerminateCharBuffer(drd);
 
     /* Run the diag */
@@ -400,19 +307,17 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v10 drd = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version5);
     if (DCGM_ST_OK != dcgmReturn)
     {
         return dcgmReturn; /* Logging handled by helper method */
     }
-    else
-    {
-        // Upgrade to v7
-        drw.SetVersion<dcgmDiagResponse_v7>(std::bit_cast<dcgmDiagResponse_v7 *>(&msg->diagResponse));
-    }
 
+    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
+
+    // Upgrade to v7
+    drw.SetVersion<dcgmDiagResponse_v7>(std::bit_cast<dcgmDiagResponse_v7 *>(&msg->diagResponse));
     DiagRunTerminateCharBuffer(drd);
 
     /* Run the diag */

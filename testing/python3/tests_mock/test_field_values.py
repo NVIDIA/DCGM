@@ -26,6 +26,10 @@ def test_nvlink_count_perlink_injection():
     trampoline()
 
 
+def test_nvlink_count_perlink_live_injection():
+    trampoline()
+
+
 def test_nvlink_fec_history_fields():
     trampoline()
 

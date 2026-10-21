@@ -127,7 +127,9 @@ docker_args+=(
     --net=host
     --rm
     --volume "$DIR:$REMOTE_DIR"
-    --workdir "$REMOTE_DIR")
+    --workdir "$REMOTE_DIR"
+    --env CARGO_HOME="${REMOTE_DIR}/_out/.cargohome"
+    --env CARGO_INCREMENTAL=0)
 
 if [[ -t 0 ]]; then
     docker_args+=(--interactive --tty)
@@ -154,13 +156,13 @@ if [[ $CCACHE -eq 1 ]]; then
     mkdir --parents "$CACHE_DIR"
 
     docker_args+=(
-        --volume "$CACHE_DIR:/ccache"
+        --volume "$CACHE_DIR:/cache/ccache"
         --env CCACHE_BASEDIR="$REMOTE_DIR"
-        --env CCACHE_DIR=/ccache
         --env CCACHE_COMPILERCHECK=content
+        --env CCACHE_DIR="/cache/ccache"
         --env CMAKE_C_COMPILER_LAUNCHER=ccache
         --env CMAKE_CXX_COMPILER_LAUNCHER=ccache
-        --env SCCACHE_DIR=/ccache
+        --env SCCACHE_DIR=/cache/ccache
         --env CARGO_INCREMENTAL=0
         --env RUSTC_WRAPPER=sccache)
 fi

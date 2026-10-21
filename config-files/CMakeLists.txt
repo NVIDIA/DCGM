@@ -22,7 +22,7 @@ configure_file(
 install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/systemd/nvidia-dcgm.service"
     DESTINATION "lib/systemd/system"
-    COMPONENT Core)
+    COMPONENT nv-hostengine)
 
 install(
     PROGRAMS "systemd/nvidia-dcgm-multinode-diagnostics-generator.sh"

@@ -44,6 +44,8 @@ def check_not_loaded_or_reloadable(status):
         status, dcgm_structs.DcgmModuleStatusNotLoaded, dcgm_structs.DcgmModuleStatusReloadable)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_get_statuses(handle):
     '''
@@ -68,6 +70,8 @@ def test_dcgm_modules_get_statuses(handle):
             check_not_loaded_or_reloadable(ms.statuses[i].status)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_in_use_introspection(handle):
     '''
@@ -89,6 +93,8 @@ def test_dcgm_modules_in_use_introspection(handle):
         dcgmSystem.modules.Denylist(moduleId)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_denylist_introspection(handle):
     '''
@@ -104,6 +110,8 @@ def test_dcgm_modules_denylist_introspection(handle):
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED)):
         bytesUsed = dcgmSystem.introspect.memory.GetForHostengine().bytesUsed
 
+
+# NO HARDWARE
 
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_in_use_health(handle):
@@ -127,6 +135,8 @@ def test_dcgm_modules_in_use_health(handle):
         dcgmSystem.modules.Denylist(moduleId)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_denylist_health(handle):
     '''
@@ -143,6 +153,8 @@ def test_dcgm_modules_denylist_health(handle):
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED)):
         dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_ALL)
 
+
+# NO HARDWARE
 
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_paused(handle):
@@ -179,13 +191,14 @@ def test_dcgm_modules_paused(handle):
     check_loaded(status)
 
 
+# NO HARDWARE
+
 @test_utils.run_only_if_checking_libraries()
 def test_dcgm_library_existence():
     libraries = [
         'libdcgmmoduleconfig.so.4',
         'libdcgmmodulehealth.so.4',
         'libdcgmmodulenvswitch.so.4',
-        'libdcgm_cublas_proxy11.so.4',
         'libdcgmmodulediag.so.4',
         'libdcgmmodulemndiag.so.4',
         'libdcgmmoduleintrospect.so.4',

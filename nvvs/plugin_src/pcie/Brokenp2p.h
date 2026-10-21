@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,17 +43,17 @@ enum class P2pLink : std::uint8_t
  * Gets the P2P dcgmError_t codes based on the NVLINK_TX_BYTES field summary max value.
  * A zero or blank field summary value indicates that NVLink was not used during the test.
  *
- * @param bg - the plugin this subtest is a part of
  * @param startTime - the start time for the field summary request
  * @param gpuId - the GPU corresponding to the field summary request
  * @param memoryError - memory error code to be filled based on the field summary value
  * @param writerError - writer error code to be filled based on the field summary value
  */
-void GetP2PError(BusGrind *bg,
-                 timelib64_t const &startTime,
+void GetP2PError(timelib64_t const &startTime,
                  unsigned int const &gpuId,
                  dcgmError_t &memoryError,
-                 dcgmError_t &writerError);
+                 dcgmError_t &writerError,
+                 DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                 dcgmHandle_t handle);
 
 class Brokenp2p
 {
@@ -66,8 +66,14 @@ public:
      * @param bg   - the plugin this subtest is a part of
      * @param gpus - information about the GPUs in this test
      * @param size - the largest write that we are performing across the devices
+     * @param cudaOps - CUDA API interface
      */
-    Brokenp2p(BusGrind *bg, std::vector<PluginDevice *> &gpus, size_t size);
+    Brokenp2p(BusGrind *bg,
+              std::vector<PluginDevice *> &gpus,
+              size_t size,
+              DcgmNs::DcgmOpsAnyPtr dcgmOps,
+              dcgmHandle_t handle,
+              CudaOpsAnyPtr cudaOps);
 
     /*****************************************************************************/
     /*
@@ -131,6 +137,9 @@ private:
     BusGrind *m_bg;
     std::vector<PluginDevice *> m_gpus;
     size_t m_size;
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; //!< DCGM API interface.
+    dcgmHandle_t m_handle;           //!< DCGM connection handle.
+    CudaOpsAnyPtr m_cudaOps;         //!< CUDA API interface.
     CUfunction m_func;
 };
 

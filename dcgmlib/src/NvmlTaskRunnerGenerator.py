@@ -158,6 +158,7 @@ NOT_AUTO_GENERATED_FUNCTIONS = [
     "nvmlDeviceRemoveGpu_v2",  # no device argument
     "nvmlDeviceDiscoverGpus",  # no device argument
     "nvmlDeviceGetDeviceHandleFromMigDeviceHandle",  # 1 migDevice argument
+    "nvmlEventSetWait_v3",  # cannot run in the task runner because it can block
     "nvmlEventSetWait_v2",  # cannot run in the task runner because it can block
     "nvmlEventSetWait",  # cannot run in the task runner because it can block
     # should create manually to return SafeNvmlHandle

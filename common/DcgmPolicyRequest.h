@@ -40,4 +40,37 @@ private:
     uint64_t mUserData;
 };
 
+/**
+ * Handles field-policy violation notifications for a registered client callback.
+ */
+class DcgmPolicyViolationRequest : public DcgmRequest
+{
+public:
+    /**
+     * Create a violation request handler.
+     *
+     * @param[in] callback Callback invoked for matching policy violations.
+     * @param[in] userData Opaque user data passed back to callback.
+     */
+    DcgmPolicyViolationRequest(fpRecvPolicyViolation callback, uint64_t userData);
+
+    /**
+     * Destroy the violation request handler.
+     */
+    virtual ~DcgmPolicyViolationRequest();
+
+    /**
+     * Process one incoming message for this request.
+     *
+     * @param[in] msg Incoming DCGM message.
+     * @return DCGM_ST_OK on success, or a DCGM_ST_* error code.
+     */
+    [[nodiscard]] int ProcessMessage(std::unique_ptr<DcgmMessage> msg) override;
+
+private:
+    bool mIsAckRecvd;
+    fpRecvPolicyViolation mCallback;
+    uint64_t mUserData;
+};
+
 #endif /* DCGMPOLICYREQUEST_H */

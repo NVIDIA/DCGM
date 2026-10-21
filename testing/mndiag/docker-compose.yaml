@@ -17,9 +17,14 @@ name: mndiag
 networks:
   dcgm-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
 
 x-node: &node
-  image: mndiag:latest
+  # Keep a distinct tag for each OpenMPI major-version environment so both
+  # images can be loaded and exercised by the same CI job.
+  image: mndiag:openmpi${OPENMPI_MAJOR:-4}
   build:
     context: .
     dockerfile: Dockerfile
@@ -29,6 +34,10 @@ x-node: &node
     - dcgm-net
   cap_add:
     - SYSLOG
+  ulimits:
+    nofile:
+      soft: 65536
+      hard: 65536
   volumes:
     - ${DCGM_INSTALL_DIR}/nv-hostengine:/usr/bin/nv-hostengine
     - ${DCGM_INSTALL_DIR}/dcgmi:/usr/bin/dcgmi
@@ -40,6 +49,7 @@ x-node: &node
     # Paths and permissions for mndiag's MPI-based test execution
     - DCGM_MNDIAG_MPIRUN_PATH=/usr/bin/mpirun
     - DCGM_MNDIAG_MNUBERGEMM_PATH=/tmp/mock_mnubergemm
+    - DCGM_MNDIAG_MNNVBANDWIDTH_PATH=/tmp/mock_mnnvbandwidth
     - DCGM_MNDIAG_SUPPORTED_SKUS=2941
     - DCGM_MPIRUN_ALLOW_RUN_AS_ROOT=1
 

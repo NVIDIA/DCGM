@@ -39,8 +39,9 @@ def test_nvlink_prm_field_registration(handle):
     """
     prm_fields = [
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SINCE_LAST_SECONDS,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_LAST_GAP_SECONDS,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SUCCESSFUL_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_RECOVERY_SUCCESSFUL_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_TOTAL,
@@ -51,7 +52,7 @@ def test_nvlink_prm_field_registration(handle):
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_CODE_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_EVENT_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENT_TOTAL,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL,
     ]
 
     # Verify all fields are registered with correct metadata
@@ -61,7 +62,11 @@ def test_nvlink_prm_field_registration(handle):
         assert fieldMeta.entityLevel == dcgm_fields.DCGM_FE_LINK, (
             f"Wrong entity type for {field_id}: "
             f"{fieldMeta.entityLevel}")
-        assert fieldMeta.fieldType == dcgm_fields.DCGM_FT_INT64, (
+        expected_type = (
+            dcgm_fields.DCGM_FT_DOUBLE
+            if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_LAST_GAP_SECONDS
+            else dcgm_fields.DCGM_FT_INT64)
+        assert fieldMeta.fieldType == expected_type, (
             f"Wrong field type for {field_id}: "
             f"{fieldMeta.fieldType}")
         assert fieldMeta.scope == dcgm_fields.DCGM_FS_ENTITY, (
@@ -71,12 +76,7 @@ def test_nvlink_prm_field_registration(handle):
         assert len(fieldMeta.tag) > 0, f"Field {field_id} has empty tag"
 
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_minimum_gpu_architecture(
-    dcgm_structs.DCGM_CHIP_ARCH_BLACKWELL)
-@test_utils.run_only_with_nvml()
-def test_nvlink_prm_manual_link_entity_creation(handle, gpuIds):
+def helper_nvlink_prm_manual_link_entity_creation(handle, gpuIds):
     """
     Test creating link entities manually for specific GPU+port combinations
     """
@@ -141,6 +141,17 @@ def test_nvlink_prm_manual_link_entity_creation(handle, gpuIds):
                 f"Failed to query PRM field for manually created link GPU {gpuId} port {port_index}: {e}")
 
 
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_with_minimum_gpu_architecture(
+    dcgm_structs.DCGM_CHIP_ARCH_BLACKWELL)
+@test_utils.run_only_with_nvml()
+def test_nvlink_prm_manual_link_entity_creation(handle, gpuIds):
+    helper_nvlink_prm_manual_link_entity_creation(handle, gpuIds)
+
+
+# NO HARDWARE
+
 def test_dcgm_link_t_structure():
     """
     Test the dcgm_link_t structure with property-based raw encoding
@@ -192,6 +203,8 @@ def test_dcgm_link_t_structure():
                           0xFFFF), "Raw->index conversion failed"
     assert link.id == ((0x12345678 >> 24) & 0xFF), "Raw->id conversion failed"
 
+
+# NO HARDWARE
 
 def test_dcgm_link_entity_id_encoding():
     """
@@ -272,13 +285,14 @@ def test_prm_field_injection_infrastructure(handle, gpuIds):
     ]
 
     recovery_fields = [
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SINCE_LAST_SECONDS,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_LAST_GAP_SECONDS,
     ]
 
     misc_fields = [
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL,
     ]
 
     # Define test field groups for validation
@@ -295,8 +309,12 @@ def test_prm_field_injection_infrastructure(handle, gpuIds):
         injected_values[field_id] = test_value
 
         # Inject directly into cache (simulates what hardware would provide)
-        dcgm_field_injection_helpers.inject_field_value_i64(
-            handle, linkEntityId, field_id, test_value, 0, dcgm_fields.DCGM_FE_LINK)
+        if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_LAST_GAP_SECONDS:
+            dcgm_field_injection_helpers.inject_field_value_fp64(
+                handle, linkEntityId, field_id, float(test_value), 0, dcgm_fields.DCGM_FE_LINK)
+        else:
+            dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, linkEntityId, field_id, test_value, 0, dcgm_fields.DCGM_FE_LINK)
 
     # Query injected fields and verify correct values
     entity = dcgm_structs.c_dcgmGroupEntityPair_t()
@@ -368,7 +386,7 @@ def test_prm_field_injection_infrastructure(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_nvml()
 @test_utils.run_with_injection_gpus()
@@ -401,13 +419,13 @@ def test_prm_field_caching_with_field_group_watcher(handle, gpuIds):
     ]
 
     recovery_fields = [
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SINCE_LAST_SECONDS,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SUCCESSFUL_TOTAL,
     ]
 
     misc_fields = [
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL,
     ]
 
     all_test_fields = plr_fields + recovery_fields + misc_fields
@@ -561,7 +579,7 @@ def test_nvlink_prm_watches(handle, gpuIds):
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_CODE_TOTAL,
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_EVENT_TOTAL,
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENT_TOTAL,
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL,
         ]
 
         updateFreq = 100000  # 100ms (0.1 second)
@@ -597,14 +615,14 @@ def test_nvlink_prm_watches(handle, gpuIds):
         fields_with_nonzero_data = 0
 
         field_names = {
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_TOTAL: "PLR_RCV_CODES",
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_ERROR_TOTAL: "PLR_RCV_CODES_ERR",
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_UNCORRECTABLE_TOTAL: "PLR_RCV_CODES_UNCTBL",
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_CODE_TOTAL: "PLR_TX_CODES",
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_CODE_TOTAL: "PLR_TX_RETRY_CODES",
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_EVENT_TOTAL: "PLR_TX_RETRY_CODES_ERR",
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENT_TOTAL: "PLR_SYNC_EVENTS",
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT: "IBPC_PORT_XMIT_WAIT",
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_TOTAL: "PLR_RX_CODE_TOTAL",
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_ERROR_TOTAL: "PLR_RX_CODE_ERROR_TOTAL",
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_UNCORRECTABLE_TOTAL: "PLR_RX_CODE_UNCORRECTABLE_TOTAL",
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_CODE_TOTAL: "PLR_TX_CODE_TOTAL",
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_CODE_TOTAL: "PLR_TX_RETRY_CODE_TOTAL",
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_EVENT_TOTAL: "PLR_TX_RETRY_EVENT_TOTAL",
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENT_TOTAL: "PLR_SYNC_EVENT_TOTAL",
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL: "IBPC_TX_WAIT_TOTAL",
         }
 
         for field_id in field_ids:
@@ -738,15 +756,12 @@ def test_nvlink_prm_watches(handle, gpuIds):
             pass
 
 
-recordedPRMTLVData = b'\x08\x04\x00\x00P\x08\x81\x01\x00\x00\x00\x00\x00\x00\x00\x00\x18?\x00\x00\x00\x0f\x00"\x00\x00\x00\x00\x00\x00\x03\xf82#\xbf\x1c\x00\x00\x00\x00\x0c(\x1b\x11\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\x8b\xff\x86\xee\xfd\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x07!e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00b\xe3\xd2\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-
-
 # NO HARDWARE
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku("B200.yaml")
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_nvml_injected_gpus()
 def test_nvlink_prm_single_field_live_then_cached(handle, gpuIds):
     gpuId = gpuIds[0]
@@ -756,18 +771,8 @@ def test_nvlink_prm_single_field_live_then_cached(handle, gpuIds):
     link.index = 1
     linkEntityId = link.raw
 
-    injectedRet = nvml_injection.c_injectNvmlRet_t()
-    injectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
-    injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_PRMTLV_V1
-    injectedRet.values[0].value.PRMTLV_v1.dataSize = 0
-    injectedRet.values[0].value.PRMTLV_v1.status = 0
-    injectedRet.values[0].value.PRMTLV_v1.data = (
-        c_ubyte * dcgm_nvml.NVML_PRM_DATA_MAX_SIZE).from_buffer_copy(recordedPRMTLVData)
-    injectedRet.valueCount = 1
-
-    ret = dcgm_agent_internal.dcgmInjectNvmlDevice(
-        handle, gpuId, "ReadWritePRM", None, 0, injectedRet)
-    assert ret == dcgm_structs.DCGM_ST_OK
+    injectedRet, counterList, counters, expectedValues = _inject_prm_counter_response(
+        handle, gpuId, [link.index])
 
     groupId = dcgm_agent.dcgmGroupCreate(
         handle, dcgm_structs.DCGM_GROUP_EMPTY, "prm_live_then_cached")
@@ -793,6 +798,8 @@ def test_nvlink_prm_single_field_live_then_cached(handle, gpuIds):
             f"Expected live status OK, got {liveValues[0].status}")
         assert not dcgmvalue.DCGM_INT64_IS_BLANK(liveValues[0].value.i64), (
             f"Expected live value not blank, got {liveValues[0].value.i64}")
+        assert liveValues[0].value.i64 == expectedValues[link.index], (
+            f"Expected live value {expectedValues[link.index]}, got {liveValues[0].value.i64}")
 
         cachedValues = dcgm_agent.dcgmEntitiesGetLatestValues(
             handle, [entity], [fieldId], 0)
@@ -802,6 +809,8 @@ def test_nvlink_prm_single_field_live_then_cached(handle, gpuIds):
             f"Expected cached status OK, got {cachedValues[0].status}")
         assert not dcgmvalue.DCGM_INT64_IS_BLANK(cachedValues[0].value.i64), (
             f"Expected cached value not blank, got {cachedValues[0].value.i64}")
+        assert cachedValues[0].value.i64 == expectedValues[link.index], (
+            f"Expected cached value {expectedValues[link.index]}, got {cachedValues[0].value.i64}")
         assert cachedValues[0].value.i64 == liveValues[0].value.i64, (
             f"Expected cached value {cachedValues[0].value.i64} to match live "
             f"value {liveValues[0].value.i64}")
@@ -826,19 +835,30 @@ def _make_link_entity(gpuId, portIndex):
     return entity
 
 
-def _inject_prm_tlv_response(handle, gpuId):
+def _inject_prm_counter_response(handle, gpuId, entityPorts):
+    counterArray = (dcgm_nvml.c_nvmlPRMCounter_v1_t * len(entityPorts))()
+    expectedValues = {}
+    for index, entityPort in enumerate(entityPorts):
+        expectedValue = 0x100000000 + entityPort
+        counterArray[index].counterId = dcgm_nvml.NVML_PRM_COUNTER_ID_PPCNT_PLR_RCV_CODES
+        counterArray[index].inputValue.localPort = entityPort + 1
+        counterArray[index].outputValue.status = dcgm_nvml.NVML_SUCCESS
+        counterArray[index].outputValue.outputType = dcgm_nvml.NVML_VALUE_TYPE_UNSIGNED_LONG_LONG
+        counterArray[index].outputValue.outputValue.ullVal = expectedValue
+        expectedValues[entityPort] = expectedValue
+
+    counterList = dcgm_nvml.c_nvmlPRMCounterList_v1_t(
+        len(counterArray), counterArray)
     injectedRet = nvml_injection.c_injectNvmlRet_t()
     injectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
-    injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_PRMTLV_V1
-    injectedRet.values[0].value.PRMTLV_v1.dataSize = 0
-    injectedRet.values[0].value.PRMTLV_v1.status = 0
-    injectedRet.values[0].value.PRMTLV_v1.data = (
-        c_ubyte * dcgm_nvml.NVML_PRM_DATA_MAX_SIZE).from_buffer_copy(recordedPRMTLVData)
+    injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_PRMCOUNTERLIST_V1
+    injectedRet.values[0].value.PRMCounterList_v1 = counterList
     injectedRet.valueCount = 1
 
     ret = dcgm_agent_internal.dcgmInjectNvmlDevice(
-        handle, gpuId, "ReadWritePRM", None, 0, injectedRet)
+        handle, gpuId, "ReadPRMCounters", None, 0, injectedRet)
     assert ret == dcgm_structs.DCGM_ST_OK
+    return injectedRet, counterList, counterArray, expectedValues
 
 
 def _get_live_link_value(handle, entity, fieldId):
@@ -870,34 +890,51 @@ def _assert_live_link_query_not_supported(handle, entity, fieldId, expected_desc
         f"Expected {expected_description} to return NOT_SUPPORTED, got {fieldValue.value.i64}")
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku("B200.yaml")
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_nvml_injected_gpus()
-def test_nvlink_prm_tlv_port_offset_behavior(handle, gpuIds):
+def test_nvlink_prm_counter_port_offset_behavior(handle, gpuIds):
     gpuId = gpuIds[0]
 
-    _inject_prm_tlv_response(handle, gpuId)
+    injectedRet, counterList, counters, expectedValues = _inject_prm_counter_response(
+        handle, gpuId, [0, dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU - 1])
 
-    nonIbPortZeroValue = _get_live_link_value(
-        handle,
+    liveEntities = [
         _make_link_entity(gpuId, 0),
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_TOTAL)
+        _make_link_entity(
+            gpuId, dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU - 1),
+    ]
+    liveValues = dcgm_agent.dcgmEntitiesGetLatestValues(
+        handle,
+        liveEntities,
+        [dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_TOTAL],
+        dcgm_structs.DCGM_FV_FLAG_LIVE_DATA)
+    assert len(liveValues) == len(liveEntities), (
+        f"Expected {len(liveEntities)} live values, got {len(liveValues)}")
+    valuesByEntityId = {
+        fieldValue.entityId: fieldValue for fieldValue in liveValues}
+
+    nonIbPortZeroValue = valuesByEntityId[liveEntities[0].entityId]
     assert nonIbPortZeroValue.status == dcgm_structs.DCGM_ST_OK, (
         f"Expected non-IB port 0 query to succeed, got {nonIbPortZeroValue.status}")
     assert not dcgmvalue.DCGM_INT64_IS_BLANK(nonIbPortZeroValue.value.i64), (
         f"Expected non-IB port 0 value not blank, got {nonIbPortZeroValue.value.i64}")
+    assert nonIbPortZeroValue.value.i64 == expectedValues[0], (
+        f"Expected non-IB port 0 value {expectedValues[0]}, got {nonIbPortZeroValue.value.i64}")
 
-    nonIbPortSeventeenValue = _get_live_link_value(
-        handle,
-        _make_link_entity(
-            gpuId, dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU - 1),
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_TOTAL)
+    nonIbPortSeventeenValue = valuesByEntityId[liveEntities[1].entityId]
     assert nonIbPortSeventeenValue.status == dcgm_structs.DCGM_ST_OK, (
         f"Expected non-IB port 17 query to succeed, got {nonIbPortSeventeenValue.status}")
     assert not dcgmvalue.DCGM_INT64_IS_BLANK(nonIbPortSeventeenValue.value.i64), (
         f"Expected non-IB port 17 value not blank, got {nonIbPortSeventeenValue.value.i64}")
+    assert nonIbPortSeventeenValue.value.i64 == expectedValues[dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU - 1], (
+        "Expected non-IB port 17 value "
+        f"{expectedValues[dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU - 1]}, "
+        f"got {nonIbPortSeventeenValue.value.i64}")
 
     _assert_live_link_query_not_supported(
         handle,
@@ -909,5 +946,5 @@ def test_nvlink_prm_tlv_port_offset_behavior(handle, gpuIds):
         handle,
         _make_link_entity(
             gpuId, dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU + 1),
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL,
         "IB port 19 query")

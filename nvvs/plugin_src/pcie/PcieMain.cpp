@@ -49,6 +49,16 @@ __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
 
 /*****************************************************************************/
 
+namespace
+{
+// Error message constants
+constexpr char const *LIBNUMA_INSTALL_ERROR_MSG
+    = "The libnuma library cannot be found. Install the libnuma1 package to resolve this issue.";
+
+} // anonymous namespace
+
+/*****************************************************************************/
+
 /*
  * Macro for checking cuda errors following a cuda launch or api call
  * (Avoid using this macro directly, use the cudaCheckError* macros where possible)
@@ -57,44 +67,44 @@ __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
  * Note: Currently this macro sets the result of the plugin to failed for all GPUs. This is to maintain existing
  * behavior (a cuda failure always resulted in the test being stopped and all GPUs being marked as failing the test).
  */
-#define BG_cudaCheckError(callName, args, mask, gpuIndex, isGpuSpecific)                         \
-    do                                                                                           \
-    {                                                                                            \
-        cudaError_t e = callName args;                                                           \
-        if (e != cudaSuccess)                                                                    \
-        {                                                                                        \
-            if (isGpuSpecific)                                                                   \
-            {                                                                                    \
-                unsigned int gpuId = bg->gpu[gpuIndex]->gpuId;                                   \
-                LOG_CUDA_ERROR_FOR_PLUGIN(bg, bg->GetPcieTestName(), #callName, e, gpuId);       \
-            }                                                                                    \
-            else                                                                                 \
-            {                                                                                    \
-                LOG_CUDA_ERROR_FOR_PLUGIN(bg, bg->GetPcieTestName(), #callName, e, 0, 0, false); \
-            }                                                                                    \
-            bg->SetResult(bg->GetPcieTestName(), NVVS_RESULT_FAIL);                              \
-            return -1;                                                                           \
-        }                                                                                        \
+#define BG_cudaCheckError(callName, args, mask, gpuIndex, isGpuSpecific)                                           \
+    do                                                                                                             \
+    {                                                                                                              \
+        cudaError_t e = cudaOps->callName args;                                                                    \
+        if (e != cudaSuccess)                                                                                      \
+        {                                                                                                          \
+            if (isGpuSpecific)                                                                                     \
+            {                                                                                                      \
+                unsigned int gpuId = bg->gpu[gpuIndex]->gpuId;                                                     \
+                LOG_CUDA_ERROR_FOR_PLUGIN(bg->m_cudaCommon, bg, bg->GetPcieTestName(), #callName, e, gpuId);       \
+            }                                                                                                      \
+            else                                                                                                   \
+            {                                                                                                      \
+                LOG_CUDA_ERROR_FOR_PLUGIN(bg->m_cudaCommon, bg, bg->GetPcieTestName(), #callName, e, 0, 0, false); \
+            }                                                                                                      \
+            bg->SetResult(bg->GetPcieTestName(), NVVS_RESULT_FAIL);                                                \
+            return -1;                                                                                             \
+        }                                                                                                          \
     } while (0)
 
-#define BG_cudaCheckErrorRef(callName, args, mask, gpuIndex, isGpuSpecific)                      \
-    do                                                                                           \
-    {                                                                                            \
-        cudaError_t e = callName args;                                                           \
-        if (e != cudaSuccess)                                                                    \
-        {                                                                                        \
-            if (isGpuSpecific)                                                                   \
-            {                                                                                    \
-                unsigned int gpuId = bg.gpu[gpuIndex]->gpuId;                                    \
-                LOG_CUDA_ERROR_FOR_PLUGIN(&bg, bg.GetPcieTestName(), #callName, e, gpuId);       \
-            }                                                                                    \
-            else                                                                                 \
-            {                                                                                    \
-                LOG_CUDA_ERROR_FOR_PLUGIN(&bg, bg.GetPcieTestName(), #callName, e, 0, 0, false); \
-            }                                                                                    \
-            bg.SetResult(bg.GetPcieTestName(), NVVS_RESULT_FAIL);                                \
-            return -1;                                                                           \
-        }                                                                                        \
+#define BG_cudaCheckErrorRef(callName, args, mask, gpuIndex, isGpuSpecific)                                       \
+    do                                                                                                            \
+    {                                                                                                             \
+        cudaError_t e = cudaOps->callName args;                                                                   \
+        if (e != cudaSuccess)                                                                                     \
+        {                                                                                                         \
+            if (isGpuSpecific)                                                                                    \
+            {                                                                                                     \
+                unsigned int gpuId = bg.gpu[gpuIndex]->gpuId;                                                     \
+                LOG_CUDA_ERROR_FOR_PLUGIN(bg.m_cudaCommon, &bg, bg.GetPcieTestName(), #callName, e, gpuId);       \
+            }                                                                                                     \
+            else                                                                                                  \
+            {                                                                                                     \
+                LOG_CUDA_ERROR_FOR_PLUGIN(bg.m_cudaCommon, &bg, bg.GetPcieTestName(), #callName, e, 0, 0, false); \
+            }                                                                                                     \
+            bg.SetResult(bg.GetPcieTestName(), NVVS_RESULT_FAIL);                                                 \
+            return -1;                                                                                            \
+        }                                                                                                         \
     } while (0)
 
 
@@ -106,43 +116,34 @@ __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
 
 // Macro for checking cuda errors following a cuda launch or api call from an OMP pragma
 // we need separate code for this since you are not allowed to exit from OMP
-#define cudaCheckErrorOmp(callName, args, mask, gpuIndex)                              \
-    do                                                                                 \
-    {                                                                                  \
-        cudaError_t e = callName args;                                                 \
-        if (e != cudaSuccess)                                                          \
-        {                                                                              \
-            unsigned int gpuId = bg->gpu[gpuIndex]->gpuId;                             \
-            LOG_CUDA_ERROR_FOR_PLUGIN(bg, bg->GetPcieTestName(), #callName, e, gpuId); \
-            bg->SetResultForGpu(bg->GetPcieTestName(), gpuId, NVVS_RESULT_FAIL);       \
-        }                                                                              \
+#define cudaCheckErrorOmp(callName, args, mask, gpuIndex)                                                \
+    do                                                                                                   \
+    {                                                                                                    \
+        cudaError_t e = cudaOps->callName args;                                                          \
+        if (e != cudaSuccess)                                                                            \
+        {                                                                                                \
+            unsigned int gpuId = bg->gpu[gpuIndex]->gpuId;                                               \
+            LOG_CUDA_ERROR_FOR_PLUGIN(bg->m_cudaCommon, bg, bg->GetPcieTestName(), #callName, e, gpuId); \
+            bg->SetResultForGpu(bg->GetPcieTestName(), gpuId, NVVS_RESULT_FAIL);                         \
+        }                                                                                                \
     } while (0)
 
 /*****************************************************************************/
-
-namespace
-{
-// Error message constants
-constexpr char const *LIBNUMA_INSTALL_ERROR_MSG
-    = "The libnuma library cannot be found. Install the libnuma1 package to resolve this issue.";
-} // anonymous namespace
-
-/*****************************************************************************/
 // enables P2P for all GPUs
-int enableP2P(BusGrind *bg)
+int enableP2P(BusGrind *bg, CudaOpsAnyPtr cudaOps)
 {
     int cudaIndexI, cudaIndexJ;
 
     for (size_t i = 0; i < bg->gpu.size(); i++)
     {
         cudaIndexI = bg->gpu[i]->cudaDeviceIdx;
-        cudaSetDevice(cudaIndexI);
+        cudaOps->cudaSetDevice(cudaIndexI);
 
         for (size_t j = 0; j < bg->gpu.size(); j++)
         {
             int access = 0;
             cudaIndexJ = bg->gpu[j]->cudaDeviceIdx;
-            cudaDeviceCanAccessPeer(&access, cudaIndexI, cudaIndexJ);
+            cudaOps->cudaDeviceCanAccessPeer(&access, cudaIndexI, cudaIndexJ);
 
             if (access)
             {
@@ -155,7 +156,7 @@ int enableP2P(BusGrind *bg)
 
 /*****************************************************************************/
 // disables P2P for all GPUs
-void disableP2P(BusGrind *bg)
+void disableP2P(BusGrind *bg, CudaOpsAnyPtr cudaOps)
 {
     int cudaIndexI, cudaIndexJ;
     cudaError_t cudaReturn;
@@ -163,15 +164,15 @@ void disableP2P(BusGrind *bg)
     for (size_t i = 0; i < bg->gpu.size(); i++)
     {
         cudaIndexI = bg->gpu[i]->cudaDeviceIdx;
-        cudaSetDevice(cudaIndexI);
+        cudaOps->cudaSetDevice(cudaIndexI);
 
         for (size_t j = 0; j < bg->gpu.size(); j++)
         {
             cudaIndexJ = bg->gpu[j]->cudaDeviceIdx;
 
-            cudaDeviceDisablePeerAccess(cudaIndexJ);
+            cudaOps->cudaDeviceDisablePeerAccess(cudaIndexJ);
             // Check for errors and clear any error that may have occurred if P2P is not supported
-            cudaReturn = cudaGetLastError();
+            cudaReturn = cudaOps->cudaGetLastError();
 
             // Note: If the error returned is cudaErrorPeerAccessNotEnabled,
             // then do not print a message in the console. We are trying to disable peer addressing
@@ -184,13 +185,13 @@ void disableP2P(BusGrind *bg)
                 log_info("cudaDeviceDisablePeerAccess for device ({}) returned error ({}): {}",
                          bg->gpu[j]->gpuId,
                          (int)cudaReturn,
-                         cudaGetErrorString(cudaReturn));
+                         cudaOps->cudaGetErrorString(cudaReturn));
             }
             else if (cudaSuccess != cudaReturn)
             {
                 std::stringstream ss;
-                ss << "cudaDeviceDisablePeerAccess returned error " << cudaGetErrorString(cudaReturn) << " for device "
-                   << bg->gpu[j]->gpuId << std::endl;
+                ss << "cudaDeviceDisablePeerAccess returned error " << cudaOps->cudaGetErrorString(cudaReturn)
+                   << " for device " << bg->gpu[j]->gpuId << std::endl;
                 bg->AddInfoVerboseForGpu(bg->GetPcieTestName(), bg->gpu[j]->gpuId, ss.str());
             }
         }
@@ -406,7 +407,7 @@ MemoryToGpuMap_t GetGpuMemoryAffinities(BusGrind &bg)
     return memoryNodeToGpuList;
 }
 
-int performHostToDeviceWork(BusGrind &bg, bool pinned, const std::string &groupName)
+int performHostToDeviceWork(BusGrind &bg, CudaOpsAnyPtr cudaOps, bool pinned, const std::string &groupName)
 {
     std::vector<int *> d_buffers(bg.gpu.size());
     int *h_buffer = 0;
@@ -432,8 +433,11 @@ int performHostToDeviceWork(BusGrind &bg, bool pinned, const std::string &groupN
 
     for (size_t d = 0; d < bg.gpu.size(); d++)
     {
-        cudaSetDevice(bg.gpu[d]->cudaDeviceIdx);
-        cudaCheckErrorRef(cudaMalloc, (&d_buffers[d], numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
+        cudaOps->cudaSetDevice(bg.gpu[d]->cudaDeviceIdx);
+        cudaCheckErrorRef(cudaMalloc,
+                          (reinterpret_cast<void **>(&d_buffers[d]), numElems * sizeof(int)),
+                          PCIE_ERR_CUDA_ALLOC_FAIL,
+                          d);
         cudaCheckErrorRef(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorRef(cudaEventCreate, (&stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorRef(cudaStreamCreate, (&stream1[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
@@ -442,7 +446,8 @@ int performHostToDeviceWork(BusGrind &bg, bool pinned, const std::string &groupN
 
     if (pinned)
     {
-        cudaCheckErrorGeneralRef(cudaMallocHost, (&h_buffer, numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL);
+        cudaCheckErrorGeneralRef(
+            cudaMallocHost, (reinterpret_cast<void **>(&h_buffer), numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL);
     }
     else
     {
@@ -453,22 +458,22 @@ int performHostToDeviceWork(BusGrind &bg, bool pinned, const std::string &groupN
 
     for (size_t i = 0; i < bg.gpu.size(); i++)
     {
-        cudaSetDevice(bg.gpu[i]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg.gpu[i]->cudaDeviceIdx);
 
         // D2H bandwidth test
         // coverity[leaked_storage] this macro can exit the function without freeing h_buffer
         cudaCheckErrorRef(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
-        cudaEventRecord(start[i]);
+        cudaOps->cudaEventRecord(start[i]);
 
         for (int r = 0; r < repeat; r++)
         {
-            cudaMemcpyAsync(h_buffer, d_buffers[i], sizeof(int) * numElems, cudaMemcpyDeviceToHost);
+            cudaOps->cudaMemcpyAsync(h_buffer, d_buffers[i], sizeof(int) * numElems, cudaMemcpyDeviceToHost);
         }
 
-        cudaEventRecord(stop[i]);
+        cudaOps->cudaEventRecord(stop[i]);
         cudaCheckErrorRef(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
-        cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+        cudaOps->cudaEventElapsedTime(&time_ms, start[i], stop[i]);
         time_s = time_ms / 1e3;
 
         gb                                     = numElems * sizeof(int) * repeat / (double)1e9;
@@ -476,16 +481,16 @@ int performHostToDeviceWork(BusGrind &bg, bool pinned, const std::string &groupN
 
         // H2D bandwidth test
         cudaCheckErrorRef(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
-        cudaEventRecord(start[i]);
+        cudaOps->cudaEventRecord(start[i]);
 
         for (int r = 0; r < repeat; r++)
         {
-            cudaMemcpyAsync(d_buffers[i], h_buffer, sizeof(int) * numElems, cudaMemcpyHostToDevice);
+            cudaOps->cudaMemcpyAsync(d_buffers[i], h_buffer, sizeof(int) * numElems, cudaMemcpyHostToDevice);
         }
-        cudaEventRecord(stop[i]);
+        cudaOps->cudaEventRecord(stop[i]);
         cudaCheckErrorRef(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
-        cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+        cudaOps->cudaEventElapsedTime(&time_ms, start[i], stop[i]);
         time_s = time_ms / 1e3;
 
         gb                                     = numElems * sizeof(int) * repeat / (double)1e9;
@@ -493,30 +498,69 @@ int performHostToDeviceWork(BusGrind &bg, bool pinned, const std::string &groupN
 
         // Bidirectional
         cudaCheckErrorRef(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
-        cudaEventRecord(start[i]);
+        cudaOps->cudaEventRecord(start[i]);
 
         for (int r = 0; r < repeat; r++)
         {
-            cudaMemcpyAsync(d_buffers[i], h_buffer, sizeof(int) * numElems, cudaMemcpyHostToDevice, stream1[i]);
-            cudaMemcpyAsync(h_buffer, d_buffers[i], sizeof(int) * numElems, cudaMemcpyDeviceToHost, stream2[i]);
+            cudaOps->cudaMemcpyAsync(
+                d_buffers[i], h_buffer, sizeof(int) * numElems, cudaMemcpyHostToDevice, stream1[i]);
+            cudaOps->cudaMemcpyAsync(
+                h_buffer, d_buffers[i], sizeof(int) * numElems, cudaMemcpyDeviceToHost, stream2[i]);
         }
 
-        cudaEventRecord(stop[i]);
+        cudaOps->cudaEventRecord(stop[i]);
         cudaCheckErrorRef(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
-        cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+        cudaOps->cudaEventElapsedTime(&time_ms, start[i], stop[i]);
         time_s = time_ms / 1e3;
 
         gb                                     = 2 * numElems * sizeof(int) * repeat / (double)1e9;
         bandwidthMatrix[2 * bg.gpu.size() + i] = gb / time_s;
     }
 
+    int failedTests = pcie_check_bandwidth(bg, groupName, bandwidthMatrix, pinned);
+
+    for (size_t d = 0; d < bg.gpu.size(); d++)
+    {
+        cudaOps->cudaSetDevice(bg.gpu[d]->cudaDeviceIdx);
+        cudaCheckErrorRef(cudaFree, (d_buffers[d]), PCIE_ERR_CUDA_ALLOC_FAIL, d);
+        cudaCheckErrorRef(cudaEventDestroy, (start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
+        cudaCheckErrorRef(cudaEventDestroy, (stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
+        cudaCheckErrorRef(cudaStreamDestroy, (stream1[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
+        cudaCheckErrorRef(cudaStreamDestroy, (stream2[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
+    }
+
+    if (pinned)
+    {
+        cudaOps->cudaFreeHost(h_buffer);
+    }
+    else
+    {
+        free(h_buffer);
+    }
+
+    return failedTests;
+}
+
+/*****************************************************************************/
+// this checks the measured host-device bandwidths against the configured minimum
+// inputs:
+//        bg:              test context holding GPUs, stats, and error reporting
+//        groupName:       subtest name used to read min bandwidth and record stats
+//        bandwidthMatrix: measured bandwidths, laid out as [labelIndex * gpuCount + gpuIndex]
+//        pinned:          whether bandwidths were measured with pinned host memory
+int pcie_check_bandwidth(BusGrind &bg,
+                         std::string const &groupName,
+                         std::vector<double> const &bandwidthMatrix,
+                         bool pinned)
+{
     char labels[][20] = { "d2h", "h2d", "bidir" };
     std::stringstream ss;
     int failedTests = 0;
     double bandwidth;
     double minimumBandwidth = bg.m_testParameters->GetSubTestDouble(groupName, PCIE_STR_MIN_BANDWIDTH);
     char statNameBuf[512];
+    std::string key;
 
     for (int i = 0; i < 3; i++)
     {
@@ -549,26 +593,6 @@ int performHostToDeviceWork(BusGrind &bg, bool pinned, const std::string &groupN
                 failedTests++;
             }
         }
-    }
-
-
-    if (pinned)
-    {
-        cudaFreeHost(h_buffer);
-    }
-    else
-    {
-        free(h_buffer);
-    }
-
-    for (size_t d = 0; d < bg.gpu.size(); d++)
-    {
-        cudaSetDevice(bg.gpu[d]->cudaDeviceIdx);
-        cudaCheckErrorRef(cudaFree, (d_buffers[d]), PCIE_ERR_CUDA_ALLOC_FAIL, d);
-        cudaCheckErrorRef(cudaEventDestroy, (start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
-        cudaCheckErrorRef(cudaEventDestroy, (stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
-        cudaCheckErrorRef(cudaStreamDestroy, (stream1[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
-        cudaCheckErrorRef(cudaStreamDestroy, (stream2[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
     }
 
     return failedTests;
@@ -1048,6 +1072,7 @@ private:
 
 
 int ForkAndLaunchBandwidthTests(BusGrind &bg,
+                                CudaOpsAnyPtr cudaOps,
                                 bool pinned,
                                 MemoryToGpuMap_t &memoryNodeToGpuList,
                                 const std::string &groupName)
@@ -1061,7 +1086,7 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
     // Reset cuda context before forking out child processes
     for (size_t i = 0; i < bg.gpu.size(); i++)
     {
-        int cudaStatus = cudaSetDevice(bg.gpu[i]->cudaDeviceIdx);
+        int cudaStatus = cudaOps->cudaSetDevice(bg.gpu[i]->cudaDeviceIdx);
         if (cudaStatus != cudaSuccess)
         {
             log_error("CUDA call cudaSetDevice failed on device {}", bg.gpu[i]->cudaDeviceIdx);
@@ -1069,7 +1094,7 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
             return -1;
         }
 
-        cudaStatus = cudaDeviceReset();
+        cudaStatus = cudaOps->cudaDeviceReset();
         if (cudaStatus != cudaSuccess)
         {
             log_error("CUDA call cudaDeviceReset failed on device {}", bg.gpu[i]->cudaDeviceIdx);
@@ -1151,7 +1176,7 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
 // inputs:
 //        int numGPUs:  The number of GPUs to test
 //        bool pinned:   Indicates if the host memory should be pinned or not
-int outputHostDeviceBandwidthMatrix(BusGrind &bg, bool pinned)
+int outputHostDeviceBandwidthMatrix(BusGrind &bg, CudaOpsAnyPtr cudaOps, bool pinned)
 {
     auto memoryNodeToGpuList = GetGpuMemoryAffinities(bg);
 
@@ -1171,13 +1196,13 @@ int outputHostDeviceBandwidthMatrix(BusGrind &bg, bool pinned)
 
     if (memoryNodeToGpuList.size() < 2 || bg.m_testParameters->GetBoolFromString(PCIE_STR_DONT_BIND_NUMA) == true)
     {
-        failedTests = performHostToDeviceWork(bg, pinned, groupName);
+        failedTests = performHostToDeviceWork(bg, cudaOps, pinned, groupName);
     }
     else
     {
         if (pinned)
         {
-            failedTests = ForkAndLaunchBandwidthTests(bg, pinned, memoryNodeToGpuList, groupName);
+            failedTests = ForkAndLaunchBandwidthTests(bg, cudaOps, pinned, memoryNodeToGpuList, groupName);
         }
         else
         {
@@ -1208,7 +1233,7 @@ int outputHostDeviceBandwidthMatrix(BusGrind &bg, bool pinned)
 // inputs:
 //        int numGPUs:  The number of GPUs to test
 //        bool pinned:   Indicates if the host memory should be pinned or not
-int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
+int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, CudaOpsAnyPtr cudaOps, bool pinned)
 {
     std::vector<double> bandwidthMatrix(3 * bg->gpu.size());
     std::barrier myBarrier(bg->gpu.size());
@@ -1234,7 +1259,8 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
 
     // one thread per GPU
     /* Lambda run for each gpuGlobals->gpu[d] */
-    auto worker = [&tids, &tidsPosted, &myBarrier, bg, pinned, numElems, repeat, &bandwidthMatrix](int d) {
+    auto worker = [&tids, &tidsPosted, &myBarrier, bg, cudaOps, pinned, numElems, repeat, &bandwidthMatrix](
+                      int d) mutable {
         int *buffer { nullptr };
         int *d_buffer { nullptr };
         cudaEvent_t start;
@@ -1246,82 +1272,83 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
         tidsPosted.count_down();
         log_debug("PCIe BW worker started for GPU {}", bg->gpu[d]->gpuId);
 
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
 
         if (pinned)
-            cudaMallocHost(&buffer, numElems * sizeof(int));
+            cudaOps->cudaMallocHost(reinterpret_cast<void **>(&buffer), numElems * sizeof(int));
         else
             buffer = (int *)malloc(numElems * sizeof(int));
-        cudaCheckErrorOmp(cudaMalloc, (&d_buffer, numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
+        cudaCheckErrorOmp(
+            cudaMalloc, (reinterpret_cast<void **>(&d_buffer), numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckErrorOmp(cudaEventCreate, (&start), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorOmp(cudaEventCreate, (&stop), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorOmp(cudaStreamCreate, (&stream1), PCIE_ERR_CUDA_STREAM_FAIL, d);
         cudaCheckErrorOmp(cudaStreamCreate, (&stream2), PCIE_ERR_CUDA_STREAM_FAIL, d);
 
         log_debug("PCIe BW worker synchronizing device after setup");
-        cudaDeviceSynchronize();
+        cudaOps->cudaDeviceSynchronize();
         log_debug("PCIe BW worker waiting at initialization barrier");
         myBarrier.arrive_and_wait();
         log_debug("PCIe BW worker ready");
 
-        cudaEventRecord(start);
+        cudaOps->cudaEventRecord(start);
         // initiate H2D copies
         for (int r = 0; r < repeat; r++)
         {
-            cudaMemcpyAsync(d_buffer, buffer, sizeof(int) * numElems, cudaMemcpyHostToDevice, stream1);
+            cudaOps->cudaMemcpyAsync(d_buffer, buffer, sizeof(int) * numElems, cudaMemcpyHostToDevice, stream1);
         }
-        cudaEventRecord(stop);
+        cudaOps->cudaEventRecord(stop);
         cudaCheckErrorOmp(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, d);
 
         float time_ms;
-        cudaEventElapsedTime(&time_ms, start, stop);
+        cudaOps->cudaEventElapsedTime(&time_ms, start, stop);
         double time_s = time_ms / 1e3;
         double gb     = numElems * sizeof(int) * repeat / (double)1e9;
 
         bandwidthMatrix[0 * bg->gpu.size() + d] = gb / time_s;
 
         log_debug("PCIe BW worker synchronizing device after host-to-device transfers");
-        cudaDeviceSynchronize();
+        cudaOps->cudaDeviceSynchronize();
         log_debug("PCIe BW worker waiting at host-to-device barrier");
         myBarrier.arrive_and_wait();
         log_debug("PCIe BW worker host-to-device barrier completed");
 
-        cudaEventRecord(start);
+        cudaOps->cudaEventRecord(start);
         for (int r = 0; r < repeat; r++)
         {
-            cudaMemcpyAsync(buffer, d_buffer, sizeof(int) * numElems, cudaMemcpyDeviceToHost, stream1);
+            cudaOps->cudaMemcpyAsync(buffer, d_buffer, sizeof(int) * numElems, cudaMemcpyDeviceToHost, stream1);
         }
-        cudaEventRecord(stop);
+        cudaOps->cudaEventRecord(stop);
         cudaCheckErrorOmp(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, d);
 
-        cudaEventElapsedTime(&time_ms, start, stop);
+        cudaOps->cudaEventElapsedTime(&time_ms, start, stop);
         time_s = time_ms / 1e3;
         gb     = numElems * sizeof(int) * repeat / (double)1e9;
 
         bandwidthMatrix[1 * bg->gpu.size() + d] = gb / time_s;
 
         log_debug("PCIe BW worker synchronizing device after device-to-host transfers");
-        cudaDeviceSynchronize();
+        cudaOps->cudaDeviceSynchronize();
         log_debug("PCIe BW worker waiting at device-to-host barrier");
         myBarrier.arrive_and_wait();
         log_debug("PCIe BW worker device-to-host barrier completed");
 
-        cudaEventRecord(start);
+        cudaOps->cudaEventRecord(start);
         // Bidirectional
         for (int r = 0; r < repeat; r++)
         {
-            cudaMemcpyAsync(d_buffer, buffer, sizeof(int) * numElems, cudaMemcpyHostToDevice, stream1);
-            cudaMemcpyAsync(buffer, d_buffer, sizeof(int) * numElems, cudaMemcpyDeviceToHost, stream2);
+            cudaOps->cudaMemcpyAsync(d_buffer, buffer, sizeof(int) * numElems, cudaMemcpyHostToDevice, stream1);
+            cudaOps->cudaMemcpyAsync(buffer, d_buffer, sizeof(int) * numElems, cudaMemcpyDeviceToHost, stream2);
         }
 
-        cudaEventRecord(stop);
+        cudaOps->cudaEventRecord(stop);
         log_debug("PCIe BW worker synchronizing device after bidirectional transfers");
         cudaCheckErrorOmp(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, d);
         log_debug("PCIe BW worker waiting at bidirectional barrier");
         myBarrier.arrive_and_wait();
         log_debug("PCIe BW worker bidirectional barrier completed");
 
-        cudaEventElapsedTime(&time_ms, start, stop);
+        cudaOps->cudaEventElapsedTime(&time_ms, start, stop);
         time_s = time_ms / 1e3;
         gb     = 2.0 * numElems * sizeof(int) * repeat / (double)1e9;
 
@@ -1329,7 +1356,7 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
 
         if (pinned)
         {
-            cudaFreeHost(buffer);
+            cudaOps->cudaFreeHost(buffer);
         }
         else
         {
@@ -1393,53 +1420,62 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
         }
     }
 
+    int failedTests = pcie_check_concurrent_bandwidth(*bg, groupName, bandwidthMatrix);
+
+    return failedTests ? 1 : 0;
+}
+
+/*****************************************************************************/
+// this checks the measured concurrent host-device bandwidths against the configured minimum
+// inputs:
+//        bg:              test context holding GPUs, stats, and error reporting
+//        groupName:       subtest name used to read min bandwidth and record stats
+//        bandwidthMatrix: measured bandwidths, laid out as [labelIndex * gpuCount + gpuIndex]
+int pcie_check_concurrent_bandwidth(BusGrind &bg,
+                                    std::string const &groupName,
+                                    std::vector<double> const &bandwidthMatrix)
+{
     char labels[][20] = { "h2d", "d2h", "bidir" };
     std::stringstream ss;
     int failedTests = 0;
-    double bandwidth, minimumBandwidth = bg->m_testParameters->GetSubTestDouble(groupName, PCIE_STR_MIN_BANDWIDTH);
+    double bandwidth, minimumBandwidth = bg.m_testParameters->GetSubTestDouble(groupName, PCIE_STR_MIN_BANDWIDTH);
+    std::string key;
 
     for (int i = 0; i < 3; i++)
     {
         double sum = 0.0;
-        for (size_t j = 0; j < bg->gpu.size(); j++)
+        for (size_t j = 0; j < bg.gpu.size(); j++)
         {
-            sum += bandwidthMatrix[i * bg->gpu.size() + j];
+            sum += bandwidthMatrix[i * bg.gpu.size() + j];
             ss.str("");
-            ss << bg->gpu[j]->gpuId;
+            ss << bg.gpu[j]->gpuId;
             ss << "_";
             ss << labels[i];
             key = ss.str();
 
-            bandwidth = bandwidthMatrix[i * bg->gpu.size() + j];
-            bg->SetGroupedStat(bg->GetPcieTestName(), groupName, key, bandwidth);
+            bandwidth = bandwidthMatrix[i * bg.gpu.size() + j];
+            bg.SetGroupedStat(bg.GetPcieTestName(), groupName, key, bandwidth);
 
             if (bandwidth < minimumBandwidth)
             {
-                DcgmError d { bg->gpu[j]->gpuId };
+                DcgmError d { bg.gpu[j]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(
-                    DCGM_FR_LOW_BANDWIDTH, d, bg->gpu[j]->gpuId, labels[i], bandwidth, minimumBandwidth);
-                bg->AddError(bg->GetPcieTestName(), d);
+                    DCGM_FR_LOW_BANDWIDTH, d, bg.gpu[j]->gpuId, labels[i], bandwidth, minimumBandwidth);
+                bg.AddError(bg.GetPcieTestName(), d);
                 log_error(d.GetMessage());
-                bg->SetResultForGpu(bg->GetPcieTestName(), bg->gpu[j]->gpuId, NVVS_RESULT_FAIL);
+                bg.SetResultForGpu(bg.GetPcieTestName(), bg.gpu[j]->gpuId, NVVS_RESULT_FAIL);
                 failedTests++;
             }
         }
 
         key = "sum_";
         key += labels[i];
-        bg->SetGroupedStat(bg->GetPcieTestName(), groupName, key, sum);
+        bg.SetGroupedStat(bg.GetPcieTestName(), groupName, key, sum);
     }
 
     log_debug("Subtest done, failedTests={}", failedTests);
 
-    if (failedTests > 0)
-    {
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
+    return failedTests;
 }
 
 /*****************************************************************************/
@@ -1447,7 +1483,7 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
 // inputs:
 //        int numGPUs:  The number of GPUs to test
 //        bool pinned:   Indicates if the host memory should be pinned or not
-int outputHostDeviceLatencyMatrix(BusGrind *bg, bool pinned)
+int outputHostDeviceLatencyMatrix(BusGrind *bg, CudaOpsAnyPtr cudaOps, bool pinned)
 {
     int *h_buffer = 0;
     std::vector<int *> d_buffers(bg->gpu.size());
@@ -1482,8 +1518,8 @@ int outputHostDeviceLatencyMatrix(BusGrind *bg, bool pinned)
 
     for (size_t d = 0; d < bg->gpu.size(); d++)
     {
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
-        cudaCheckError(cudaMalloc, (&d_buffers[d], 1), PCIE_ERR_CUDA_ALLOC_FAIL, d);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaCheckError(cudaMalloc, (reinterpret_cast<void **>(&d_buffers[d]), 1), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckError(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaEventCreate, (&stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaStreamCreate, (&stream1[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
@@ -1492,7 +1528,8 @@ int outputHostDeviceLatencyMatrix(BusGrind *bg, bool pinned)
 
     if (pinned)
     {
-        cudaCheckErrorGeneral(cudaMallocHost, (&h_buffer, sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL);
+        cudaCheckErrorGeneral(
+            cudaMallocHost, (reinterpret_cast<void **>(&h_buffer), sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL);
     }
     else
     {
@@ -1502,112 +1539,73 @@ int outputHostDeviceLatencyMatrix(BusGrind *bg, bool pinned)
 
     for (size_t i = 0; i < bg->gpu.size(); i++)
     {
-        cudaSetDevice(bg->gpu[i]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[i]->cudaDeviceIdx);
 
         // D2H tests
         // coverity[leaked_storage] this macro can exit the function without freeing h_buffer
         cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
-        cudaEventRecord(start[i]);
+        cudaOps->cudaEventRecord(start[i]);
 
         for (int r = 0; r < repeat; r++)
         {
-            cudaMemcpyAsync(h_buffer, d_buffers[i], 1, cudaMemcpyDeviceToHost);
+            cudaOps->cudaMemcpyAsync(h_buffer, d_buffers[i], 1, cudaMemcpyDeviceToHost);
         }
 
-        cudaEventRecord(stop[i]);
+        cudaOps->cudaEventRecord(stop[i]);
         cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
-        cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+        cudaOps->cudaEventElapsedTime(&time_ms, start[i], stop[i]);
 
         latencyMatrix[0 * bg->gpu.size() + i] = time_ms * 1e3 / repeat;
 
         // H2D tests
         cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
-        cudaEventRecord(start[i]);
+        cudaOps->cudaEventRecord(start[i]);
 
         for (int r = 0; r < repeat; r++)
         {
-            cudaMemcpyAsync(d_buffers[i], h_buffer, 1, cudaMemcpyHostToDevice);
+            cudaOps->cudaMemcpyAsync(d_buffers[i], h_buffer, 1, cudaMemcpyHostToDevice);
         }
 
-        cudaEventRecord(stop[i]);
+        cudaOps->cudaEventRecord(stop[i]);
         cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
-        cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+        cudaOps->cudaEventElapsedTime(&time_ms, start[i], stop[i]);
 
         latencyMatrix[1 * bg->gpu.size() + i] = time_ms * 1e3 / repeat;
 
         // Bidirectional tests
         cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
-        cudaEventRecord(start[i]);
+        cudaOps->cudaEventRecord(start[i]);
 
         for (int r = 0; r < repeat; r++)
         {
-            cudaMemcpyAsync(d_buffers[i], h_buffer, 1, cudaMemcpyHostToDevice, stream1[i]);
-            cudaMemcpyAsync(h_buffer, d_buffers[i], 1, cudaMemcpyDeviceToHost, stream2[i]);
+            cudaOps->cudaMemcpyAsync(d_buffers[i], h_buffer, 1, cudaMemcpyHostToDevice, stream1[i]);
+            cudaOps->cudaMemcpyAsync(h_buffer, d_buffers[i], 1, cudaMemcpyDeviceToHost, stream2[i]);
         }
 
-        cudaEventRecord(stop[i]);
+        cudaOps->cudaEventRecord(stop[i]);
         cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
-        cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+        cudaOps->cudaEventElapsedTime(&time_ms, start[i], stop[i]);
 
         latencyMatrix[2 * bg->gpu.size() + i] = time_ms * 1e3 / repeat;
     }
 
-    char labels[][20] = { "d2h", "h2d", "bidir" };
-    std::stringstream ss;
-    double maxLatency = bg->m_testParameters->GetSubTestDouble(groupName, PCIE_STR_MAX_LATENCY);
-    double latency;
-    std::string errorString;
-    int Nfailures = 0;
-    char statNameBuf[512];
-
-    for (int i = 0; i < 3; i++)
-    {
-        for (size_t j = 0; j < bg->gpu.size(); j++)
-        {
-            ss.str("");
-            ss << bg->gpu[j]->gpuId;
-            ss << "_";
-            ss << labels[i];
-            key = ss.str();
-
-            latency = latencyMatrix[i * bg->gpu.size() + j];
-
-            bg->SetGroupedStat(bg->GetPcieTestName(), groupName, key, latency);
-            if (pinned)
-                addLatencyInfo(bg, bg->gpu[j]->gpuId, labels[i], latency);
-
-            snprintf(
-                statNameBuf, sizeof(statNameBuf), "%s.%s-%s", groupName.c_str(), PCIE_STR_MIN_BANDWIDTH, labels[i]);
-            bg->RecordObservedMetric(bg->GetPcieTestName(), bg->gpu[j]->gpuId, statNameBuf, latency);
-
-            if (latency > maxLatency)
-            {
-                DcgmError d { bg->gpu[j]->gpuId };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_HIGH_LATENCY, d, labels[i], bg->gpu[j]->gpuId, latency, maxLatency);
-                log_error(d.GetMessage());
-                bg->AddError(bg->GetPcieTestName(), d);
-                bg->SetResultForGpu(bg->GetPcieTestName(), bg->gpu[j]->gpuId, NVVS_RESULT_FAIL);
-                Nfailures++;
-            }
-        }
-    }
-
-
     if (pinned)
     {
-        cudaFreeHost(h_buffer);
+        cudaOps->cudaFreeHost(h_buffer);
     }
     else
     {
         free(h_buffer);
     }
 
+    int Nfailures = pcie_check_latency(*bg, groupName, latencyMatrix, pinned);
+
     for (size_t d = 0; d < bg->gpu.size(); d++)
     {
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
         cudaCheckError(cudaFree, (d_buffers[d]), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckError(cudaEventDestroy, (start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaEventDestroy, (stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
@@ -1615,16 +1613,64 @@ int outputHostDeviceLatencyMatrix(BusGrind *bg, bool pinned)
         cudaCheckError(cudaStreamDestroy, (stream2[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
     }
 
+    return Nfailures > 0 ? 1 : 0;
+}
+
+/*****************************************************************************/
+// this checks the measured host-device latencies against the configured maximum
+// inputs:
+//        bg:            test context holding GPUs, stats, and error reporting
+//        groupName:     subtest name used to read max latency and record stats
+//        latencyMatrix: measured latencies, laid out as [labelIndex * gpuCount + gpuIndex]
+//        pinned:        whether latencies were measured with pinned host memory
+int pcie_check_latency(BusGrind &bg,
+                       std::string const &groupName,
+                       std::vector<double> const &latencyMatrix,
+                       bool pinned)
+{
+    char labels[][20] = { "d2h", "h2d", "bidir" };
+    std::stringstream ss;
+    double maxLatency = bg.m_testParameters->GetSubTestDouble(groupName, PCIE_STR_MAX_LATENCY);
+    double latency;
+    int Nfailures = 0;
+    char statNameBuf[512];
+    std::string key;
+
+    for (int i = 0; i < 3; i++)
+    {
+        for (size_t j = 0; j < bg.gpu.size(); j++)
+        {
+            ss.str("");
+            ss << bg.gpu[j]->gpuId;
+            ss << "_";
+            ss << labels[i];
+            key = ss.str();
+
+            latency = latencyMatrix[i * bg.gpu.size() + j];
+
+            bg.SetGroupedStat(bg.GetPcieTestName(), groupName, key, latency);
+            if (pinned)
+                addLatencyInfo(&bg, bg.gpu[j]->gpuId, labels[i], latency);
+
+            snprintf(
+                statNameBuf, sizeof(statNameBuf), "%s.%s-%s", groupName.c_str(), PCIE_STR_MIN_BANDWIDTH, labels[i]);
+            bg.RecordObservedMetric(bg.GetPcieTestName(), bg.gpu[j]->gpuId, statNameBuf, latency);
+
+            if (latency > maxLatency)
+            {
+                DcgmError d { bg.gpu[j]->gpuId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_HIGH_LATENCY, d, labels[i], bg.gpu[j]->gpuId, latency, maxLatency);
+                log_error(d.GetMessage());
+                bg.AddError(bg.GetPcieTestName(), d);
+                bg.SetResultForGpu(bg.GetPcieTestName(), bg.gpu[j]->gpuId, NVVS_RESULT_FAIL);
+                Nfailures++;
+            }
+        }
+    }
+
     log_debug("Subtest done, Nfailures = {}", Nfailures);
 
-    if (Nfailures > 0)
-    {
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
+    return Nfailures;
 }
 
 /*****************************************************************************/
@@ -1632,7 +1678,7 @@ int outputHostDeviceLatencyMatrix(BusGrind *bg, bool pinned)
 // inputs:
 //        int numGPUs:  The number of GPUs to test
 //        bool p2p:   Indicates if GPUDirect P2P should be enabled or not
-int outputP2PBandwidthMatrix(BusGrind *bg, bool p2p)
+int outputP2PBandwidthMatrix(BusGrind *bg, CudaOpsAnyPtr cudaOps, bool p2p)
 {
     std::vector<int *> buffers(bg->gpu.size());
     std::vector<cudaEvent_t> start(bg->gpu.size());
@@ -1666,8 +1712,9 @@ int outputP2PBandwidthMatrix(BusGrind *bg, bool p2p)
 
     for (size_t d = 0; d < bg->gpu.size(); d++)
     {
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
-        cudaCheckError(cudaMalloc, (&buffers[d], numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaCheckError(
+            cudaMalloc, (reinterpret_cast<void **>(&buffers[d]), numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckError(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaEventCreate, (&stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaStreamCreate, (&stream0[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
@@ -1678,35 +1725,35 @@ int outputP2PBandwidthMatrix(BusGrind *bg, bool p2p)
 
     if (p2p)
     {
-        enableP2P(bg);
+        enableP2P(bg, cudaOps);
     }
 
     // for each device
     for (size_t i = 0; i < bg->gpu.size(); i++)
     {
-        cudaSetDevice(bg->gpu[i]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[i]->cudaDeviceIdx);
 
         // for each device
         for (size_t j = 0; j < bg->gpu.size(); j++)
         {
             // measure bandwidth between device i and device j
             cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
-            cudaEventRecord(start[i]);
+            cudaOps->cudaEventRecord(start[i]);
 
             for (int r = 0; r < repeat; r++)
             {
-                cudaMemcpyPeerAsync(buffers[i],
-                                    bg->gpu[i]->cudaDeviceIdx,
-                                    buffers[j],
-                                    bg->gpu[j]->cudaDeviceIdx,
-                                    sizeof(int) * numElems);
+                cudaOps->cudaMemcpyPeerAsync(buffers[i],
+                                             bg->gpu[i]->cudaDeviceIdx,
+                                             buffers[j],
+                                             bg->gpu[j]->cudaDeviceIdx,
+                                             sizeof(int) * numElems);
             }
 
-            cudaEventRecord(stop[i]);
+            cudaOps->cudaEventRecord(stop[i]);
             cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
             float time_ms;
-            cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+            cudaOps->cudaEventElapsedTime(&time_ms, start[i], stop[i]);
             double time_s = time_ms / 1e3;
 
             double gb                               = numElems * sizeof(int) * repeat / (double)1e9;
@@ -1733,34 +1780,34 @@ int outputP2PBandwidthMatrix(BusGrind *bg, bool p2p)
 
     for (size_t i = 0; i < bg->gpu.size(); i++)
     {
-        cudaSetDevice(bg->gpu[i]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[i]->cudaDeviceIdx);
 
         for (size_t j = 0; j < bg->gpu.size(); j++)
         {
             cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
-            cudaEventRecord(start[i]);
+            cudaOps->cudaEventRecord(start[i]);
 
             for (int r = 0; r < repeat; r++)
             {
-                cudaMemcpyPeerAsync(buffers[i],
-                                    bg->gpu[i]->cudaDeviceIdx,
-                                    buffers[j],
-                                    bg->gpu[j]->cudaDeviceIdx,
-                                    sizeof(int) * numElems,
-                                    stream0[i]);
-                cudaMemcpyPeerAsync(buffers[j],
-                                    bg->gpu[j]->cudaDeviceIdx,
-                                    buffers[i],
-                                    bg->gpu[i]->cudaDeviceIdx,
-                                    sizeof(int) * numElems,
-                                    stream1[i]);
+                cudaOps->cudaMemcpyPeerAsync(buffers[i],
+                                             bg->gpu[i]->cudaDeviceIdx,
+                                             buffers[j],
+                                             bg->gpu[j]->cudaDeviceIdx,
+                                             sizeof(int) * numElems,
+                                             stream0[i]);
+                cudaOps->cudaMemcpyPeerAsync(buffers[j],
+                                             bg->gpu[j]->cudaDeviceIdx,
+                                             buffers[i],
+                                             bg->gpu[i]->cudaDeviceIdx,
+                                             sizeof(int) * numElems,
+                                             stream1[i]);
             }
 
-            cudaEventRecord(stop[i]);
+            cudaOps->cudaEventRecord(stop[i]);
             cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
             float time_ms = 0;
-            cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+            cudaOps->cudaEventElapsedTime(&time_ms, start[i], stop[i]);
             double time_s = time_ms / 1e3;
 
             double gb                               = 2.0 * numElems * sizeof(int) * repeat / (double)1e9;
@@ -1785,12 +1832,12 @@ int outputP2PBandwidthMatrix(BusGrind *bg, bool p2p)
 
     if (p2p)
     {
-        disableP2P(bg);
+        disableP2P(bg, cudaOps);
     }
 
     for (size_t d = 0; d < bg->gpu.size(); d++)
     {
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
         cudaCheckError(cudaFree, (buffers[d]), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckError(cudaEventDestroy, (start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaEventDestroy, (stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
@@ -1808,7 +1855,7 @@ int outputP2PBandwidthMatrix(BusGrind *bg, bool p2p)
 // inputs:
 //        int numGPUs:  The number of GPUs to test
 //        bool p2p:   Indicates if GPUDirect P2P should be enabled or not
-int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
+int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, CudaOpsAnyPtr cudaOps, bool p2p)
 {
     // only run this test if p2p tests are enabled
     int numGPUs = bg->gpu.size() / 2 * 2; // round to the neared even number of GPUs
@@ -1838,7 +1885,7 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
 
     if (p2p)
     {
-        enableP2P(bg);
+        enableP2P(bg, cudaOps);
     }
 
     /* Initialize buffers to make valgrind happy */
@@ -1863,137 +1910,147 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
     ProtectedVector<unsigned int> tids;
     std::latch tidsPosted { numGPUs };
 
-    auto worker
-        = [&tids, &tidsPosted, &myBarrier, bg, numElems, repeat, &bandwidthMatrix, &buffers, &start, &stop, numGPUs](
-              int d) {
-              tids.PushBack(syscall(SYS_gettid));
-              tidsPosted.count_down();
-              log_debug("PCIe P2P worker started for GPU {}", bg->gpu[d]->gpuId);
+    auto worker = [&tids,
+                   &tidsPosted,
+                   &myBarrier,
+                   bg,
+                   cudaOps,
+                   numElems,
+                   repeat,
+                   &bandwidthMatrix,
+                   &buffers,
+                   &start,
+                   &stop,
+                   numGPUs](int d) mutable {
+        tids.PushBack(syscall(SYS_gettid));
+        tidsPosted.count_down();
+        log_debug("PCIe P2P worker started for GPU {}", bg->gpu[d]->gpuId);
 
-              cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
 
-              cudaStream_t stream { 0 };
+        cudaStream_t stream { 0 };
 
-              cudaCheckErrorOmp(cudaMalloc, (&buffers[d], numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
-              cudaCheckErrorOmp(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
-              cudaCheckErrorOmp(cudaEventCreate, (&stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
-              cudaCheckErrorOmp(cudaStreamCreate, (&stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
+        cudaCheckErrorOmp(
+            cudaMalloc, (reinterpret_cast<void **>(&buffers[d]), numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
+        cudaCheckErrorOmp(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
+        cudaCheckErrorOmp(cudaEventCreate, (&stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
+        cudaCheckErrorOmp(cudaStreamCreate, (&stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
 
-              log_debug("PCIe P2P worker synchronizing device after setup");
-              cudaDeviceSynchronize();
-              log_debug("PCIe P2P worker waiting at initialization barrier");
-              myBarrier.arrive_and_wait();
-              log_debug("PCIe P2P worker ready");
+        log_debug("PCIe P2P worker synchronizing device after setup");
+        cudaOps->cudaDeviceSynchronize();
+        log_debug("PCIe P2P worker waiting at initialization barrier");
+        myBarrier.arrive_and_wait();
+        log_debug("PCIe P2P worker ready");
 
-              cudaEventRecord(start[d], stream);
-              // right to left tests
-              if (d % 2 == 0)
-              {
-                  for (int r = 0; r < repeat; r++)
-                  {
-                      cudaMemcpyPeerAsync(buffers[d + 1],
-                                          bg->gpu[d + 1]->cudaDeviceIdx,
-                                          buffers[d],
-                                          bg->gpu[d]->cudaDeviceIdx,
-                                          sizeof(int) * numElems,
-                                          stream);
-                  }
-                  cudaEventRecord(stop[d], stream);
-                  cudaDeviceSynchronize();
+        cudaOps->cudaEventRecord(start[d], stream);
+        // right to left tests
+        if (d % 2 == 0)
+        {
+            for (int r = 0; r < repeat; r++)
+            {
+                cudaOps->cudaMemcpyPeerAsync(buffers[d + 1],
+                                             bg->gpu[d + 1]->cudaDeviceIdx,
+                                             buffers[d],
+                                             bg->gpu[d]->cudaDeviceIdx,
+                                             sizeof(int) * numElems,
+                                             stream);
+            }
+            cudaOps->cudaEventRecord(stop[d], stream);
+            cudaOps->cudaDeviceSynchronize();
 
-                  float time_ms;
-                  cudaEventElapsedTime(&time_ms, start[d], stop[d]);
-                  double time_s = time_ms / 1e3;
-                  double gb     = numElems * sizeof(int) * repeat / (double)1e9;
+            float time_ms;
+            cudaOps->cudaEventElapsedTime(&time_ms, start[d], stop[d]);
+            double time_s = time_ms / 1e3;
+            double gb     = numElems * sizeof(int) * repeat / (double)1e9;
 
-                  bandwidthMatrix[0 * numGPUs / 2 + d / 2] = gb / time_s;
-              }
+            bandwidthMatrix[0 * numGPUs / 2 + d / 2] = gb / time_s;
+        }
 
-              log_debug("PCIe P2P worker synchronizing device after peer right-to-left transfers");
-              cudaDeviceSynchronize();
-              log_debug("PCIe P2P worker waiting at peer right-to-left barrier");
-              myBarrier.arrive_and_wait();
-              log_debug("PCIe P2P worker peer right-to-left barrier completed");
+        log_debug("PCIe P2P worker synchronizing device after peer right-to-left transfers");
+        cudaOps->cudaDeviceSynchronize();
+        log_debug("PCIe P2P worker waiting at peer right-to-left barrier");
+        myBarrier.arrive_and_wait();
+        log_debug("PCIe P2P worker peer right-to-left barrier completed");
 
-              cudaEventRecord(start[d], stream);
-              // left to right tests
-              if (d % 2 == 1)
-              {
-                  for (int r = 0; r < repeat; r++)
-                  {
-                      cudaMemcpyPeerAsync(buffers[d - 1],
-                                          bg->gpu[d - 1]->cudaDeviceIdx,
-                                          buffers[d],
-                                          bg->gpu[d]->cudaDeviceIdx,
-                                          sizeof(int) * numElems,
-                                          stream);
-                  }
-                  cudaEventRecord(stop[d], stream);
-                  cudaDeviceSynchronize();
+        cudaOps->cudaEventRecord(start[d], stream);
+        // left to right tests
+        if (d % 2 == 1)
+        {
+            for (int r = 0; r < repeat; r++)
+            {
+                cudaOps->cudaMemcpyPeerAsync(buffers[d - 1],
+                                             bg->gpu[d - 1]->cudaDeviceIdx,
+                                             buffers[d],
+                                             bg->gpu[d]->cudaDeviceIdx,
+                                             sizeof(int) * numElems,
+                                             stream);
+            }
+            cudaOps->cudaEventRecord(stop[d], stream);
+            cudaOps->cudaDeviceSynchronize();
 
-                  float time_ms;
-                  cudaEventElapsedTime(&time_ms, start[d], stop[d]);
-                  double time_s = time_ms / 1e3;
-                  double gb     = numElems * sizeof(int) * repeat / (double)1e9;
+            float time_ms;
+            cudaOps->cudaEventElapsedTime(&time_ms, start[d], stop[d]);
+            double time_s = time_ms / 1e3;
+            double gb     = numElems * sizeof(int) * repeat / (double)1e9;
 
-                  bandwidthMatrix[1 * numGPUs / 2 + d / 2] = gb / time_s;
-              }
+            bandwidthMatrix[1 * numGPUs / 2 + d / 2] = gb / time_s;
+        }
 
-              log_debug("PCIe P2P worker synchronizing device after peer left-to-right transfers");
-              cudaDeviceSynchronize();
-              log_debug("PCIe P2P worker waiting at peer left-to-right barrier");
-              myBarrier.arrive_and_wait();
-              log_debug("PCIe P2P worker peer left-to-right barrier completed");
+        log_debug("PCIe P2P worker synchronizing device after peer left-to-right transfers");
+        cudaOps->cudaDeviceSynchronize();
+        log_debug("PCIe P2P worker waiting at peer left-to-right barrier");
+        myBarrier.arrive_and_wait();
+        log_debug("PCIe P2P worker peer left-to-right barrier completed");
 
-              cudaEventRecord(start[d], stream);
-              // Bidirectional tests
-              if (d % 2 == 0)
-              {
-                  for (int r = 0; r < repeat; r++)
-                  {
-                      cudaMemcpyPeerAsync(buffers[d + 1],
-                                          bg->gpu[d + 1]->cudaDeviceIdx,
-                                          buffers[d],
-                                          bg->gpu[d]->cudaDeviceIdx,
-                                          sizeof(int) * numElems,
-                                          stream);
-                  }
-              }
-              else
-              {
-                  for (int r = 0; r < repeat; r++)
-                  {
-                      cudaMemcpyPeerAsync(buffers[d - 1],
-                                          bg->gpu[d - 1]->cudaDeviceIdx,
-                                          buffers[d],
-                                          bg->gpu[d]->cudaDeviceIdx,
-                                          sizeof(int) * numElems,
-                                          stream);
-                  }
-              }
+        cudaOps->cudaEventRecord(start[d], stream);
+        // Bidirectional tests
+        if (d % 2 == 0)
+        {
+            for (int r = 0; r < repeat; r++)
+            {
+                cudaOps->cudaMemcpyPeerAsync(buffers[d + 1],
+                                             bg->gpu[d + 1]->cudaDeviceIdx,
+                                             buffers[d],
+                                             bg->gpu[d]->cudaDeviceIdx,
+                                             sizeof(int) * numElems,
+                                             stream);
+            }
+        }
+        else
+        {
+            for (int r = 0; r < repeat; r++)
+            {
+                cudaOps->cudaMemcpyPeerAsync(buffers[d - 1],
+                                             bg->gpu[d - 1]->cudaDeviceIdx,
+                                             buffers[d],
+                                             bg->gpu[d]->cudaDeviceIdx,
+                                             sizeof(int) * numElems,
+                                             stream);
+            }
+        }
 
-              cudaEventRecord(stop[d], stream);
-              log_debug("PCIe P2P worker synchronizing device after peer bidirectional transfers");
-              cudaDeviceSynchronize();
-              log_debug("PCIe P2P worker waiting at peer bidirectional barrier");
-              myBarrier.arrive_and_wait();
-              log_debug("PCIe P2P worker peer bidirectional barrier completed");
+        cudaOps->cudaEventRecord(stop[d], stream);
+        log_debug("PCIe P2P worker synchronizing device after peer bidirectional transfers");
+        cudaOps->cudaDeviceSynchronize();
+        log_debug("PCIe P2P worker waiting at peer bidirectional barrier");
+        myBarrier.arrive_and_wait();
+        log_debug("PCIe P2P worker peer bidirectional barrier completed");
 
-              if (d % 2 == 0)
-              {
-                  float time_ms1 = 0;
-                  float time_ms2 = 0;
-                  cudaEventElapsedTime(&time_ms1, start[d], stop[d]);
-                  cudaEventElapsedTime(&time_ms2, start[d + 1], stop[d + 1]);
-                  double time_s = std::max(time_ms1, time_ms2) / 1e3;
-                  double gb     = 2.0 * numElems * sizeof(int) * repeat / (double)1e9;
+        if (d % 2 == 0)
+        {
+            float time_ms1 = 0;
+            float time_ms2 = 0;
+            cudaOps->cudaEventElapsedTime(&time_ms1, start[d], stop[d]);
+            cudaOps->cudaEventElapsedTime(&time_ms2, start[d + 1], stop[d + 1]);
+            double time_s = std::max(time_ms1, time_ms2) / 1e3;
+            double gb     = 2.0 * numElems * sizeof(int) * repeat / (double)1e9;
 
-                  bandwidthMatrix[2 * numGPUs / 2 + d / 2] = gb / time_s;
-              }
+            bandwidthMatrix[2 * numGPUs / 2 + d / 2] = gb / time_s;
+        }
 
-              cudaCheckErrorOmp(cudaStreamDestroy, (stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
-              log_debug("PCIe P2P worker completed");
-          }; // end lambda
+        cudaCheckErrorOmp(cudaStreamDestroy, (stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
+        log_debug("PCIe P2P worker completed");
+    }; // end lambda
 
 
     {
@@ -2075,12 +2132,12 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
     }
     if (p2p)
     {
-        disableP2P(bg);
+        disableP2P(bg, cudaOps);
     }
 
     for (int d = 0; d < numGPUs; d++)
     {
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
         cudaCheckError(cudaFree, (buffers[d]), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckError(cudaEventDestroy, (start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaEventDestroy, (stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
@@ -2097,7 +2154,7 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
 // inputs:
 //        int numGPUs:  The number of GPUs to test
 //        bool p2p:   Indicates if GPUDirect P2P should be enabled or not
-int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
+int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, CudaOpsAnyPtr cudaOps, bool p2p)
 {
     int numGPUs = bg->gpu.size() / 2 * 2; // round to the neared even number of GPUs
     std::vector<int *> buffers(numGPUs);
@@ -2141,54 +2198,56 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
 
     if (p2p)
     {
-        enableP2P(bg);
+        enableP2P(bg, cudaOps);
     }
 
     std::barrier myBarrier(numGPUs);
     std::latch tidsPosted { numGPUs };
     ProtectedVector<unsigned int> tids;
 
-    auto worker = [&tids, &tidsPosted, &myBarrier, bg, numElems, repeat, &bandwidthMatrix, &buffers, numGPUs](int d) {
+    auto worker = [&tids, &tidsPosted, &myBarrier, bg, cudaOps, numElems, repeat, &bandwidthMatrix, &buffers, numGPUs](
+                      int d) mutable {
         tids.PushBack(syscall(SYS_gettid));
         tidsPosted.count_down();
         log_debug("PCIe 1D-exch worker started for GPU {}", bg->gpu[d]->gpuId);
 
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
 
         cudaEvent_t start;
         cudaEvent_t stop;
         cudaStream_t stream1 { 0 };
 
-        cudaCheckErrorOmp(cudaMalloc, (&buffers[d], numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
+        cudaCheckErrorOmp(
+            cudaMalloc, (reinterpret_cast<void **>(&buffers[d]), numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckErrorOmp(cudaEventCreate, (&start), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorOmp(cudaEventCreate, (&stop), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorOmp(cudaStreamCreate, (&stream1), PCIE_ERR_CUDA_STREAM_FAIL, d);
 
         log_debug("PCIe 1D-exch worker synchronizing device after setup");
-        cudaDeviceSynchronize();
+        cudaOps->cudaDeviceSynchronize();
         log_debug("PCIe 1D-exch worker waiting at initialization barrier");
         myBarrier.arrive_and_wait();
         log_debug("PCIe 1D-exch worker ready");
 
-        cudaEventRecord(start, stream1);
+        cudaOps->cudaEventRecord(start, stream1);
         // L2R tests
         for (int r = 0; r < repeat; r++)
         {
             if (d + 1 < numGPUs)
             {
-                cudaMemcpyPeerAsync(buffers[d + 1],
-                                    bg->gpu[d + 1]->cudaDeviceIdx,
-                                    buffers[d],
-                                    bg->gpu[d]->cudaDeviceIdx,
-                                    sizeof(int) * numElems,
-                                    stream1);
+                cudaOps->cudaMemcpyPeerAsync(buffers[d + 1],
+                                             bg->gpu[d + 1]->cudaDeviceIdx,
+                                             buffers[d],
+                                             bg->gpu[d]->cudaDeviceIdx,
+                                             sizeof(int) * numElems,
+                                             stream1);
             }
         }
-        cudaEventRecord(stop, stream1);
-        cudaDeviceSynchronize();
+        cudaOps->cudaEventRecord(stop, stream1);
+        cudaOps->cudaDeviceSynchronize();
 
         float time_ms;
-        cudaEventElapsedTime(&time_ms, start, stop);
+        cudaOps->cudaEventElapsedTime(&time_ms, start, stop);
         double time_s = time_ms / 1e3;
         double gb     = numElems * sizeof(int) * repeat / (double)1e9;
 
@@ -2196,27 +2255,27 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
             gb = 0;
         bandwidthMatrix[0 * numGPUs + d] = gb / time_s;
         log_debug("PCIe 1D-exch worker synchronizing device after left-to-right exchange");
-        cudaDeviceSynchronize();
+        cudaOps->cudaDeviceSynchronize();
         log_debug("PCIe 1D-exch worker waiting at left-to-right barrier");
         myBarrier.arrive_and_wait();
         log_debug("PCIe 1D-exch worker left-to-right barrier completed");
 
-        cudaEventRecord(start, stream1);
+        cudaOps->cudaEventRecord(start, stream1);
         // R2L tests
         for (int r = 0; r < repeat; r++)
         {
             if (d > 0)
-                cudaMemcpyPeerAsync(buffers[d - 1],
-                                    bg->gpu[d - 1]->cudaDeviceIdx,
-                                    buffers[d],
-                                    bg->gpu[d]->cudaDeviceIdx,
-                                    sizeof(int) * numElems,
-                                    stream1);
+                cudaOps->cudaMemcpyPeerAsync(buffers[d - 1],
+                                             bg->gpu[d - 1]->cudaDeviceIdx,
+                                             buffers[d],
+                                             bg->gpu[d]->cudaDeviceIdx,
+                                             sizeof(int) * numElems,
+                                             stream1);
         }
-        cudaEventRecord(stop, stream1);
-        cudaDeviceSynchronize();
+        cudaOps->cudaEventRecord(stop, stream1);
+        cudaOps->cudaDeviceSynchronize();
 
-        cudaEventElapsedTime(&time_ms, start, stop);
+        cudaOps->cudaEventElapsedTime(&time_ms, start, stop);
         time_s = time_ms / 1e3;
         gb     = numElems * sizeof(int) * repeat / (double)1e9;
 
@@ -2226,7 +2285,7 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
         bandwidthMatrix[1 * numGPUs + d] = gb / time_s;
 
         log_debug("PCIe 1D-exch worker synchronizing device before cleanup");
-        cudaDeviceSynchronize();
+        cudaOps->cudaDeviceSynchronize();
 
         cudaCheckErrorOmp(cudaEventDestroy, (start), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorOmp(cudaEventDestroy, (stop), PCIE_ERR_CUDA_EVENT_FAIL, d);
@@ -2309,13 +2368,13 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
 
     for (int d = 0; d < numGPUs; d++)
     {
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
         cudaCheckError(cudaFree, (buffers[d]), PCIE_ERR_CUDA_ALLOC_FAIL, d);
     }
 
     if (p2p)
     {
-        disableP2P(bg);
+        disableP2P(bg, cudaOps);
     }
 
     log_debug("Subtest done");
@@ -2328,7 +2387,7 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
 // inputs:
 //        int numGPUs:  The number of GPUs to test
 //        bool p2p:   Indicates if GPUDirect P2P should be enabled or not
-int outputP2PLatencyMatrix(BusGrind *bg, bool p2p)
+int outputP2PLatencyMatrix(BusGrind *bg, CudaOpsAnyPtr cudaOps, bool p2p)
 {
     std::vector<int *> buffers(bg->gpu.size());
     std::vector<cudaEvent_t> start(bg->gpu.size());
@@ -2357,13 +2416,13 @@ int outputP2PLatencyMatrix(BusGrind *bg, bool p2p)
 
     if (p2p)
     {
-        enableP2P(bg);
+        enableP2P(bg, cudaOps);
     }
 
     for (size_t d = 0; d < bg->gpu.size(); d++)
     {
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
-        cudaCheckError(cudaMalloc, (&buffers[d], 1), PCIE_ERR_CUDA_ALLOC_FAIL, d);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaCheckError(cudaMalloc, (reinterpret_cast<void **>(&buffers[d]), 1), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckError(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaEventCreate, (&stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
     }
@@ -2372,23 +2431,24 @@ int outputP2PLatencyMatrix(BusGrind *bg, bool p2p)
 
     for (size_t i = 0; i < bg->gpu.size(); i++)
     {
-        cudaSetDevice(bg->gpu[i]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[i]->cudaDeviceIdx);
 
         for (size_t j = 0; j < bg->gpu.size(); j++)
         {
             cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
-            cudaEventRecord(start[i]);
+            cudaOps->cudaEventRecord(start[i]);
 
             for (int r = 0; r < repeat; r++)
             {
-                cudaMemcpyPeerAsync(buffers[i], bg->gpu[i]->cudaDeviceIdx, buffers[j], bg->gpu[j]->cudaDeviceIdx, 1);
+                cudaOps->cudaMemcpyPeerAsync(
+                    buffers[i], bg->gpu[i]->cudaDeviceIdx, buffers[j], bg->gpu[j]->cudaDeviceIdx, 1);
             }
 
-            cudaEventRecord(stop[i]);
+            cudaOps->cudaEventRecord(stop[i]);
             cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
             float time_ms;
-            cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+            cudaOps->cudaEventElapsedTime(&time_ms, start[i], stop[i]);
 
             latencyMatrix[i * bg->gpu.size() + j] = time_ms * 1e3 / repeat;
         }
@@ -2410,12 +2470,12 @@ int outputP2PLatencyMatrix(BusGrind *bg, bool p2p)
     }
     if (p2p)
     {
-        disableP2P(bg);
+        disableP2P(bg, cudaOps);
     }
 
     for (size_t d = 0; d < bg->gpu.size(); d++)
     {
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+        cudaOps->cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
         cudaCheckError(cudaFree, (buffers[d]), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckError(cudaEventDestroy, (start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaEventDestroy, (stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
@@ -2427,7 +2487,11 @@ int outputP2PLatencyMatrix(BusGrind *bg, bool p2p)
 }
 
 /*****************************************************************************/
-int main_init(BusGrind &bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
+int main_init(BusGrind &bg,
+              const dcgmDiagPluginEntityList_v1 &entityInfo,
+              DcgmNs::DcgmOpsAnyPtr dcgmOps,
+              dcgmHandle_t handle,
+              CudaOpsAnyPtr cudaOps)
 {
     for (unsigned int gpuListIndex = 0; gpuListIndex < entityInfo.numEntities; ++gpuListIndex)
     {
@@ -2442,7 +2506,10 @@ int main_init(BusGrind &bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
             pd = new PluginDevice(bg.GetPcieTestName(),
                                   entityInfo.entities[gpuListIndex].entity.entityId,
                                   entityInfo.entities[gpuListIndex].auxField.gpu.attributes.identifiers.pciBusId,
-                                  &bg);
+                                  &bg,
+                                  dcgmOps,
+                                  handle,
+                                  cudaOps);
         }
         catch (DcgmError &d)
         {
@@ -2493,7 +2560,6 @@ int main_init(BusGrind &bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
     fieldIds.push_back(DCGM_FI_DEV_SXID_NON_FATAL_ERROR);
     fieldIds.push_back(DCGM_FI_DEV_SXID_FATAL_ERROR);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW);
     char fieldGroupName[128];
     char groupName[128];
     snprintf(fieldGroupName, sizeof(fieldGroupName), "pcie_field_group");
@@ -2514,7 +2580,7 @@ int main_init(BusGrind &bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
 }
 
 /*****************************************************************************/
-void bg_record_cliques(BusGrind *bg)
+void bg_record_cliques(BusGrind *bg, CudaOpsAnyPtr cudaOps)
 {
     // compute cliques
     // a clique is a group of GPUs that can P2P
@@ -2536,7 +2602,7 @@ void bg_record_cliques(BusGrind *bg)
         for (size_t j = i + 1; j < bg->gpu.size(); j++)
         {
             int access = 0;
-            cudaDeviceCanAccessPeer(&access, bg->gpu[i]->cudaDeviceIdx, bg->gpu[j]->cudaDeviceIdx);
+            cudaOps->cudaDeviceCanAccessPeer(&access, bg->gpu[i]->cudaDeviceIdx, bg->gpu[j]->cudaDeviceIdx);
 
             // if GPU i can acces j then add to current clique
             if (access)
@@ -2672,8 +2738,6 @@ bool bg_check_error_conditions(BusGrind *bg,
     int ret = bg->m_dcgmRecorder.CheckErrorFields(
         fieldIds, &failureThresholds, gpuId, 1000, errorList, ignoredErrorList, startTime);
 
-    int effectiveBerRet = bg->m_dcgmRecorder.CheckEffectiveBER(gpuId, errorList);
-
     for (auto const &error : ignoredErrorList)
     {
         auto newInfoMsg = SUPPRESSED_ERROR_STR + error.GetMessage();
@@ -2681,7 +2745,7 @@ bool bg_check_error_conditions(BusGrind *bg,
     }
 
     dcgmReturn_t st = bg_check_per_second_error_conditions(bg, gpuId, errorList, startTime);
-    if (ret != DR_SUCCESS || effectiveBerRet != DR_SUCCESS || st != DCGM_ST_OK)
+    if (ret != DR_SUCCESS || st != DCGM_ST_OK)
     {
         passed = false;
     }
@@ -2747,13 +2811,16 @@ bool pcie_gpu_id_in_list(unsigned int gpuId, const dcgmDiagPluginEntityList_v1 &
     return false;
 }
 
-void pcie_check_nvlink_status(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
+void pcie_check_nvlink_status(BusGrind *bg,
+                              const dcgmDiagPluginEntityList_v1 &entityInfo,
+                              DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                              dcgmHandle_t handle)
 {
     dcgmNvLinkStatus_v5 linkStatus;
     memset(&linkStatus, 0, sizeof(linkStatus));
 
     linkStatus.version = dcgmNvLinkStatus_version5;
-    dcgmReturn_t ret   = dcgmGetNvLinkLinkStatus(bg->GetHandle(), &linkStatus);
+    dcgmReturn_t ret   = dcgmOps->dcgmGetNvLinkLinkStatus(handle, &linkStatus);
     bool downLinks     = false;
 
     if (ret != DCGM_ST_OK)
@@ -2833,12 +2900,14 @@ void pcie_check_nvlink_status(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &e
 /*****************************************************************************/
 std::unique_ptr<DcgmGroup> StartDcgmGroupWatch(BusGrind *bg,
                                                std::vector<unsigned short> const &fieldIds,
-                                               std::vector<unsigned int> const &gpuIds)
+                                               std::vector<unsigned int> const &gpuIds,
+                                               DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                                               dcgmHandle_t handle)
 {
-    std::unique_ptr<DcgmGroup> dcgmGroup = std::make_unique<DcgmGroup>();
+    std::unique_ptr<DcgmGroup> dcgmGroup = std::make_unique<DcgmGroup>(dcgmOps);
     std::string groupName                = "custom-group";
     std::string fieldGroupName           = "custom-field-group";
-    if (dcgmReturn_t ret = dcgmGroup->Init(bg->GetHandle(), groupName, gpuIds); ret != DCGM_ST_OK)
+    if (dcgmReturn_t ret = dcgmGroup->Init(handle, groupName, gpuIds); ret != DCGM_ST_OK)
     {
         log_error("Error initializing DcgmGroup: {}", ret);
         return nullptr;
@@ -2859,7 +2928,11 @@ std::unique_ptr<DcgmGroup> StartDcgmGroupWatch(BusGrind *bg,
 }
 
 /*****************************************************************************/
-int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
+int main_entry_wrapped(BusGrind *bg,
+                       const dcgmDiagPluginEntityList_v1 &entityInfo,
+                       DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                       dcgmHandle_t handle,
+                       CudaOpsAnyPtr cudaOps)
 {
     int st;
     timelib64_t startTime = timelib_usecSince1970();
@@ -2867,10 +2940,10 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
 
     if (bg->test_nvlink_status)
     {
-        pcie_check_nvlink_status(bg, entityInfo);
+        pcie_check_nvlink_status(bg, entityInfo, dcgmOps, handle);
     }
 
-    bg_record_cliques(bg);
+    bg_record_cliques(bg, cudaOps);
 
     // Cuda currently throws an error on more than 8 GPUs
     static const int MAX_PCIE_CONCURRENT_GPUS = 8;
@@ -2909,13 +2982,13 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
             std::vector<unsigned short> fieldIds = { DCGM_FI_PROF_NVLINK_TX_BYTES };
             // Field watch is destroyed when DcgmGroup is destructed. Keep the DcgmGroup pointer
             // around until the test is run.
-            auto dcgmGroup = StartDcgmGroupWatch(bg, fieldIds, gpuIds);
+            auto dcgmGroup = StartDcgmGroupWatch(bg, fieldIds, gpuIds, dcgmOps, handle);
 
             size_t size
                 = bg->m_testParameters->GetSubTestDouble(PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB);
             size *= 1024; // convert to bytes
 
-            Brokenp2p p2p(bg, bg->gpu, size);
+            Brokenp2p p2p(bg, bg->gpu, size, dcgmOps, handle, cudaOps);
             if (p2p.RunTest() == NVVS_RESULT_FAIL)
             {
                 goto NO_MORE_TESTS;
@@ -2930,7 +3003,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
     /******************Host/Device Tests**********************/
     if (bg->test_1 && bg->test_pinned && !bg_should_stop(bg))
     {
-        st = outputHostDeviceBandwidthMatrix(*bg, true);
+        st = outputHostDeviceBandwidthMatrix(*bg, cudaOps, true);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -2938,7 +3011,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
     }
     if (bg->test_2 && bg->test_unpinned && !bg_should_stop(bg))
     {
-        st = outputHostDeviceBandwidthMatrix(*bg, false);
+        st = outputHostDeviceBandwidthMatrix(*bg, cudaOps, false);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -2947,7 +3020,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
 
     if (bg->test_3 && bg->test_pinned && !bg_should_stop(bg))
     {
-        st = outputConcurrentHostDeviceBandwidthMatrix(bg, true);
+        st = outputConcurrentHostDeviceBandwidthMatrix(bg, cudaOps, true);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -2955,7 +3028,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
     }
     if (bg->test_4 && bg->test_unpinned && !bg_should_stop(bg))
     {
-        st = outputConcurrentHostDeviceBandwidthMatrix(bg, false);
+        st = outputConcurrentHostDeviceBandwidthMatrix(bg, cudaOps, false);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -2965,7 +3038,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
     /*************************P2P Tests************************/
     if (bg->test_5 && bg->test_p2p_on && !bg_should_stop(bg))
     {
-        st = outputP2PBandwidthMatrix(bg, true);
+        st = outputP2PBandwidthMatrix(bg, cudaOps, true);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -2973,7 +3046,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
     }
     if (bg->test_6 && bg->test_p2p_off && !bg_should_stop(bg))
     {
-        st = outputP2PBandwidthMatrix(bg, false);
+        st = outputP2PBandwidthMatrix(bg, cudaOps, false);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -2982,7 +3055,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
 
     if (bg->test_7 && bg->test_p2p_on && !bg_should_stop(bg))
     {
-        st = outputConcurrentPairsP2PBandwidthMatrix(bg, true);
+        st = outputConcurrentPairsP2PBandwidthMatrix(bg, cudaOps, true);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -2990,7 +3063,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
     }
     if (bg->test_8 && bg->test_p2p_off && !bg_should_stop(bg))
     {
-        st = outputConcurrentPairsP2PBandwidthMatrix(bg, false);
+        st = outputConcurrentPairsP2PBandwidthMatrix(bg, cudaOps, false);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -2999,7 +3072,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
 
     if (bg->test_9 && bg->test_p2p_on && !bg_should_stop(bg))
     {
-        st = outputConcurrent1DExchangeBandwidthMatrix(bg, true);
+        st = outputConcurrent1DExchangeBandwidthMatrix(bg, cudaOps, true);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -3008,7 +3081,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
 
     if (bg->test_10 && bg->test_p2p_off && !bg_should_stop(bg))
     {
-        st = outputConcurrent1DExchangeBandwidthMatrix(bg, false);
+        st = outputConcurrent1DExchangeBandwidthMatrix(bg, cudaOps, false);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -3018,7 +3091,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
     /******************Latency Tests****************************/
     if (bg->test_11 && bg->test_pinned && !bg_should_stop(bg))
     {
-        st = outputHostDeviceLatencyMatrix(bg, true);
+        st = outputHostDeviceLatencyMatrix(bg, cudaOps, true);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -3027,7 +3100,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
 
     if (bg->test_12 && bg->test_unpinned && !bg_should_stop(bg))
     {
-        st = outputHostDeviceLatencyMatrix(bg, false);
+        st = outputHostDeviceLatencyMatrix(bg, cudaOps, false);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -3036,7 +3109,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
 
     if (bg->test_13 && bg->test_p2p_on && !bg_should_stop(bg))
     {
-        st = outputP2PLatencyMatrix(bg, true);
+        st = outputP2PLatencyMatrix(bg, cudaOps, true);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -3045,7 +3118,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityIn
 
     if (bg->test_14 && bg->test_p2p_off && !bg_should_stop(bg))
     {
-        st = outputP2PLatencyMatrix(bg, false);
+        st = outputP2PLatencyMatrix(bg, cudaOps, false);
         if (st < 0)
         {
             goto NO_MORE_TESTS;
@@ -3068,7 +3141,11 @@ NO_MORE_TESTS:
 }
 
 /*****************************************************************************/
-int main_entry(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
+int main_entry(BusGrind *bg,
+               const dcgmDiagPluginEntityList_v1 &entityInfo,
+               DcgmNs::DcgmOpsAnyPtr dcgmOps,
+               dcgmHandle_t handle,
+               CudaOpsAnyPtr cudaOps)
 {
     int st = 1; /* Default to failed in case we catch an exception */
 
@@ -3080,7 +3157,7 @@ int main_entry(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
 
     try
     {
-        st = main_entry_wrapped(bg, entityInfo);
+        st = main_entry_wrapped(bg, entityInfo, dcgmOps, handle, cudaOps);
     }
     catch (const std::runtime_error &e)
     {

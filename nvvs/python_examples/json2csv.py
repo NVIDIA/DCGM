@@ -70,10 +70,10 @@ def cleanup():
 if __name__ == "__main__":
     parseArgs(sys.argv[1:])
 
-jsonFile = open(inputfile) if inputfile is not "" else sys.stdin
+jsonFile = open(inputfile) if inputfile != "" else sys.stdin
 jsonData = json.load(jsonFile)
 
-outHandle = open(outputfile, 'wb') if outputfile is not "" else sys.stdout
+outHandle = open(outputfile, 'wb') if outputfile != "" else sys.stdout
 csvWriter = csv.writer(outHandle, quotechar='"',
                        quoting=csv.QUOTE_ALL, delimiter=",")
 

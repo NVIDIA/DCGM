@@ -315,11 +315,21 @@ public:
     virtual nvsdmRet_t nvsdmPortGetDevice(nvsdmPort_t const port, nvsdmDevice_t *device) override;
 
     void InjectDevice(NvsdmMockDevice const &dev);
+
+    /**
+     * Sets the telemetry error code for this device to return. This is used to force unit test results.
+     * Note: Mock-only function.
+     *
+     * @param (I) devId - the device ID to specify what should be returned. User must make this unique per entity.
+     * @param (I) ret - the desired error code for this device ID to return.
+     */
+    void SetDeviceTelemetryReturn(uint16_t devID, nvsdmRet_t ret);
     bool LoadYaml(std::string const &path);
 
 private:
     bool m_init = false;
     std::vector<NvsdmMockDevice> m_devices;
+    std::unordered_map<uint16_t, nvsdmRet_t> m_deviceTelemetryReturns;
 };
 
 } //namespace DcgmNs

@@ -13,6 +13,8 @@
 # limitations under the License.
 from common.Struct import Struct
 
+# NO HARDWARE
+
 
 def test_struct():
     s = Struct(field='field')

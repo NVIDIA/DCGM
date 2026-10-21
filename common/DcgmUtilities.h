@@ -20,6 +20,7 @@
 #include <dcgm_structs.h>
 
 #include "DcgmLogging.h"
+#include <FileHandle.hpp>
 #include <chrono>
 #include <csignal>
 #include <expected>
@@ -44,101 +45,6 @@
 /*************************************************************************/
 /* Error message constants */
 #define DCGM_LIBNUMA_LOAD_ERROR_MSG "Cannot load libnuma.so: not binding to NUMA nodes!"
-
-/**
- * @brief Defines the behavior of the \c ChangeUser() function.
- */
-enum class ChangeUserPolicy : std::uint8_t
-{
-    Permanently, /*!< Request to change the current process user permanently. No rollback possible after that */
-    Temporarily, /*!< Request to change the current process user temporarily. Later this change can be rolled back */
-    Rollback,    /*!< Request to rollback the current user to the previously preserved one */
-};
-
-/**
- * @brief Represents information about user account (uid/gid) and groups it belongs to.
- */
-struct UserCredentials
-{
-    gid_t gid;                 /*!< User group id */
-    uid_t uid;                 /*!< User id */
-    std::vector<gid_t> groups; /*!< List of user's group ids. This is filled and used by \c ChangeUser(). */
-};
-
-/**
- * @brief Exception happens if some logic error unrelated to the underlying syscalls happens in the ChangeUser()
- */
-struct ChangeUserException : std::runtime_error
-{
-    using std::runtime_error::runtime_error;
-};
-
-/**
- * @brief Changes the effective user/group of the current process.
- *
- * This function allows to change the user of the current process either temporarily or permanently.
- * The main purpose of this function is to drop/reacquire the root privileges of the calling process.
- * If \a policy is \c ChangeUserPolicy::Temporarily, then the function returns old credentials of the
- * user that called this function, and later those credentials can be used to reacquire permissions
- * back with \c ChangeUserPolicy::Rollback. In case of permanent policy, the old credentials cannot be
- * reacquired, thus nothing is returned from this function.
- *
- * @param[in] policy            Defines the behavior of the function - whether the user should be
- * changed permanently/temporarily or previous user should be restored.
- * @param[in] newCredentials    UserCredentials for the target user.
- *
- * @return \c std::nullopt      If the \a policy was either \c ChangeUserPolicy::Permanently or \c
- *                              ChangeUserPolicy::Rollback.
- * @return \c UserCredentials   UserCredentials of the user that called this function. That value can
- * be used later with \c ChangeUserPolicy::Rollback \a policy.
- *
- * @throws std::system_error            If underlying syscalls return errors.
- * @throws ChangePrivilegesException    If there is some logic error that is not directly related to
- * the syscalls. For example, if \a policy is \c ChangeUserPolicy::Permanently and it's possible to
- *                                      reacquire the old privileges back.
- * @note This function should not get credentials of a user with root privileges if the \a policy is
- *       ChangeUserPolicy::Permanently. In such a case, the function will throw an exception as it
- * will be possible to reacquire the uid/gid of the user who is originally called the function.
- * @example
- * @code
- *      //
- *      // Dropping the root privileges
- *      //
- *      try {
- *          ChangeUser(ChangeUserPolicy::Permanently, GetUserCredentials("nobody"));
- *      } except (std::exception const& ex) {
- *          // it's impossible to drop the root permissions
- *      }
- *
- *      //
- *      // Temporarily dropping the root privileges
- *      //
- *      UserCredentials oldCred;
- *      try {
- *          oldCred = ChangeUser(ChangeUserPolicy::Temporarily,
- * GetUserCredentials("nobody"))->value(); } catch (std::exception const& ex) {
- *          //it's impossible to drop the root privileges
- *      }
- *      // do some non-root activity
- *      try {
- *          ChangeUser(ChangeUserPolicy::Rollback, oldCred);
- *      } except (std::exception const& ex) {
- *          //it's impossible to reacquire previous user privileges
- *      }
- * @endcode
- */
-std::optional<UserCredentials> ChangeUser(ChangeUserPolicy policy,
-                                          UserCredentials const &newCredentials) noexcept(false);
-
-/**
- * @brief Returns credentials for the user with the given \a userName
- * @param[in] userName  User name, the gid/uid are got
- * @return \c std::nullopt if there is not such login in the system
- * @return \c UserCredentials  gid/uid for the given \a userName
- * @throws \c std::system_error if the underlying OS API returns errors
- * @note The \c UserCredentials::groups is not filled in this function. It's only used/filled by \c ChangeUser()
- */
-std::optional<UserCredentials> GetUserCredentials(const char *userName) noexcept(false);
 
 template <typename T>
 struct DcgmResult : public std::expected<T, dcgmReturn_t>
@@ -288,6 +194,7 @@ constexpr dcgmReturn_t NvmlReturnToDcgmReturn(nvmlReturn_t nvmlReturn)
             return DCGM_ST_OK;
 
         case NVML_ERROR_NOT_SUPPORTED:
+        case NVML_ERROR_FUNCTION_NOT_FOUND:
             return DCGM_ST_NOT_SUPPORTED;
 
         case NVML_ERROR_NO_PERMISSION:
@@ -316,7 +223,6 @@ constexpr dcgmReturn_t NvmlReturnToDcgmReturn(nvmlReturn_t nvmlReturn)
 
         case NVML_ERROR_IRQ_ISSUE:
         case NVML_ERROR_LIBRARY_NOT_FOUND:
-        case NVML_ERROR_FUNCTION_NOT_FOUND:
         case NVML_ERROR_CORRUPTED_INFOROM:
         case NVML_ERROR_OPERATING_SYSTEM:
         case NVML_ERROR_LIB_RM_VERSION_MISMATCH:
@@ -331,78 +237,6 @@ constexpr dcgmReturn_t NvmlReturnToDcgmReturn(nvmlReturn_t nvmlReturn)
 
     return DCGM_ST_GENERIC_ERROR; /* Shouldn't get here */
 }
-
-/**
- * @brief Represents a system file descriptor
- */
-class FileHandle
-{
-public:
-    /**
-     * @brief Creates invalid (-1) file descriptor
-     */
-    FileHandle() noexcept;
-
-    /**
-     * @brief Acquires ownership of the \a fd file descriptor
-     * @param[in] fd    A valid file descriptor. External caller must no call \c close() on this descriptor once
-     * it's transferred to the \c FileHandle
-     */
-    explicit FileHandle(int fd) noexcept;
-
-    ~FileHandle() noexcept;
-
-    FileHandle(FileHandle const &)            = delete;
-    FileHandle &operator=(FileHandle const &) = delete;
-
-    FileHandle(FileHandle &&other) noexcept;
-    FileHandle &operator=(FileHandle &&other) noexcept;
-
-    explicit operator int() const;
-    /**
-     * @brief Returns underlying system file descriptor. Caller must not call \c close() on the descriptor returned
-     * from this function.
-     * @return \c int  File descriptor.
-     */
-    [[nodiscard]] int Get() const &;
-    /**
-     * @brief Returns the underlying system file descriptor and abandons ownership so that it's caller
-     * responsibility to call \c close() on the result descriptor
-     * @return \c int  File descriptor. Caller must call \c close() on the value later.
-     */
-    [[nodiscard]] int Release();
-
-    /**
-     * @brief Reads data from the file descriptor until it reaches the end of the file or the specified size is
-     * read. This function will try its best effort to continue reading the data even if the read is interrupted by
-     * a signal.
-     * @param[in] buffer  The buffer to read the data into
-     * @param[in] size    The number of bytes to read
-     * @return The number of bytes read, -1 if an error occurred. 0 if the end of the file is reached. Details of
-     * the error can be retrieved by GetErrno(). When 0 or -1 returned, the buffer may be partially filled.
-     */
-    [[nodiscard]] virtual ssize_t ReadExact(std::byte *buffer, size_t size);
-
-    /**
-     * @brief Writes data to the file descriptor
-     * @param[in] buffer  The buffer to write the data from
-     * @param[in] size    The number of bytes to write
-     * @return The number of bytes written, -1 if an error occurred. Details of the error can be retrieved by
-     * GetErrno().
-     */
-    [[nodiscard]] virtual ssize_t Write(void const *buffer, size_t size);
-
-    /**
-     * @brief Returns the errno of the last error that occurred on the file descriptor
-     * @return The errno of the last error that occurred on the file descriptor
-     */
-    [[nodiscard]] virtual int GetErrno() const;
-
-private:
-    int m_fd;
-    int m_errno;
-};
-
 
 /**
  * @brief Smart wrapper around system pipes
@@ -635,20 +469,6 @@ bool WaitFor(F &&fn, std::chrono::duration<Rep, Period> timeout) noexcept(noexce
  */
 std::tuple<uint64_t, uint64_t, double> NvmlBerParser(int64_t ber);
 
-/**
- * Returns true when effective BER exceeds the 1e-12 failure threshold.
- *
- * @param[in] mantissa The mantissa of the BER value
- * @param[in] exponent The exponent of the BER value
- * @return true if the effective BER exceeds the 1e-12 failure threshold,
- *         false otherwise
- *
- * @note The encoded BER is represented as mantissa * 10^-exponent, with a
- *       zero sentinel of mantissa=15 and exponent=255.
- */
-[[nodiscard]] bool IsEffectiveBerThresholdExceeded(uint64_t mantissa, uint64_t exponent);
-
-
 struct LogPaths
 {
     std::filesystem::path logFileName;
@@ -688,21 +508,34 @@ std::expected<std::string, dcgmReturn_t> FindExecutable(std::string_view executa
 bool IsProcessRunning(pid_t pid);
 
 using LivenessCheckFn = std::function<bool(pid_t)>;
+using SignalSenderFn  = std::function<void(pid_t, int)>;
 
 /**
- * @brief Core SIGTERM-then-SIGKILL termination loop parameterized by a liveness-check callback.
+ * @brief Callbacks used by TerminateProcess.
+ */
+struct TerminateProcessCallbacks
+{
+    LivenessCheckFn isAlive; //!< Callback returning true while the process is still alive.
+    SignalSenderFn sendSignal = [](pid_t signalPid, int signalNumber) {
+        ::kill(signalPid, signalNumber);
+    }; //!< Callback used to send a signal to the process. Defaults to kill(2).
+};
+
+/**
+ * @brief Core SIGTERM-then-SIGKILL termination loop parameterized by process callbacks.
  *
  * Sends SIGTERM on the first (maxAttempts - 1) iterations, then escalates to SIGKILL.
  * Yields on the first attempt, then sleeps for retryDelay between subsequent attempts.
  *
- * @param pid           Process ID to terminate
- * @param isAlive       Callback returning true while the process is still alive
- * @param maxAttempts   Total number of signal attempts (SIGTERM + one final SIGKILL)
- * @param retryDelay    Delay between attempts after the first yield
- * @return DCGM_ST_OK if the process was terminated, DCGM_ST_CHILD_NOT_KILLED otherwise
+ * @param[in] pid           Process ID to terminate
+ * @param[in] callbacks     Liveness and signal-delivery callbacks
+ * @param[in] maxAttempts   Total number of signal attempts (SIGTERM + one final SIGKILL)
+ * @param[in] retryDelay    Delay between attempts after the first yield
+ * @return DCGM_ST_OK if the process was terminated, DCGM_ST_BADPARAM if a callback is missing,
+ *         DCGM_ST_CHILD_NOT_KILLED otherwise
  */
 dcgmReturn_t TerminateProcess(pid_t pid,
-                              LivenessCheckFn const &isAlive,
+                              TerminateProcessCallbacks const &callbacks,
                               unsigned int maxAttempts             = 4,
                               std::chrono::milliseconds retryDelay = std::chrono::milliseconds { 500 });
 
@@ -742,7 +575,10 @@ dcgmReturn_t StopProcess(pid_t pid,
         return DCGM_ST_INSTANCE_NOT_FOUND;
     }
     auto delayMs = std::chrono::duration_cast<std::chrono::milliseconds>(sigtermRetryDelay);
-    auto result  = TerminateProcess(pid, [](pid_t p) { return kill(p, 0) == 0; }, maxSigtermAttempts, delayMs);
+    TerminateProcessCallbacks callbacks {
+        .isAlive = [](pid_t p) { return kill(p, 0) == 0; },
+    };
+    auto result = TerminateProcess(pid, callbacks, maxSigtermAttempts, delayMs);
     if (result != DCGM_ST_OK && IsProcessRunning(pid))
     {
         log_error("Giving up attempting to kill process {} after {} retries.", pid, maxSigtermAttempts);

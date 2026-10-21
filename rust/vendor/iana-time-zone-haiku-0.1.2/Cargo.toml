@@ -1,0 +1,19 @@
+[build-dependencies.cc]
+version = "1.0.79"
+
+[dependencies]
+
+[lib]
+path = "src/lib.rs"
+
+[package]
+authors = ["René Kijewski <crates.io@k6i.de>"]
+categories = ["date-and-time", "internationalization", "os"]
+description = "iana-time-zone support crate for Haiku OS"
+edition = "2018"
+keywords = ["IANA", "time"]
+license = "MIT OR Apache-2.0"
+name = "iana-time-zone-haiku"
+readme = "README.md"
+repository = "https://github.com/strawlab/iana-time-zone"
+version = "0.1.2"

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ target_link_libraries(nvvsMockTests
         mock_nvvs
         nvvs_without_main_objects
         rt
-        ${YAML_STATIC_LIBS}
+        yaml-cpp::yaml-cpp
 )
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")

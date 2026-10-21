@@ -16,6 +16,7 @@
 
 #include <DcgmFieldGroup.h>
 #include <DcgmWatcher.h>
+#include <ScopedDcgmFields.hpp>
 #include <dcgm_fields.h>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
@@ -41,21 +42,12 @@ constexpr dcgm_connection_id_t c_unknownConnId = 999;
 /* A handle value that is never returned by AddFieldGroup, used for negative tests */
 const dcgmFieldGrp_t c_bogusHandle = reinterpret_cast<dcgmFieldGrp_t>(static_cast<uintptr_t>(9999));
 
-/* DcgmFieldsInit() is required so AddFieldGroup() can validate field IDs. */
+/* Field metadata is required so AddFieldGroup() can validate field IDs. */
 class DcgmFieldGroupFixture
 {
 public:
+    ScopedDcgmFields fields;
     DcgmFieldGroupManager mgr;
-
-    DcgmFieldGroupFixture()
-    {
-        DcgmFieldsInit();
-    }
-
-    ~DcgmFieldGroupFixture()
-    {
-        DcgmFieldsTerm();
-    }
 
     static DcgmWatcher ClientWatcher(dcgm_connection_id_t connId = c_connId1)
     {

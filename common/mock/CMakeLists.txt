@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,20 +16,13 @@ if (NOT BUILD_TESTING)
     return()
 endif()
 
-add_library(mock_common STATIC)
-target_sources(mock_common PRIVATE
-    MockDcgmLib.cpp
-    MockDcgmLib.h
-    MockFileHandle.cpp
-    MockFileHandle.h
+add_library(mock_common INTERFACE)
+target_sources(mock_common INTERFACE
     MockDynamicLibraryLoader.h
     MockFileSystemOperator.h)
 
-target_include_directories(mock_common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(mock_common PUBLIC
+target_include_directories(mock_common INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(mock_common INTERFACE
     dcgm_common
-    dcgm
     common_interface
     fmt::fmt)
-
-add_subdirectory(tests)

@@ -19,25 +19,33 @@
 #include "dcgm_test_apis.h"
 #include <DcgmMnDiagManager.h>
 #include <DcgmStringHelpers.h>
+#include <DcgmUtilities.h>
+#include <MockDcgmOps.h>
+#include <ScopedEnvVars.hpp>
+#include <TempDir.hpp>
+#include <TempFile.hpp>
 #include <catch2/catch_all.hpp>
 #include <cstdlib>
 #include <dcgm_nvml.h>
 #include <dcgm_structs.h>
-#include <fstream>
+#include <fmt/format.h>
 #include <memory>
 #include <ranges>
+#include <vector>
 
-#include "MockDcgmApi.h"
 #include "MockDcgmCoreProxy.h"
 #include "MockDcgmResourceHandle.h"
 #include "MockMnDiagMpiRunner.h"
 #include "MockMnDiagStateMachine.h"
 #include "MockTcpSSHTunnelManager.h"
 #include "MockUdsSSHTunnelManager.h"
+#include "UniquePtrUtil.h"
 
 // Force a UID of 0, corresponding to the root user. This is so that there will
 // always be a username associated with the UID
-static constexpr uid_t EFFECTIVE_UID = 0;
+static constexpr uid_t MNDIAG_MANAGER_EFFECTIVE_UID = 0;
+
+std::expected<dcgmMultinodeTestType_t, dcgmReturn_t> GetTestTypeFromName(std::string_view testName);
 
 // Mock implementation of processModuleCommandAtHostEngine for tests
 dcgmReturn_t processModuleCommandAtHostEngine(dcgmHandle_t,
@@ -55,6 +63,27 @@ static dcgmReturn_t dummyPostCallback(dcgm_module_command_header_t *, void *)
     return DCGM_ST_OK;
 }
 
+TEST_CASE("DcgmMnDiagManager GetTestTypeFromName")
+{
+    SECTION("Known tests map to stable multinode test types")
+    {
+        auto mnubergemmType = GetTestTypeFromName("mnubergemm");
+        REQUIRE(mnubergemmType.has_value());
+        CHECK(*mnubergemmType == dcgmMultinodeTestType_t::mnubergemm);
+
+        auto mnnvbandwidthType = GetTestTypeFromName("mnnvbandwidth");
+        REQUIRE(mnnvbandwidthType.has_value());
+        CHECK(*mnnvbandwidthType == dcgmMultinodeTestType_t::mnnvbandwidth);
+    }
+
+    SECTION("Unknown tests are rejected")
+    {
+        auto type = GetTestTypeFromName("unknown");
+        REQUIRE_FALSE(type.has_value());
+        CHECK(type.error() == DCGM_ST_BADPARAM);
+    }
+}
+
 /**
  * Fixture class for MnDiagManager tests
  * This provides direct access to the manager for testing
@@ -63,14 +92,16 @@ class MnDiagManagerTests
 {
 protected:
     dcgmCoreCallbacks_t m_callbacks;
+    DcgmNs::MockDcgmOps m_mockDcgmOps;
     DcgmMnDiagManager m_manager;
 
 public:
     MnDiagManagerTests()
         : m_callbacks(GetCallbacks())
-        , m_manager(m_callbacks)
+        , m_manager(m_callbacks, &m_mockDcgmOps)
     {
-        // Setup is done in the constructor
+        m_mockDcgmOps.UseGeneratedConnectHandles();
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
     }
 
     // Expose private methods for testing
@@ -172,6 +203,11 @@ public:
         return m_manager.GetNodeInfo(testType);
     }
 
+    nodeInfoMap_t const &GetNodeInfoMap() const
+    {
+        return m_manager.m_nodeInfo;
+    }
+
     dcgmReturn_t AuthorizeRemoteConnections(dcgmMultinodeTestType_t testType = dcgmMultinodeTestType_t::mnubergemm)
     {
         return m_manager.AuthorizeRemoteConnections(testType);
@@ -198,7 +234,7 @@ public:
     }
 
     void PopulateMpiFailureResponseStruct(MnDiagMpiRunnerBase *mpiRunner,
-                                          dcgmMnDiagResponse_v1 &response,
+                                          dcgmMnDiagResponse_v2 &response,
                                           std::optional<pid_t> mpiPID,
                                           DcgmNs::Utils::LogPaths const &logPaths)
     {
@@ -255,16 +291,6 @@ public:
     void SetCoreProxy(std::unique_ptr<DcgmCoreProxyBase> coreProxy)
     {
         m_manager.m_coreProxy = std::move(coreProxy);
-    }
-
-    /**
-     * @brief Set a new DCGM API instance for testing
-     *
-     * @param dcgmApi The API implementation to use
-     */
-    void SetDcgmApi(std::unique_ptr<DcgmApiBase> dcgmApi)
-    {
-        m_manager.m_dcgmApi = std::move(dcgmApi);
     }
 
     /**
@@ -342,14 +368,35 @@ public:
         return static_cast<MockMnDiagStateMachine *>(m_manager.m_stateMachine.get());
     }
 
-    /**
-     * @brief Get the DCGM API instance
-     *
-     * @return MockDcgmApi* The API instance
-     */
-    MockDcgmApi *GetDcgmApi()
+    void ResetMockOps()
     {
-        return static_cast<MockDcgmApi *>(m_manager.m_dcgmApi.get());
+        m_mockDcgmOps.ResetApiState();
+        m_mockDcgmOps.UseGeneratedConnectHandles();
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+    }
+
+    void SetResourceResponse(dcgmMultinodeRequestType_t requestType, MnDiagStatus response)
+    {
+        m_mockDcgmOps.SetMultinodeRequestHandler(
+            requestType, [this, response](dcgmHandle_t /* handle */, dcgmMultinodeRequest_t *request) {
+                request->requestData.resource.response = response;
+                return m_mockDcgmOps.GetMultinodeRequestResult();
+            });
+    }
+
+    void SetReserveResourcesResponse(MnDiagStatus response)
+    {
+        SetResourceResponse(dcgmMultinodeRequestType_t::ReserveResources, response);
+    }
+
+    void SetReleaseResourcesResponse(MnDiagStatus response)
+    {
+        SetResourceResponse(dcgmMultinodeRequestType_t::ReleaseResources, response);
+    }
+
+    void SetDetectProcessResponse(MnDiagStatus response)
+    {
+        SetResourceResponse(dcgmMultinodeRequestType_t::DetectProcess, response);
     }
 
     /**
@@ -390,7 +437,7 @@ public:
             connInfo.handle           = handle;
             connInfo.remotePort       = 5555 + i;
             connInfo.isLoopback       = false;
-            connInfo.uid              = EFFECTIVE_UID;
+            connInfo.uid              = MNDIAG_MANAGER_EFFECTIVE_UID;
             connInfo.remoteSocketPath = "";
 
             m_manager.m_connections[hostname] = std::move(connInfo);
@@ -406,7 +453,7 @@ public:
         connInfo.handle           = 0;
         connInfo.remotePort       = 0;
         connInfo.isLoopback       = true;
-        connInfo.uid              = EFFECTIVE_UID;
+        connInfo.uid              = MNDIAG_MANAGER_EFFECTIVE_UID;
         connInfo.remoteSocketPath = "";
 
         m_manager.m_connections["localhost"] = std::move(connInfo);
@@ -479,22 +526,9 @@ private:
 class MockProcDirectory
 {
 public:
-    MockProcDirectory(std::filesystem::path path)
-        : m_path(MakeUniquePath(std::move(path)))
-    {
-        CleanupMockProcDirectory();
-
-        std::error_code ec;
-        if (!std::filesystem::create_directories(m_path, ec) && ec)
-        {
-            FAIL("Failed to create mock proc directory: " << m_path << " - Error: " << ec.message());
-        }
-    }
-
-    ~MockProcDirectory()
-    {
-        CleanupMockProcDirectory();
-    }
+    explicit MockProcDirectory(std::string prefix)
+        : m_dir(TempDir::Random(std::move(prefix).append("-")))
+    {}
 
     MockProcDirectory(MockProcDirectory const &)            = delete;
     MockProcDirectory &operator=(MockProcDirectory const &) = delete;
@@ -503,7 +537,7 @@ public:
 
     std::filesystem::path const &GetPath() const
     {
-        return m_path;
+        return m_dir.Path();
     }
 
     void CreateTestDirectory(std::filesystem::path const &path) const
@@ -519,68 +553,18 @@ public:
     {
         for (auto const &[pid, comm, state, ppid] : processes)
         {
-            auto pidDir = m_path / std::to_string(pid);
+            auto pidDir = m_dir.Path() / std::to_string(pid);
             CreateTestDirectory(pidDir);
 
             auto statFile = pidDir / "stat";
-            std::ofstream out(statFile);
-            if (!out)
-            {
-                FAIL("Failed to create mock stat file: " << statFile);
-            }
-
-            out << pid << " " << comm << " " << state << " " << ppid << " 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n";
-            out.close();
+            m_statFiles.emplace_back(TempFile::MakeUniqueFixed(
+                statFile, fmt::format("{} {} {} {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n", pid, comm, state, ppid)));
         }
     }
 
 private:
-    static std::filesystem::path MakeUniquePath(std::filesystem::path basePath)
-    {
-        auto now       = std::chrono::system_clock::now();
-        auto timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-        auto pid       = getpid();
-
-        std::string uniqueSuffix = fmt::format("_{}_{}", timestamp, pid);
-        return basePath.string() + uniqueSuffix;
-    }
-
-    void CleanupMockProcDirectory()
-    {
-        std::error_code ec;
-        if (std::filesystem::exists(m_path, ec) && !ec)
-        {
-            std::filesystem::remove_all(m_path, ec);
-            if (ec)
-            {
-                // Log but don't fail - cleanup is best-effort
-                WARN("Failed to cleanup mock proc directory: " << m_path << " - Error: " << ec.message());
-            }
-        }
-    }
-
-    std::filesystem::path m_path;
-};
-
-// Helper to save and restore environment variable
-auto saveEnvVar = [](char const *name) -> std::optional<std::string> {
-    char const *val = std::getenv(name);
-    if (val)
-    {
-        return std::string(val);
-    }
-    return std::nullopt;
-};
-
-auto restoreEnvVar = [](char const *name, const std::optional<std::string> &val) {
-    if (val)
-    {
-        setenv(name, val->c_str(), 1);
-    }
-    else
-    {
-        unsetenv(name);
-    }
+    TempDir m_dir;
+    std::vector<std::unique_ptr<TempFile>> m_statFiles;
 };
 
 /**
@@ -1464,10 +1448,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Mn Diag Handler Tests [mndiag]")
  */
 TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with empty remote connections [mndiag]")
 {
-    // Create and inject mock API
-    auto dcgmApi = std::make_unique<MockDcgmApi>();
-    SetDcgmApi(std::move(dcgmApi));
-
     /**
      * Tests for ReserveRemoteResources method
      * This method reserves resources on all connected remote nodes
@@ -1582,10 +1562,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with emp
  */
 TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non-empty remote connections [mndiag]")
 {
-    // Create and inject mock API
-    auto dcgmApi = std::make_unique<MockDcgmApi>();
-    SetDcgmApi(std::move(dcgmApi));
-
     /**
      * Tests for ReserveRemoteResources method with remote connections
      * This tests that requests are sent to all remote nodes
@@ -1609,9 +1585,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             // Setup mock connections
             SetupMockConnections(3);
 
-            // Configure the mock API to return success for all requests
-            GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
-            GetDcgmApi()->SetReserveResourcesResponse(MnDiagStatus::RESERVED);
+            // Configure the mock operations to return success for all requests
+            m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+            SetReserveResourcesResponse(MnDiagStatus::RESERVED);
 
             // Call the method under test
             dcgmReturn_t result = ReserveRemoteResources();
@@ -1622,7 +1598,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             REQUIRE(GetStateMachine()->GetStats().notifyToReserveCalled == true);
 
             // Verify the API was called for each remote connection (3 connections)
-            REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 3);
+            REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 3);
         }
 
         SECTION("Should fail when any remote node fails to reserve")
@@ -1643,16 +1619,16 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             SetupMockConnections(3);
 
             // Configure the second request to fail by setting up handle-specific callbacks
-            GetDcgmApi()->SetHandleCommandCallback(11,
-                                                   dcgmMultinodeRequestType_t::ReserveResources,
-                                                   [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_t *request) {
-                                                       request->requestData.resource.response = MnDiagStatus::FAILED;
-                                                       return DCGM_ST_IN_USE;
-                                                   });
+            m_mockDcgmOps.SetMultinodeRequestHandler(11,
+                                                     dcgmMultinodeRequestType_t::ReserveResources,
+                                                     [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_t *request) {
+                                                         request->requestData.resource.response = MnDiagStatus::FAILED;
+                                                         return DCGM_ST_IN_USE;
+                                                     });
 
             // All other requests succeed
-            GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
-            GetDcgmApi()->SetReserveResourcesResponse(MnDiagStatus::RESERVED);
+            m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+            SetReserveResourcesResponse(MnDiagStatus::RESERVED);
 
             // Call the method under test
             dcgmReturn_t result = ReserveRemoteResources();
@@ -1662,7 +1638,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
 
             // The API should have been called for only the failing connection before exiting
             // The implementation should stop processing after the first failure
-            REQUIRE(GetDcgmApi()->GetSendRequestCallCount() > 0);
+            REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() > 0);
         }
     }
 
@@ -1689,9 +1665,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             // Setup mock connections
             SetupMockConnections(3);
 
-            // Configure the mock API to return success for all requests
-            GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
-            GetDcgmApi()->SetReleaseResourcesResponse(MnDiagStatus::READY);
+            // Configure the mock operations to return success for all requests
+            m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+            SetReleaseResourcesResponse(MnDiagStatus::READY);
 
             // Call the method under test
             dcgmReturn_t result = ReleaseRemoteResources();
@@ -1702,7 +1678,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             REQUIRE(GetStateMachine()->GetStats().notifyDiagnosticFinishedCalled == true);
 
             // Verify the API was called for each remote connection (3 connections)
-            REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 3);
+            REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 3);
         }
 
         SECTION("Should fail when any remote node fails to release")
@@ -1723,7 +1699,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             SetupMockConnections(3);
 
             // Configure one request to fail
-            GetDcgmApi()->SetHandleCommandCallback(
+            m_mockDcgmOps.SetMultinodeRequestHandler(
                 11,
                 dcgmMultinodeRequestType_t::ReleaseResources,
                 [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_t * /* request */) {
@@ -1731,17 +1707,20 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
                 });
 
             // All other requests succeed
-            GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
-            GetDcgmApi()->SetReleaseResourcesResponse(MnDiagStatus::READY);
+            m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+            SetReleaseResourcesResponse(MnDiagStatus::READY);
+            SetStatus(MnDiagStatus::RUNNING);
 
             // Call the method under test
             dcgmReturn_t result = ReleaseRemoteResources();
 
             // Verify results
-            REQUIRE(result == DCGM_ST_CONNECTION_NOT_VALID);
+            CHECK(result == DCGM_ST_CONNECTION_NOT_VALID);
+            CHECK(GetStatus() == MnDiagStatus::READY);
+            CHECK(GetStateMachine()->GetStats().notifyDiagnosticFinishedCalled);
 
             // All connections should have been attempted
-            REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 3);
+            REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 3);
         }
     }
 
@@ -1755,8 +1734,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             // Setup mock connections
             SetupMockConnections(3);
 
-            // Configure the mock API to return success for all requests
-            GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
+            // Configure the mock operations to return success for all requests
+            m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
             // Call the method under test
             dcgmReturn_t result = GetNodeInfo();
@@ -1765,7 +1744,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             REQUIRE(result == DCGM_ST_OK);
 
             // Verify the API was called for each remote connection (3 connections)
-            REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 3);
+            REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 3);
         }
 
         SECTION("Should fail when any remote node fails to get node info")
@@ -1774,7 +1753,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             SetupMockConnections(3);
 
             // Configure one request to fail
-            GetDcgmApi()->SetHandleCommandCallback(
+            m_mockDcgmOps.SetMultinodeRequestHandler(
                 11,
                 dcgmMultinodeRequestType_t::GetNodeInfo,
                 [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_t * /* request */) {
@@ -1782,7 +1761,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
                 });
 
             // All other requests succeed
-            GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
+            m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
             // Call the method under test
             dcgmReturn_t result = GetNodeInfo();
@@ -1791,8 +1770,122 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             REQUIRE(result == DCGM_ST_DIAG_BAD_JSON);
 
             // All connections should have been attempted
-            REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 3);
+            REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 3);
         }
+    }
+
+    SECTION("GetNodeInfo includes active GPU inventory")
+    {
+        InitMockCuda();
+        dcgmcm_gpu_info_cached_t gpuInfo {};
+        gpuInfo.gpuId = 7;
+        SafeCopyTo(gpuInfo.uuid, "GPU-uuid-7");
+        GetDcgmCoreProxy()->SetMockGpuIds({ 7 });
+        GetDcgmCoreProxy()->SetMockGpuInfo({ gpuInfo });
+
+        dcgm_mndiag_msg_node_info_t message {};
+        message.header.version = dcgm_mndiag_msg_node_info_version2;
+
+        REQUIRE(HandleGetNodeInfo(&message.header) == DCGM_ST_OK);
+        REQUIRE(message.nodeInfo.numGpus == 1);
+        CHECK(message.nodeInfo.gpus[0].gpuId == 7);
+        CHECK(std::string(message.nodeInfo.gpus[0].uuid) == "GPU-uuid-7");
+
+        message.header.version = dcgm_mndiag_msg_node_info_version1;
+        CHECK(HandleGetNodeInfo(&message.header) == DCGM_ST_VER_MISMATCH);
+
+        dcgm_mndiag_msg_node_info_t incompleteMessage {};
+        incompleteMessage.header.version = dcgm_mndiag_msg_node_info_version2;
+        GetDcgmCoreProxy()->SetMockGpuIds({ 8 });
+        GetDcgmCoreProxy()->SetMockGpuInfo({});
+        CHECK(HandleGetNodeInfo(&incompleteMessage.header) == DCGM_ST_NO_DATA);
+        CHECK(incompleteMessage.nodeInfo.numGpus == 0);
+    }
+
+    SECTION("HandleGetNodeInfo propagates active GPU ID collection failures")
+    {
+        InitMockCuda();
+        GetDcgmCoreProxy()->SetMockGpuIdsResult(DCGM_ST_GENERIC_ERROR);
+        dcgm_mndiag_msg_node_info_t message {};
+        message.header.version = dcgm_mndiag_msg_node_info_version2;
+
+        CHECK(HandleGetNodeInfo(&message.header) == DCGM_ST_GENERIC_ERROR);
+        CHECK(message.nodeInfo.numGpus == 0);
+    }
+
+    SECTION("HandleGetNodeInfo propagates GPU metadata collection failures")
+    {
+        InitMockCuda();
+        GetDcgmCoreProxy()->SetMockGpuIds({ 0 });
+        GetDcgmCoreProxy()->SetMockGpuInfoResult(DCGM_ST_GENERIC_ERROR);
+        dcgm_mndiag_msg_node_info_t message {};
+        message.header.version = dcgm_mndiag_msg_node_info_version2;
+
+        CHECK(HandleGetNodeInfo(&message.header) == DCGM_ST_GENERIC_ERROR);
+        CHECK(message.nodeInfo.numGpus == 0);
+    }
+
+    SECTION("HandleGetNodeInfo rejects inventory exceeding message capacity")
+    {
+        InitMockCuda();
+        dcgm_mndiag_msg_node_info_t message {};
+        message.header.version = dcgm_mndiag_msg_node_info_version2;
+        std::vector<unsigned int> gpuIds;
+        for (size_t gpuIndex = 0; gpuIndex <= std::size(message.nodeInfo.gpus); ++gpuIndex)
+        {
+            gpuIds.push_back(static_cast<unsigned int>(gpuIndex));
+        }
+        GetDcgmCoreProxy()->SetMockGpuIds(gpuIds);
+
+        CHECK(HandleGetNodeInfo(&message.header) == DCGM_ST_INSUFFICIENT_SIZE);
+        CHECK(message.nodeInfo.numGpus == 0);
+    }
+
+    SECTION("GetNodeInfo propagates local and remote GPU inventory")
+    {
+        InitMockCuda();
+        dcgmcm_gpu_info_cached_t localGpu {};
+        localGpu.gpuId = 7;
+        SafeCopyTo(localGpu.uuid, "GPU-local-7");
+        GetDcgmCoreProxy()->SetMockGpuIds({ 7 });
+        GetDcgmCoreProxy()->SetMockGpuInfo({ localGpu });
+        SetupLoopbackConnection();
+        SetupMockConnections(1);
+        m_mockDcgmOps.SetMultinodeRequestHandler(dcgmMultinodeRequestType_t::GetNodeInfo,
+                                                 [](dcgmHandle_t, dcgmMultinodeRequest_t *request) {
+                                                     auto &nodeInfo = request->requestData.nodeInfo;
+                                                     SafeCopyTo(nodeInfo.dcgmVersion, "test-dcgm");
+                                                     SafeCopyTo(nodeInfo.driverVersion, "test-driver");
+                                                     nodeInfo.numGpus       = 1;
+                                                     nodeInfo.gpus[0].gpuId = 8;
+                                                     SafeCopyTo(nodeInfo.gpus[0].uuid, "GPU-remote-8");
+                                                     return DCGM_ST_OK;
+                                                 });
+
+        REQUIRE(GetNodeInfo() == DCGM_ST_OK);
+        auto const &nodeInfo = GetNodeInfoMap();
+        REQUIRE(nodeInfo.at("localhost").gpus.size() == 1);
+        CHECK(nodeInfo.at("localhost").gpus[0].gpuId == 7);
+        CHECK(nodeInfo.at("localhost").gpus[0].uuid == "GPU-local-7");
+        CHECK_FALSE(nodeInfo.at("localhost").mpiNodeName.empty());
+        REQUIRE(nodeInfo.at("test-node-0").gpus.size() == 1);
+        CHECK(nodeInfo.at("test-node-0").gpus[0].gpuId == 8);
+        CHECK(nodeInfo.at("test-node-0").gpus[0].uuid == "GPU-remote-8");
+        CHECK(nodeInfo.at("test-node-0").mpiNodeName == "test-node-0");
+    }
+
+    SECTION("GetNodeInfo rejects an oversized remote GPU inventory")
+    {
+        InitMockCuda();
+        SetupMockConnections(1);
+        m_mockDcgmOps.SetMultinodeRequestHandler(
+            dcgmMultinodeRequestType_t::GetNodeInfo, [](dcgmHandle_t, dcgmMultinodeRequest_t *request) {
+                request->requestData.nodeInfo.numGpus = std::size(request->requestData.nodeInfo.gpus) + 1;
+                return DCGM_ST_OK;
+            });
+
+        CHECK(GetNodeInfo() == DCGM_ST_BADPARAM);
+        CHECK_FALSE(GetNodeInfoMap().contains("test-node-0"));
     }
 }
 
@@ -1804,53 +1897,60 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
     SECTION("ConnectRemoteNodes handles TCP connections correctly")
     {
         // Set up mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
 
         // Set default behavior for tunnel manager
         mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
         mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Set default behavior for DCGM API (only connection, no authorization)
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
+        // Set default behavior for DCGM operations (only connection, no authorization)
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
 
         // Test with a list of hosts using TCP connections
         std::vector<std::string> hostList = { "node1:5555", "node2:6666" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, MNDIAG_MANAGER_EFFECTIVE_UID);
 
         // Verify result
         REQUIRE(result == DCGM_ST_OK);
 
-        // Verify TCP tunnel manager was called with correct parameters
+        // Verify TCP tunnel manager was called with correct parameters (order is non-deterministic)
         auto const &calls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
         REQUIRE(calls.size() == 2);
 
-        // Since connections are now synchronous, we can verify the order
-        REQUIRE(std::get<0>(calls[0]) == "node1");
-        REQUIRE(std::get<1>(calls[0]) == 5555);
-        REQUIRE(std::get<2>(calls[0]).value() == EFFECTIVE_UID);
+        bool foundNode1 = false;
+        bool foundNode2 = false;
+        for (auto const &call : calls)
+        {
+            if (std::get<0>(call) == "node1" && std::get<1>(call) == 5555)
+            {
+                REQUIRE(std::get<2>(call).value() == MNDIAG_MANAGER_EFFECTIVE_UID);
+                foundNode1 = true;
+            }
+            else if (std::get<0>(call) == "node2" && std::get<1>(call) == 6666)
+            {
+                REQUIRE(std::get<2>(call).value() == MNDIAG_MANAGER_EFFECTIVE_UID);
+                foundNode2 = true;
+            }
+        }
+        REQUIRE(foundNode1);
+        REQUIRE(foundNode2);
 
-        REQUIRE(std::get<0>(calls[1]) == "node2");
-        REQUIRE(std::get<1>(calls[1]) == 6666);
-        REQUIRE(std::get<2>(calls[1]).value() == EFFECTIVE_UID);
-
-        // Verify DCGM API was called correctly for connections only
-        REQUIRE(GetDcgmApi()->GetConnectCallCount() == 2);
+        // Verify DCGM operations was called correctly for connections only
+        REQUIRE(m_mockDcgmOps.GetConnectV3CallCount() == 2);
 
         // Verify NO authorization calls were made (authorization is separate now)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 0);
 
         // Verify that the connection was made using the local port returned by the tunnel manager
-        // Examine connections by handle in the DCGM API
+        // Examine connections by handle in the DCGM operations
         // For TCP connections, the address should include the local port returned by the SSH tunnel manager (12345)
         for (dcgmHandle_t handle = 1; handle <= 2; handle++)
         {
-            REQUIRE(GetDcgmApi()->HasConnection(handle));
-            auto connInfoOpt = GetDcgmApi()->GetConnectionInfo(handle);
+            REQUIRE(m_mockDcgmOps.HasConnection(handle));
+            auto connInfoOpt = m_mockDcgmOps.GetConnectionInfo(handle);
             REQUIRE(connInfoOpt.has_value());
             auto const &connInfo = connInfoOpt.value();
             REQUIRE(connInfo.connectionString == "tcp://127.0.0.1:12345"); // Port is included in the address
@@ -1860,53 +1960,60 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
     SECTION("ConnectRemoteNodes handles UDS connections correctly")
     {
         // Set up mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockUdsSSHTunnelManager = std::make_unique<MockUdsSSHTunnelManager>();
 
         // Set default behavior for tunnel manager
         mockUdsSSHTunnelManager->SetDefaultRemoteSocketPath("/tmp/local_socket");
         mockUdsSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Set default behavior for DCGM API (only connection, no authorization)
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
+        // Set default behavior for DCGM operations (only connection, no authorization)
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetUdsSSHTunnelManager(std::move(mockUdsSSHTunnelManager));
 
         // Test with a list of hosts using UDS connections
         std::vector<std::string> hostList = { "node1:unix:///var/run/dcgm.socket", "node2:unix:///tmp/dcgm.socket" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, MNDIAG_MANAGER_EFFECTIVE_UID);
 
         // Verify result
         REQUIRE(result == DCGM_ST_OK);
 
-        // Verify UDS tunnel manager was called with correct parameters
+        // Verify UDS tunnel manager was called with correct parameters (order is non-deterministic)
         auto calls = GetUdsSSHTunnelManager()->GetStartSessionCalls();
         REQUIRE(calls.size() == 2);
 
-        // Since connections are now synchronous, we can verify the order
-        REQUIRE(std::get<0>(calls[0]) == "node1");
-        REQUIRE(std::get<1>(calls[0]) == "/var/run/dcgm.socket");
-        REQUIRE(std::get<2>(calls[0]).value() == EFFECTIVE_UID);
+        bool foundNode1 = false;
+        bool foundNode2 = false;
+        for (auto const &call : calls)
+        {
+            if (std::get<0>(call) == "node1" && std::get<1>(call) == "/var/run/dcgm.socket")
+            {
+                REQUIRE(std::get<2>(call).value() == MNDIAG_MANAGER_EFFECTIVE_UID);
+                foundNode1 = true;
+            }
+            else if (std::get<0>(call) == "node2" && std::get<1>(call) == "/tmp/dcgm.socket")
+            {
+                REQUIRE(std::get<2>(call).value() == MNDIAG_MANAGER_EFFECTIVE_UID);
+                foundNode2 = true;
+            }
+        }
+        REQUIRE(foundNode1);
+        REQUIRE(foundNode2);
 
-        REQUIRE(std::get<0>(calls[1]) == "node2");
-        REQUIRE(std::get<1>(calls[1]) == "/tmp/dcgm.socket");
-        REQUIRE(std::get<2>(calls[1]).value() == EFFECTIVE_UID);
-
-        // Verify DCGM API was called correctly for connections only
-        REQUIRE(GetDcgmApi()->GetConnectCallCount() == 2);
+        // Verify DCGM operations was called correctly for connections only
+        REQUIRE(m_mockDcgmOps.GetConnectV3CallCount() == 2);
 
         // Verify NO authorization calls were made (authorization is separate now)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 0);
 
         // Verify that the connection was made using the local socket path returned by the tunnel manager
-        // Examine connections by handle in the DCGM API
+        // Examine connections by handle in the DCGM operations
         // The socket path should match the one returned by the UDS SSH tunnel manager ("/tmp/local_socket")
         for (dcgmHandle_t handle = 1; handle <= 2; handle++)
         {
-            REQUIRE(GetDcgmApi()->HasConnection(handle));
-            auto connInfoOpt = GetDcgmApi()->GetConnectionInfo(handle);
+            REQUIRE(m_mockDcgmOps.HasConnection(handle));
+            auto connInfoOpt = m_mockDcgmOps.GetConnectionInfo(handle);
             REQUIRE(connInfoOpt.has_value());
             auto const &connInfo = connInfoOpt.value();
             REQUIRE(connInfo.connectionString == "unix:///tmp/local_socket");
@@ -1916,7 +2023,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
     SECTION("ConnectRemoteNodes handles mixed connections (TCP and UDS) correctly")
     {
         // Set up mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockUdsSSHTunnelManager = std::make_unique<MockUdsSSHTunnelManager>();
 
@@ -1926,17 +2032,16 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         mockUdsSSHTunnelManager->SetDefaultRemoteSocketPath("/tmp/local_socket");
         mockUdsSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Set default behavior for DCGM API (only connection, no authorization)
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
+        // Set default behavior for DCGM operations (only connection, no authorization)
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetUdsSSHTunnelManager(std::move(mockUdsSSHTunnelManager));
 
         // Test with a list of hosts using both TCP and UDS connections
         std::vector<std::string> hostList = { "node1:5555", "node2:unix:///tmp/dcgm.socket" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, MNDIAG_MANAGER_EFFECTIVE_UID);
 
         // Verify result
         REQUIRE(result == DCGM_ST_OK);
@@ -1949,7 +2054,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         bool foundTcpNode = false;
         for (const auto &call : tcpCalls)
         {
-            if (std::get<0>(call) == "node1" && std::get<1>(call) == 5555 && std::get<2>(call).value() == EFFECTIVE_UID)
+            if (std::get<0>(call) == "node1" && std::get<1>(call) == 5555
+                && std::get<2>(call).value() == MNDIAG_MANAGER_EFFECTIVE_UID)
             {
                 foundTcpNode = true;
                 break;
@@ -1966,7 +2072,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         for (const auto &call : udsCalls)
         {
             if (std::get<0>(call) == "node2" && std::get<1>(call) == "/tmp/dcgm.socket"
-                && std::get<2>(call).value() == EFFECTIVE_UID)
+                && std::get<2>(call).value() == MNDIAG_MANAGER_EFFECTIVE_UID)
             {
                 foundUdsNode = true;
                 break;
@@ -1974,20 +2080,20 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         }
         REQUIRE(foundUdsNode);
 
-        // Verify DCGM API was called correctly for connections only
-        REQUIRE(GetDcgmApi()->GetConnectCallCount() == 2);
+        // Verify DCGM operations was called correctly for connections only
+        REQUIRE(m_mockDcgmOps.GetConnectV3CallCount() == 2);
 
         // Verify NO authorization calls were made (authorization is separate now)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 0);
 
         // Verify that the connections were made using the correct local ports/paths returned by the tunnel managers
         // We need to examine each connection handle
 
         // Since we can't guarantee the order of handles, check both and make sure one is TCP and one is UDS
-        REQUIRE(GetDcgmApi()->HasConnection(1));
-        REQUIRE(GetDcgmApi()->HasConnection(2));
-        auto connInfoOpt1 = GetDcgmApi()->GetConnectionInfo(1);
-        auto connInfoOpt2 = GetDcgmApi()->GetConnectionInfo(2);
+        REQUIRE(m_mockDcgmOps.HasConnection(1));
+        REQUIRE(m_mockDcgmOps.HasConnection(2));
+        auto connInfoOpt1 = m_mockDcgmOps.GetConnectionInfo(1);
+        auto connInfoOpt2 = m_mockDcgmOps.GetConnectionInfo(2);
         REQUIRE(connInfoOpt1.has_value());
         REQUIRE(connInfoOpt2.has_value());
         auto const &connInfo1 = connInfoOpt1.value();
@@ -2029,19 +2135,17 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
     SECTION("ConnectRemoteNodes handles tunnel creation failure")
     {
         // Set up mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
 
         // Set behavior for tunnel manager to simulate failure
         mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::GenericFailure);
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
 
         // Test with a host that will fail to create a tunnel
         std::vector<std::string> hostList = { "node1:5555" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, MNDIAG_MANAGER_EFFECTIVE_UID);
 
         // Verify result indicates failure
         REQUIRE(result == DCGM_ST_REMOTE_SSH_CONNECTION_FAILED);
@@ -2050,30 +2154,28 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         auto const &startCalls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
         REQUIRE(startCalls.size() == 1);
 
-        // Verify DCGM API was not called after tunnel failure
-        REQUIRE(GetDcgmApi()->GetConnectCallCount() == 0);
+        // Verify DCGM operations was not called after tunnel failure
+        REQUIRE(m_mockDcgmOps.GetConnectV3CallCount() == 0);
     }
 
     SECTION("ConnectRemoteNodes handles DCGM connection failure")
     {
         // Set up mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
 
         // Set default behavior for tunnel manager
         mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
         mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Set behavior for DCGM API to simulate connection failure
-        mockDcgmApi->SetConnectResult(DCGM_ST_CONNECTION_NOT_VALID);
+        // Set behavior for DCGM operations to simulate connection failure
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_CONNECTION_NOT_VALID);
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
 
         // Test with a host that will fail to connect to DCGM
         std::vector<std::string> hostList = { "node1:5555" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, MNDIAG_MANAGER_EFFECTIVE_UID);
 
         // Verify result indicates connection failure
         REQUIRE(result == DCGM_ST_CONNECTION_NOT_VALID);
@@ -2082,8 +2184,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         auto const &startCalls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
         REQUIRE(startCalls.size() == 1);
 
-        // Verify DCGM API Connect was called but failed
-        REQUIRE(GetDcgmApi()->GetConnectCallCount() == 1);
+        // Verify DCGM operations Connect was called but failed
+        REQUIRE(m_mockDcgmOps.GetConnectV3CallCount() == 1);
 
         // Verify EndSession was called to clean up the tunnel
         auto const &endCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
@@ -2098,15 +2200,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AuthorizeRemoteConnections Tests [mndiag]"
 {
     SECTION("AuthorizeRemoteConnections handles successful authorization")
     {
-        // Set up mock objects
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-
-        // Set behavior for DCGM API - authorization succeeds
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-
-        // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
-
+        // Set behavior for DCGM operations - authorization succeeds
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
         // Setup mock connections first
         SetupMockConnections(2);
 
@@ -2117,21 +2212,13 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AuthorizeRemoteConnections Tests [mndiag]"
         REQUIRE(result == DCGM_ST_OK);
 
         // Verify authorization was called for each remote connection (2 connections)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 2);
     }
 
     SECTION("AuthorizeRemoteConnections handles authorization failure")
     {
-        // Set up mock objects
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-
-        // Set behavior for DCGM API - ALL remote authorizations fail
-        // This ensures fail-fast behavior regardless of iteration order
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
-
-        // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
-
+        // Set behavior for DCGM operations - ALL remote authorizations fail
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
         // Setup mock connections first
         SetupMockConnections(2);
 
@@ -2141,9 +2228,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AuthorizeRemoteConnections Tests [mndiag]"
         // Verify result indicates authorization failure
         REQUIRE(result == DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
 
-        // Verify only one authorization call was made before failure (fail-fast behavior)
-        // (whichever connection gets processed first will fail and stop the iteration)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 1);
+        // All connections in the batch are processed in parallel before failure is checked
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 2);
     }
 }
 
@@ -2154,15 +2240,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RevokeRemoteAuthorizations Tests [mndiag]"
 {
     SECTION("RevokeRemoteAuthorizations handles successful revocation")
     {
-        // Set up mock objects
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-
-        // Set behavior for DCGM API - revocation succeeds
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-
-        // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
-
+        // Set behavior for DCGM operations - revocation succeeds
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
         // Setup mock connections first
         SetupMockConnections(2);
 
@@ -2171,8 +2250,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RevokeRemoteAuthorizations Tests [mndiag]"
         REQUIRE(authResult == DCGM_ST_OK);
 
         // Reset call counter for the revocation test
-        GetDcgmApi()->Reset();
-        GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
+        ResetMockOps();
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
         // Test revocation
         dcgmReturn_t result = RevokeRemoteAuthorizations();
@@ -2181,31 +2260,23 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RevokeRemoteAuthorizations Tests [mndiag]"
         REQUIRE(result == DCGM_ST_OK);
 
         // Verify revocation was called for each remote connection (2 connections)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 2);
     }
 
     SECTION("RevokeRemoteAuthorizations handles revocation failure")
     {
-        // Set up mock objects
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-
         // First set up for successful authorization
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-
-        // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
-
-        // Setup 2 mock connections to test fail-fast behavior with non-deterministic iteration
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+        // Setup 2 mock connections
         SetupMockConnections(2);
 
         // Authorize connections first to simulate an authorized state
         dcgmReturn_t authResult = AuthorizeRemoteConnections();
         REQUIRE(authResult == DCGM_ST_OK);
 
-        // Reset and set behavior for DCGM API - ALL remote revocations fail
-        // This ensures fail-fast behavior regardless of iteration order
-        GetDcgmApi()->Reset();
-        GetDcgmApi()->SetSendRequestResult(DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
+        // Reset and set behavior for DCGM operations - ALL remote revocations fail
+        ResetMockOps();
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
 
         // Test revocation
         dcgmReturn_t result = RevokeRemoteAuthorizations();
@@ -2213,9 +2284,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RevokeRemoteAuthorizations Tests [mndiag]"
         // Verify result indicates revocation failure
         REQUIRE(result == DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
 
-        // Should see exactly 1 call due to fail-fast behavior
-        // (whichever connection gets processed first will fail and stop the iteration)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 1);
+        // All connections in the batch are processed in parallel before failure is checked
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 2);
     }
 }
 
@@ -2227,17 +2297,15 @@ TEST_CASE_METHOD(MnDiagManagerTests, "CleanupConnections Tests [mndiag]")
     SECTION("CleanupConnections properly cleans up all connections")
     {
         // Set up mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockUdsSSHTunnelManager = std::make_unique<MockUdsSSHTunnelManager>();
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetUdsSSHTunnelManager(std::move(mockUdsSSHTunnelManager));
 
         // First set up some connections via ConnectRemoteNodes
-        GetDcgmApi()->SetConnectResult(DCGM_ST_OK);
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
         GetTcpSSHTunnelManager()->SetDefaultRemotePort(12345);
         GetTcpSSHTunnelManager()->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
         GetUdsSSHTunnelManager()->SetDefaultRemoteSocketPath("/tmp/local_socket");
@@ -2245,11 +2313,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "CleanupConnections Tests [mndiag]")
 
         // Connect to a mix of TCP and UDS nodes
         std::vector<std::string> hostList = { "node1:5555", "node2:unix:///tmp/dcgm.socket" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, MNDIAG_MANAGER_EFFECTIVE_UID);
         REQUIRE(result == DCGM_ST_OK);
 
         // Reset counters for cleanup phase
-        GetDcgmApi()->Reset();
+        ResetMockOps();
         GetTcpSSHTunnelManager()->Reset();
         GetUdsSSHTunnelManager()->Reset();
 
@@ -2259,8 +2327,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "CleanupConnections Tests [mndiag]")
         // Verify result
         REQUIRE(result == DCGM_ST_OK);
 
-        // Verify DCGM API was called to disconnect each connection (2 connections)
-        REQUIRE(GetDcgmApi()->GetDisconnectCallCount() == 2);
+        // Verify DCGM operations was called to disconnect each connection (2 connections)
+        REQUIRE(m_mockDcgmOps.GetDisconnectCallCount() == 2);
 
         // Verify tunnel managers were called to end sessions
         auto tcpEndCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
@@ -2285,18 +2353,16 @@ TEST_CASE_METHOD(MnDiagManagerTests, "DisconnectRemoteNodes Tests [mndiag]")
     SECTION("DisconnectRemoteNodes properly disconnects all nodes")
     {
         // Set up mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockUdsSSHTunnelManager = std::make_unique<MockUdsSSHTunnelManager>();
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetUdsSSHTunnelManager(std::move(mockUdsSSHTunnelManager));
 
         // First set up some connections via ConnectRemoteNodes
         // We need to set up the mock behavior for connection (no authorization)
-        GetDcgmApi()->SetConnectResult(DCGM_ST_OK);
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
         GetTcpSSHTunnelManager()->SetDefaultRemotePort(12345);
         GetTcpSSHTunnelManager()->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
         GetUdsSSHTunnelManager()->SetDefaultRemoteSocketPath("/tmp/local_socket");
@@ -2304,22 +2370,22 @@ TEST_CASE_METHOD(MnDiagManagerTests, "DisconnectRemoteNodes Tests [mndiag]")
 
         // Connect to a mix of TCP and UDS nodes
         std::vector<std::string> hostList = { "node1:5555", "node2:unix:///tmp/dcgm.socket" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, MNDIAG_MANAGER_EFFECTIVE_UID);
         REQUIRE(result == DCGM_ST_OK);
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0); // No authorization in ConnectRemoteNodes
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 0); // No authorization in ConnectRemoteNodes
 
         // Authorize the connections before disconnecting them
-        GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
         result = AuthorizeRemoteConnections();
         REQUIRE(result == DCGM_ST_OK);
 
         // Reset the call counters for the disconnect phase
-        GetDcgmApi()->Reset();
+        ResetMockOps();
         GetTcpSSHTunnelManager()->Reset();
         GetUdsSSHTunnelManager()->Reset();
 
         // Set up mock behavior for revocation during disconnect
-        GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
         // Now test DisconnectRemoteNodes
         result = DisconnectRemoteNodes();
@@ -2327,9 +2393,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "DisconnectRemoteNodes Tests [mndiag]")
         // Verify result
         REQUIRE(result == DCGM_ST_OK);
 
-        // Verify DCGM API was called for revocation (2 remote nodes) + disconnect (2 remote nodes)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2); // Revocation calls
-        REQUIRE(GetDcgmApi()->GetDisconnectCallCount() == 2);  // Disconnect calls
+        // Verify DCGM operations was called for revocation (2 remote nodes) + disconnect (2 remote nodes)
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 2); // Revocation calls
+        REQUIRE(m_mockDcgmOps.GetDisconnectCallCount() == 2);       // Disconnect calls
 
         // Verify tunnel managers were called to end sessions
         auto tcpEndCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
@@ -2366,21 +2432,19 @@ TEST_CASE_METHOD(MnDiagManagerTests, "DisconnectRemoteNodes Tests [mndiag]")
     SECTION("DisconnectRemoteNodes handles revocation failure")
     {
         // Set up mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
 
         // First set up a connection via ConnectRemoteNodes
-        GetDcgmApi()->SetConnectResult(DCGM_ST_OK);
-        GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
         GetTcpSSHTunnelManager()->SetDefaultRemotePort(12345);
         GetTcpSSHTunnelManager()->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
         std::vector<std::string> hostList = { "node1:5555" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, MNDIAG_MANAGER_EFFECTIVE_UID);
         REQUIRE(result == DCGM_ST_OK);
 
         // Authorize the connection first
@@ -2388,8 +2452,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "DisconnectRemoteNodes Tests [mndiag]")
         REQUIRE(result == DCGM_ST_OK);
 
         // Reset the API and set it to fail on revocation
-        GetDcgmApi()->Reset();
-        GetDcgmApi()->SetSendRequestResult(DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
+        ResetMockOps();
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
 
         // Now test DisconnectRemoteNodes
         result = DisconnectRemoteNodes();
@@ -2399,7 +2463,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "DisconnectRemoteNodes Tests [mndiag]")
 
         // Still verify that we tried to disconnect and end the tunnel session
         // Even with the revocation error
-        REQUIRE(GetDcgmApi()->GetDisconnectCallCount() == 1);
+        REQUIRE(m_mockDcgmOps.GetDisconnectCallCount() == 1);
         const auto &endCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
         REQUIRE(endCalls.size() == 1);
     }
@@ -2436,10 +2500,12 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         fakeGpuInfos.push_back(info);
     }
 
-    SECTION("Successful execution of RunHeadNode")
+    SECTION("RunHeadNode dispatches mnnvbandwidth GPU pair mode directly")
     {
+        int const executionBehavior = GENERATE(0, 1, 2);
+        CAPTURE(executionBehavior);
+
         // Create mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
 
@@ -2463,18 +2529,22 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
         mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Configure DCGM API behavior
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        mockDcgmApi->SetReserveResourcesResponse(MnDiagStatus::RESERVED);
-        mockDcgmApi->SetDetectProcessResponse(MnDiagStatus::RUNNING);
+        // Configure DCGM operations behavior
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+        SetReserveResourcesResponse(MnDiagStatus::RESERVED);
+        SetReleaseResourcesResponse(executionBehavior == 2 ? MnDiagStatus::FAILED : MnDiagStatus::READY);
+        SetDetectProcessResponse(MnDiagStatus::RUNNING);
 
         // Configure MPI runner factory behavior
         // The mock factory's CreateMpiRunner method will return a MockMnDiagMpiRunner with default behaviors
         mockMpiRunnerFactory->SetMockTestBinaryPath(GetMockPath());
+        if (executionBehavior == 2)
+        {
+            mockMpiRunnerFactory->SetMockBatchResult(std::unexpected(DCGM_ST_TIMEOUT));
+        }
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetMpiRunnerFactory(std::move(mockMpiRunnerFactory));
         SetStateMachine(std::move(mockStateMachine));
@@ -2483,13 +2553,22 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         // Create test input parameters
         dcgmRunMnDiag_t params {};
         params.version = dcgmRunMnDiag_version;
-        SafeCopyTo(params.testName, "mnubergemm");
+        SafeCopyTo(params.testName, executionBehavior == 0 ? "mnubergemm" : "mnnvbandwidth");
+        if (executionBehavior != 0)
+        {
+            SafeCopyTo(params.testParms[0], "mnnvbandwidth.gpuPairs=all");
+        }
         SafeCopyTo(params.hostList[0], "localhost");
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
         // Create response structure to be populated
-        dcgmMnDiagResponse_t response {};
+        auto responsePtr = MakeUniqueZero<dcgmMnDiagResponse_t>();
+        auto &response   = *responsePtr;
         response.version = dcgmMnDiagResponse_version;
+        if (executionBehavior == 2)
+        {
+            response.numErrors = 1;
+        }
 
         // Set the mock GPU IDs and GPU Info
         GetDcgmCoreProxy()->SetMockGpuIds(fakeGpuIds);
@@ -2498,22 +2577,34 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockCudaVersion(12000);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, MNDIAG_MANAGER_EFFECTIVE_UID, response);
 
         // Verify results
-        REQUIRE(result == DCGM_ST_OK);
+        dcgmReturn_t const expectedResult = executionBehavior == 2 ? DCGM_ST_TIMEOUT : DCGM_ST_OK;
+        REQUIRE(result == expectedResult);
+        if (executionBehavior == 2)
+        {
+            CHECK(response.version == dcgmMnDiagResponse_version);
+            CHECK(response.numErrors == 0);
+        }
 
         // Verify ConnectRemoteNodes was called
-        REQUIRE(GetDcgmApi()->GetConnectCallCount() > 0);
+        REQUIRE(m_mockDcgmOps.GetConnectV3CallCount() > 0);
 
         // Verify ReserveRemoteResources was called
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() > 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() > 0);
 
         // Verify MPI runner methods were called
         REQUIRE(GetMpiRunnerFactory()->m_createMpiRunnerCount == 1);
-        REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().constructMpiCommandCount == 1);
-        REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().launchMpiProcessCount == 1);
-        REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().waitCount == 1);
+        REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().runBatchCount
+                == (executionBehavior == 1 || executionBehavior == 2 ? 1 : 0));
+        REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().constructMpiCommandCount
+                == (executionBehavior == 0 ? 1 : 0));
+        REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().launchMpiProcessCount == (executionBehavior == 0 ? 1 : 0));
+        REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().waitCount == (executionBehavior == 0 ? 1 : 0));
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestTypeCount(dcgmMultinodeRequestType_t::ReleaseResources) == 1);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestTypeCount(dcgmMultinodeRequestType_t::DetectProcess)
+                == (executionBehavior == 0 ? 1 : 0));
 
         // Verify state machine received the binary path
         std::string mockPath = GetMockPath();
@@ -2522,10 +2613,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
 
     SECTION("Successful execution of RunHeadNode with custom mnubergemm path")
     {
-        auto savedMnubergemmPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-
         // Create mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
 
@@ -2538,7 +2626,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
 
         // Set env to custom path
         std::string customPath = "/bin/true";
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), customPath.c_str(), 1);
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), customPath);
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
 
@@ -2553,18 +2641,18 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
         mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Configure DCGM API behavior
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        mockDcgmApi->SetReserveResourcesResponse(MnDiagStatus::RESERVED);
-        mockDcgmApi->SetDetectProcessResponse(MnDiagStatus::RUNNING);
+        // Configure DCGM operations behavior
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+        SetReserveResourcesResponse(MnDiagStatus::RESERVED);
+        SetReleaseResourcesResponse(MnDiagStatus::READY);
+        SetDetectProcessResponse(MnDiagStatus::RUNNING);
 
         // Configure MPI runner factory behavior
         // The mock factory's CreateMpiRunner method will return a MockMnDiagMpiRunner with default behaviors
         mockMpiRunnerFactory->SetMockTestBinaryPath(customPath);
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetMpiRunnerFactory(std::move(mockMpiRunnerFactory));
         SetStateMachine(std::move(mockStateMachine));
@@ -2578,7 +2666,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
         // Create response structure to be populated
-        dcgmMnDiagResponse_t response {};
+        auto responsePtr = MakeUniqueZero<dcgmMnDiagResponse_t>();
+        auto &response   = *responsePtr;
         response.version = dcgmMnDiagResponse_version;
 
         // Set the mock GPU IDs and GPU Info
@@ -2588,16 +2677,16 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockCudaVersion(12000);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, MNDIAG_MANAGER_EFFECTIVE_UID, response);
 
         // Verify results
         REQUIRE(result == DCGM_ST_OK);
 
         // Verify ConnectRemoteNodes was called
-        REQUIRE(GetDcgmApi()->GetConnectCallCount() > 0);
+        REQUIRE(m_mockDcgmOps.GetConnectV3CallCount() > 0);
 
         // Verify ReserveRemoteResources was called
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() > 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() > 0);
 
         // Verify MPI runner methods were called
         REQUIRE(GetMpiRunnerFactory()->m_createMpiRunnerCount == 1);
@@ -2607,14 +2696,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
 
         // Verify StateMachine received the custom path
         REQUIRE(capturedStateMachinePath == customPath);
-
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedMnubergemmPath);
     }
 
     SECTION("Failed to connect to remote nodes")
     {
         // Create mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
         auto mockCoreProxy           = std::make_unique<MockDcgmCoreProxy>();
@@ -2626,7 +2712,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         // The mock factory's CreateMpiRunner method will return a MockMnDiagMpiRunner with default behaviors
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetMpiRunnerFactory(std::move(mockMpiRunnerFactory));
         SetCoreProxy(std::move(mockCoreProxy));
@@ -2639,7 +2724,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
         // Create response structure to be populated
-        dcgmMnDiagResponse_t response {};
+        auto responsePtr = MakeUniqueZero<dcgmMnDiagResponse_t>();
+        auto &response   = *responsePtr;
         response.version = dcgmMnDiagResponse_version;
 
         // Set the mock GPU IDs and GPU Info
@@ -2648,7 +2734,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, MNDIAG_MANAGER_EFFECTIVE_UID, response);
 
         // Verify results
         REQUIRE(result == DCGM_ST_REMOTE_SSH_CONNECTION_FAILED);
@@ -2660,7 +2746,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
     SECTION("Failed to reserve resources")
     {
         // Create mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
         auto mockStateMachine
@@ -2676,13 +2761,12 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
         mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Configure DCGM API behavior
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        mockDcgmApi->SetReserveResourcesResponse(MnDiagStatus::FAILED);
+        // Configure DCGM operations behavior
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+        SetReserveResourcesResponse(MnDiagStatus::FAILED);
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetMpiRunnerFactory(std::move(mockMpiRunnerFactory));
         SetStateMachine(std::move(mockStateMachine));
@@ -2696,7 +2780,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
         // Create response structure to be populated
-        dcgmMnDiagResponse_t response {};
+        auto responsePtr = MakeUniqueZero<dcgmMnDiagResponse_t>();
+        auto &response   = *responsePtr;
         response.version = dcgmMnDiagResponse_version;
 
         // Set the mock GPU IDs and GPU Info
@@ -2705,7 +2790,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, MNDIAG_MANAGER_EFFECTIVE_UID, response);
 
         // Verify results
         REQUIRE(result == DCGM_ST_IN_USE);
@@ -2717,7 +2802,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
     SECTION("Failed to launch MPI process")
     {
         // Create mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
         auto mockStateMachine
@@ -2733,10 +2817,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
         mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Configure DCGM API behavior
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        mockDcgmApi->SetReserveResourcesResponse(MnDiagStatus::RESERVED);
+        // Configure DCGM operations behavior
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+        SetReserveResourcesResponse(MnDiagStatus::RESERVED);
+        SetReleaseResourcesResponse(MnDiagStatus::READY);
 
         // Configure MPI runner to fail to launch
         // We need to subclass MockMnDiagMpiRunnerFactory to override CreateMpiRunner
@@ -2760,7 +2845,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         auto customMpiRunnerFactory = std::make_unique<CustomMockMpiRunnerFactory>();
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetMpiRunnerFactory(std::move(customMpiRunnerFactory));
         SetStateMachine(std::move(mockStateMachine));
@@ -2774,7 +2858,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
         // Create response structure to be populated
-        dcgmMnDiagResponse_t response {};
+        auto responsePtr = MakeUniqueZero<dcgmMnDiagResponse_t>();
+        auto &response   = *responsePtr;
         response.version = dcgmMnDiagResponse_version;
 
         // Set the mock GPU IDs and GPU Info
@@ -2783,7 +2868,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, MNDIAG_MANAGER_EFFECTIVE_UID, response);
 
         // Verify results
         REQUIRE(result == DCGM_ST_GENERIC_ERROR);
@@ -2798,7 +2883,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
     SECTION("Failed to get node info")
     {
         // Create mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
         auto mockStateMachine
@@ -2816,17 +2900,16 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
         mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Configure DCGM API behavior
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        mockDcgmApi->SetReserveResourcesResponse(MnDiagStatus::RESERVED);
-        mockDcgmApi->SetDetectProcessResponse(MnDiagStatus::RUNNING);
+        // Configure DCGM operations behavior
+        m_mockDcgmOps.SetConnectV3Result(DCGM_ST_OK);
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
+        SetReserveResourcesResponse(MnDiagStatus::RESERVED);
+        SetDetectProcessResponse(MnDiagStatus::RUNNING);
 
         // Configure MPI runner factory behavior
         // The mock factory's CreateMpiRunner method will return a MockMnDiagMpiRunner with default behaviors
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetMpiRunnerFactory(std::move(mockMpiRunnerFactory));
         SetStateMachine(std::move(mockStateMachine));
@@ -2840,7 +2923,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
         // Create response structure to be populated
-        dcgmMnDiagResponse_t response {};
+        auto responsePtr = MakeUniqueZero<dcgmMnDiagResponse_t>();
+        auto &response   = *responsePtr;
         response.version = dcgmMnDiagResponse_version;
 
         // Set the mock GPU IDs and GPU Info
@@ -2852,23 +2936,23 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         dcgmReturn_t driverVersionResult = DCGM_ST_NVML_ERROR;
         GetDcgmCoreProxy()->SetMockDriverVersionResult(driverVersionResult);
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, MNDIAG_MANAGER_EFFECTIVE_UID, response);
 
         // Verify results. This should be the same as the mock driver version result since that is a
         // fatal error and will halt execution
         REQUIRE(result == driverVersionResult);
 
         // Verify ConnectRemoteNodes was called
-        REQUIRE(GetDcgmApi()->GetConnectCallCount() > 0);
+        REQUIRE(m_mockDcgmOps.GetConnectV3CallCount() > 0);
 
         // Verify only one request was made - authorize connection
-        //REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 1);
-        REQUIRE(GetDcgmApi()->GetRequestTypeCount(dcgmMultinodeRequestType_t::AuthorizeConnection) == 1);
-        REQUIRE(GetDcgmApi()->GetRequestTypeCount(dcgmMultinodeRequestType_t::RevokeAuthorization) == 1);
-        REQUIRE(GetDcgmApi()->GetRequestTypeCount(dcgmMultinodeRequestType_t::GetNodeInfo) == 0);
-        REQUIRE(GetDcgmApi()->GetRequestTypeCount(dcgmMultinodeRequestType_t::ReserveResources) == 0);
-        REQUIRE(GetDcgmApi()->GetRequestTypeCount(dcgmMultinodeRequestType_t::ReleaseResources) == 0);
-        REQUIRE(GetDcgmApi()->GetRequestTypeCount(dcgmMultinodeRequestType_t::DetectProcess) == 0);
+        //REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 1);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestTypeCount(dcgmMultinodeRequestType_t::AuthorizeConnection) == 1);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestTypeCount(dcgmMultinodeRequestType_t::RevokeAuthorization) == 1);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestTypeCount(dcgmMultinodeRequestType_t::GetNodeInfo) == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestTypeCount(dcgmMultinodeRequestType_t::ReserveResources) == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestTypeCount(dcgmMultinodeRequestType_t::ReleaseResources) == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestTypeCount(dcgmMultinodeRequestType_t::DetectProcess) == 0);
 
         // Verify MPI runner methods were not called
         REQUIRE(GetMpiRunnerFactory()->m_createMpiRunnerCount == 0);
@@ -2877,7 +2961,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
     SECTION("RunHeadNode fails when factory returns null runner")
     {
         // Create mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
         auto mockStateMachine
@@ -2888,7 +2971,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         mockMpiRunnerFactory->SetReturnNullNext();
 
         // Install mock objects
-        SetDcgmApi(std::move(mockDcgmApi));
         SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
         SetMpiRunnerFactory(std::move(mockMpiRunnerFactory));
         SetStateMachine(std::move(mockStateMachine));
@@ -2901,7 +2983,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         SafeCopyTo(params.testName, "mnubergemm");
 
         // Create response structure to be populated
-        dcgmMnDiagResponse_t response {};
+        auto responsePtr = MakeUniqueZero<dcgmMnDiagResponse_t>();
+        auto &response   = *responsePtr;
         response.version = dcgmMnDiagResponse_version;
 
         // Set the mock GPU IDs and GPU Info
@@ -2910,7 +2993,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, MNDIAG_MANAGER_EFFECTIVE_UID, response);
 
         // Verify results - should fail because factory returned null
         REQUIRE(result == DCGM_ST_BADPARAM);
@@ -3064,7 +3147,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AreDevicesSupported [mndiag]")
     SECTION("Devices supported (different device IDs) - fail")
     {
         // Add additional SKUs
-        setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "1240", 1);
+        ScopedEnvVars envVars("DCGM_MNDIAG_SUPPORTED_SKUS", "1240");
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
         REQUIRE(skus.size() == 3);
@@ -3087,12 +3170,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AreDevicesSupported [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(false);
 
         REQUIRE(AreDevicesSupported() == false);
-        unsetenv("DCGM_MNDIAG_SUPPORTED_SKUS");
     }
 
     SECTION("Devices supported from env and default")
     {
-        setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "1240", 1);
+        ScopedEnvVars envVars("DCGM_MNDIAG_SUPPORTED_SKUS", "1240");
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
         REQUIRE(skus.size() == 3);
@@ -3114,12 +3196,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AreDevicesSupported [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         REQUIRE(AreDevicesSupported() == true);
-        unsetenv("DCGM_MNDIAG_SUPPORTED_SKUS");
     }
 
     SECTION("Device not present in SKU (env + default)")
     {
-        setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "1240", 1);
+        ScopedEnvVars envVars("DCGM_MNDIAG_SUPPORTED_SKUS", "1240");
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
         REQUIRE(skus.size() == 3);
@@ -3141,7 +3222,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AreDevicesSupported [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         REQUIRE(AreDevicesSupported() == false);
-        unsetenv("DCGM_MNDIAG_SUPPORTED_SKUS");
     }
 }
 
@@ -3149,7 +3229,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "LoadSupportedSkusFromEnv [mndiag]")
 {
     SECTION("Default (no env var set)")
     {
-        unsetenv("DCGM_MNDIAG_SUPPORTED_SKUS");
+        ScopedEnvVars envVars("DCGM_MNDIAG_SUPPORTED_SKUS", std::nullopt);
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
         REQUIRE(skus.size() == 2);
@@ -3159,7 +3239,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "LoadSupportedSkusFromEnv [mndiag]")
 
     SECTION("Multiple SKUs in env")
     {
-        setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "abcd, 1234, 5678 ", 1);
+        ScopedEnvVars envVars("DCGM_MNDIAG_SUPPORTED_SKUS", "abcd, 1234, 5678 ");
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
         REQUIRE(skus.size() == 5);
@@ -3168,12 +3248,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "LoadSupportedSkusFromEnv [mndiag]")
         REQUIRE(skus.contains("abcd"));
         REQUIRE(skus.contains("1234"));
         REQUIRE(skus.contains("5678"));
-        unsetenv("DCGM_MNDIAG_SUPPORTED_SKUS");
     }
 
     SECTION("Mixedcase SKUs in env are stored as lowercase")
     {
-        setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "24B9,1h34,xY5Z", 1);
+        ScopedEnvVars envVars("DCGM_MNDIAG_SUPPORTED_SKUS", "24B9,1h34,xY5Z");
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
         REQUIRE(skus.size() == 5);
@@ -3182,7 +3261,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "LoadSupportedSkusFromEnv [mndiag]")
         REQUIRE(skus.contains("24b9"));
         REQUIRE(skus.contains("1h34"));
         REQUIRE(skus.contains("xy5z"));
-        unsetenv("DCGM_MNDIAG_SUPPORTED_SKUS");
     }
 }
 
@@ -3286,6 +3364,33 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
         REQUIRE(timeoutWasSet == true); // Timeout should always be set (to default when not specified)
         REQUIRE(capturedTimeout == std::chrono::seconds(3600)); // Default timeout is 3600 seconds
         REQUIRE(capturedPath == testPath);
+        CHECK_FALSE(GetStateMachine()->GetStats().lastKeepReserved);
+    }
+
+    SECTION("GPU pair mode extends the reservation timeout for the full run")
+    {
+        auto mockStateMachine
+            = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
+        SetStateMachine(std::move(mockStateMachine));
+
+        dcgm_mndiag_msg_run_params_t paramMsg {};
+        paramMsg.header.length     = sizeof(paramMsg);
+        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version2;
+        paramMsg.header.moduleId   = DcgmModuleIdMnDiag;
+        paramMsg.header.subCommand = DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS;
+
+        paramMsg.runParams.headNodeId       = 12345;
+        paramMsg.runParams.timeToRunSeconds = 15;
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testName, "mnnvbandwidth");
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testParms[0], "mnnvbandwidth.gpuPairs=all");
+        SafeCopyTo(paramMsg.runParams.testBinaryPath, "/test/path/mnnvbandwidth");
+        SafeCopyTo(paramMsg.runParams.testPrefix, "mnnvbandwidth.");
+
+        REQUIRE(HandleBroadcastRunParameters(reinterpret_cast<dcgm_module_command_header_t *>(&paramMsg))
+                == DCGM_ST_OK);
+        CHECK(GetStateMachine()->GetStats().setProcessExecutionTimeoutCalled);
+        CHECK(GetStateMachine()->GetStats().lastTimeoutInSeconds == std::chrono::seconds(15));
+        CHECK(GetStateMachine()->GetStats().lastKeepReserved);
     }
 
     SECTION("Invalid time_to_run parameter format")
@@ -3523,10 +3628,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
 
     SECTION("Successful broadcast to multiple remote nodes")
     {
-        // Setup mock DCGM API
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        SetDcgmApi(std::move(mockDcgmApi));
+        // Setup mock DCGM operations
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
         // Setup mock connections
         SetupMockConnections(3); // 3 remote connections
@@ -3546,26 +3649,23 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
 
         // Verify that MultinodeRequest was called for all remote nodes
         // (3 remote nodes, no loopback connections in this test)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 3);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 3);
     }
 
     SECTION("Broadcast failure on one remote node")
     {
-        // Setup mock DCGM API to fail on specific handle
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
+        // Setup mock DCGM operations to fail on specific handle
 
         // Set default success
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
         // Set failure for handle 11 (second remote node)
-        mockDcgmApi->SetHandleCommandCallback(
+        m_mockDcgmOps.SetMultinodeRequestHandler(
             11,
             BroadcastRunParameters,
             [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_t * /* request */) -> dcgmReturn_t {
                 return DCGM_ST_CONNECTION_NOT_VALID;
             });
-
-        SetDcgmApi(std::move(mockDcgmApi));
 
         // Setup mock connections
         SetupMockConnections(3); // 3 remote connections
@@ -3584,15 +3684,13 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(result == DCGM_ST_CONNECTION_NOT_VALID);
 
         // Verify that MultinodeRequest was called for all remote nodes
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 3);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 3);
     }
 
     SECTION("Broadcast with no remote connections (loopback only)")
     {
-        // Setup mock DCGM API
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        SetDcgmApi(std::move(mockDcgmApi));
+        // Setup mock DCGM operations
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
         // Setup only a loopback connection
         SetupLoopbackConnection();
@@ -3610,15 +3708,13 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(result == DCGM_ST_OK);
 
         // Verify that no remote MultinodeRequest calls were made (only loopback)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 0);
     }
 
     SECTION("Broadcast with empty parameters")
     {
-        // Setup mock DCGM API
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        SetDcgmApi(std::move(mockDcgmApi));
+        // Setup mock DCGM operations
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
         // Setup mock connections
         SetupMockConnections(2); // 2 remote connections
@@ -3634,23 +3730,20 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(result == DCGM_ST_OK);
 
         // Verify that MultinodeRequest was called for both remote nodes
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 2);
     }
 
     SECTION("Verify request structure is populated correctly - custom mnubergemm path")
     {
-        // Save current environment state
-        auto savedPath         = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
         std::string customPath = "/bin/true";
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), customPath.c_str(), 1);
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), customPath);
 
-        // Setup mock DCGM API with callback to inspect request
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
+        // Setup mock DCGM operations with callback to inspect request
 
         dcgmMultinodeRequest_t capturedRequest {};
         bool requestCaptured = false;
 
-        mockDcgmApi->SetHandleCommandCallback(
+        m_mockDcgmOps.SetMultinodeRequestHandler(
             10,
             BroadcastRunParameters,
             [&capturedRequest, &requestCaptured](dcgmHandle_t /* handle */,
@@ -3659,8 +3752,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
                 requestCaptured = true;
                 return DCGM_ST_OK;
             });
-
-        SetDcgmApi(std::move(mockDcgmApi));
 
         // Setup mock connections
         SetupMockConnections(2); // 1 remote + 1 loopback
@@ -3683,7 +3774,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(requestCaptured == true);
 
         // Verify request structure
-        REQUIRE(capturedRequest.version == dcgmMultinodeRequest_version2);
+        REQUIRE(capturedRequest.version == dcgmMultinodeRequest_version);
         REQUIRE(capturedRequest.testType == MnDiagTestType::mnubergemm);
         REQUIRE(capturedRequest.requestType == MnDiagRequestType::BroadcastRunParameters);
 
@@ -3695,24 +3786,18 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
 
         // Verify custom mnubergemm path is used
         REQUIRE(std::string(capturedRequest.requestData.runParams.testBinaryPath) == customPath);
-
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
     SECTION("Verify request structure is populated correctly - default mnubergemm path")
     {
-        // Save current environment state
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-        unsetenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
+        ScopedEnvVars envVars(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), std::nullopt);
 
-        // Setup mock DCGM API with callback to inspect request
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
+        // Setup mock DCGM operations with callback to inspect request
 
         dcgmMultinodeRequest_t capturedRequest {};
         bool requestCaptured = false;
 
-        mockDcgmApi->SetHandleCommandCallback(
+        m_mockDcgmOps.SetMultinodeRequestHandler(
             10,
             BroadcastRunParameters,
             [&capturedRequest, &requestCaptured](dcgmHandle_t /* handle */,
@@ -3721,8 +3806,6 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
                 requestCaptured = true;
                 return DCGM_ST_OK;
             });
-
-        SetDcgmApi(std::move(mockDcgmApi));
 
         // Setup mock connections
         SetupMockConnections(2); // 1 remote + 1 loopback
@@ -3746,7 +3829,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(requestCaptured == true);
 
         // Verify request structure
-        REQUIRE(capturedRequest.version == dcgmMultinodeRequest_version2);
+        REQUIRE(capturedRequest.version == dcgmMultinodeRequest_version);
         REQUIRE(capturedRequest.testType == MnDiagTestType::mnubergemm);
         REQUIRE(capturedRequest.requestType == MnDiagRequestType::BroadcastRunParameters);
 
@@ -3758,17 +3841,12 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
 
         // Verify default mnubergemm path is used
         REQUIRE(std::string(capturedRequest.requestData.runParams.testBinaryPath).find(mockPath) != std::string::npos);
-
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
     SECTION("Malformed time_to_run on head node returns early without broadcasting")
     {
-        // Setup mock DCGM API
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        SetDcgmApi(std::move(mockDcgmApi));
+        // Setup mock DCGM operations
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
         // Setup mock connections
         SetupMockConnections(3); // 3 remote connections
@@ -3789,15 +3867,13 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(result == DCGM_ST_BADPARAM);
 
         // Verify that no remote MultinodeRequest calls were made (early return)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 0);
     }
 
     SECTION("Zero time_to_run on head node returns early without broadcasting")
     {
-        // Setup mock DCGM API
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        SetDcgmApi(std::move(mockDcgmApi));
+        // Setup mock DCGM operations
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
         // Setup mock connections
         SetupMockConnections(3); // 3 remote connections
@@ -3818,15 +3894,13 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(result == DCGM_ST_BADPARAM);
 
         // Verify that no remote MultinodeRequest calls were made (early return)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 0);
     }
 
     SECTION("Non-numeric time_to_run on head node returns early without broadcasting")
     {
-        // Setup mock DCGM API
-        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        SetDcgmApi(std::move(mockDcgmApi));
+        // Setup mock DCGM operations
+        m_mockDcgmOps.SetMultinodeRequestResult(DCGM_ST_OK);
 
         // Setup mock connections
         SetupMockConnections(3); // 3 remote connections
@@ -3847,7 +3921,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(result == DCGM_ST_BADPARAM);
 
         // Verify that no remote MultinodeRequest calls were made (early return)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
+        REQUIRE(m_mockDcgmOps.GetMultinodeRequestCallCount() == 0);
     }
 }
 
@@ -3857,7 +3931,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "FindSshZombieProcesses Tests [mndiag]")
 
     SECTION("Should find ssh zombie processes and filter out all other processes (zombie, not zombie, etc.)")
     {
-        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_ssh_zombies");
+        MockProcDirectory mockProc("test-proc-ssh-zombies");
 
         mockProc.CreateProcesses({ { 1234, "(ssh)", 'Z', ourPid },
                                    { 1235, "(sshd)", 'Z', ourPid },
@@ -3875,7 +3949,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "FindSshZombieProcesses Tests [mndiag]")
 
     SECTION("Should filter out zombie processes with wrong parent PID")
     {
-        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_wrong_ppid");
+        MockProcDirectory mockProc("test-proc-wrong-ppid");
 
         pid_t wrongPpid = ourPid + 1000;
 
@@ -3890,7 +3964,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "FindSshZombieProcesses Tests [mndiag]")
 
     SECTION("Should handle empty proc directory")
     {
-        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_empty");
+        MockProcDirectory mockProc("test-proc-empty");
 
         auto result = FindSshZombieProcesses(mockProc.GetPath());
 
@@ -3899,12 +3973,12 @@ TEST_CASE_METHOD(MnDiagManagerTests, "FindSshZombieProcesses Tests [mndiag]")
 
     SECTION("Should handle malformed, missing, and empty stat files")
     {
-        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_stat_errors");
+        MockProcDirectory mockProc("test-proc-stat-errors");
 
         // Create a directory with malformed stat file (invalid format)
         auto pidDir1 = mockProc.GetPath() / "1234";
         mockProc.CreateTestDirectory(pidDir1);
-        std::ofstream(pidDir1 / "stat") << "malformed data\n";
+        [[maybe_unused]] auto malformedStatFile = TempFile::Fixed(pidDir1 / "stat", "malformed data\n");
 
         // Create a PID directory without stat file (missing)
         mockProc.CreateTestDirectory(mockProc.GetPath() / "1236");
@@ -3912,7 +3986,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "FindSshZombieProcesses Tests [mndiag]")
         // Create a directory with empty stat file
         auto pidDir3 = mockProc.GetPath() / "9999";
         mockProc.CreateTestDirectory(pidDir3);
-        std::ofstream(pidDir3 / "stat"); // Empty file, no content written
+        [[maybe_unused]] auto emptyStatFile = TempFile::Fixed(pidDir3 / "stat", "");
 
         // Create valid SSH zombie processes
         mockProc.CreateProcesses({ { 1235, "(ssh)", 'Z', ourPid }, { 8888, "(sshd)", 'Z', ourPid } });
@@ -3927,14 +4001,14 @@ TEST_CASE_METHOD(MnDiagManagerTests, "FindSshZombieProcesses Tests [mndiag]")
 
     SECTION("Should skip non-directory entries and directories with non-numeric names")
     {
-        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_non_dirs");
+        MockProcDirectory mockProc("test-proc-non-dirs");
 
         // Create a valid SSH zombie process
         mockProc.CreateProcesses({ { 5678, "(ssh)", 'Z', ourPid } });
 
         // Create non-directory entries (files)
-        std::ofstream(mockProc.GetPath() / "cmdline") << "dummy\n";
-        std::ofstream(mockProc.GetPath() / "stat") << "dummy\n";
+        [[maybe_unused]] auto cmdlineFile = TempFile::Fixed(mockProc.GetPath() / "cmdline", "dummy\n");
+        [[maybe_unused]] auto statFile    = TempFile::Fixed(mockProc.GetPath() / "stat", "dummy\n");
 
         // Create directories (common in /proc)
         mockProc.CreateTestDirectory(mockProc.GetPath() / "self");
@@ -3952,7 +4026,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "FindSshZombieProcesses Tests [mndiag]")
 
     SECTION("Should skip PIDs 0 and 1 (init and kernel)")
     {
-        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_special_pids");
+        MockProcDirectory mockProc("test-proc-special-pids");
 
         // Try to create SSH zombies for special PIDs (should be filtered out by implementation)
         mockProc.CreateProcesses(
@@ -3967,8 +4041,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "FindSshZombieProcesses Tests [mndiag]")
 
     SECTION("Should gracefully handle exceptions from filesystem operations")
     {
-        // Test with non-existent directory to trigger exception
-        auto nonExistentPath = std::filesystem::temp_directory_path() / "non_existent_proc_dir_xyz123";
+        auto removedDir      = TempDir::Random("non-existent-proc-dir-");
+        auto nonExistentPath = removedDir.Path();
 
         // Ensure the directory doesn't exist
         std::error_code ec;

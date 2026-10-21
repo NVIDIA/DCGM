@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,15 @@
 
 #include "Command.h"
 #include "DcgmiOutput.h"
+
+#include <DcgmOpsAnyPtr.hpp>
+
 #include <vector>
 
 class Group
 {
 public:
-    Group()          = default;
+    explicit Group(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~Group() = default;
 
     /*****************************************************************************
@@ -74,6 +77,7 @@ public:
     std::string getGroupInfo();
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
     dcgmGpuGrp_t groupId = 0;
     std::string groupName;
     std::string groupInfo;
@@ -90,7 +94,7 @@ private:
 class GroupList : public Command
 {
 public:
-    GroupList(std::string hostname, bool json);
+    GroupList(std::string hostname, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -105,7 +109,7 @@ private:
 class GroupCreate : public Command
 {
 public:
-    GroupCreate(std::string hostname, Group &obj, dcgmGroupType_t groupType);
+    GroupCreate(std::string hostname, Group &obj, dcgmGroupType_t groupType, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -121,7 +125,7 @@ private:
 class GroupDestroy : public Command
 {
 public:
-    GroupDestroy(std::string hostname, Group &obj);
+    GroupDestroy(std::string hostname, Group &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -136,7 +140,7 @@ private:
 class GroupInfo : public Command
 {
 public:
-    GroupInfo(std::string hostname, Group &obj, bool json);
+    GroupInfo(std::string hostname, Group &obj, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -151,7 +155,7 @@ private:
 class GroupAddTo : public Command
 {
 public:
-    GroupAddTo(std::string hostname, Group &obj);
+    GroupAddTo(std::string hostname, Group &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -166,7 +170,7 @@ private:
 class GroupDeleteFrom : public Command
 {
 public:
-    GroupDeleteFrom(std::string hostname, Group &obj);
+    GroupDeleteFrom(std::string hostname, Group &obj, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "Introspect.h"
+
+#include "CommandLineParser.h"
+
+#include <DcgmLogging.h>
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
+
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <utility>
 #include <vector>
-
-#include "CommandLineParser.h"
-#include "DcgmLogging.h"
-#include "Introspect.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
 
 static char const INTROSPECT_HEADER[]
     = "+----------------------------------------------------------------------------+\n"
@@ -54,7 +56,8 @@ static const char ERROR_STRING[] = "Error";
 #define ATTRIBUTE_TAG      "<ATTRIBUTE"
 #define ATTRIBUTE_DATA_TAG "<ATTRIBUTE_DATA"
 
-Introspect::Introspect()
+Introspect::Introspect(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
 {}
 
 Introspect::~Introspect()
@@ -72,7 +75,7 @@ dcgmReturn_t Introspect::DisplayStats(dcgmHandle_t handle, bool forHostengine)
     heCpuInfo.version = dcgmIntrospectCpuUtil_version1;
 
     // always retrieve hostengine mem usage as a way to check if introspection is enabled
-    heMemReturn = dcgmIntrospectGetHostengineMemoryUsage(handle, &heMemInfo, true);
+    heMemReturn = m_dcgmOps->dcgmIntrospectGetHostengineMemoryUsage(handle, &heMemInfo, true);
     if (DCGM_ST_OK != heMemReturn)
     {
         log_error("Error retrieving memory usage for hostengine. Return: {}", errorString(heMemReturn));
@@ -80,7 +83,7 @@ dcgmReturn_t Introspect::DisplayStats(dcgmHandle_t handle, bool forHostengine)
 
     if (forHostengine)
     {
-        heCpuReturn = dcgmIntrospectGetHostengineCpuUtilization(handle, &heCpuInfo, true);
+        heCpuReturn = m_dcgmOps->dcgmIntrospectGetHostengineCpuUtilization(handle, &heCpuInfo, true);
         if (DCGM_ST_OK != heCpuReturn)
         {
             log_error("Error retrieving CPU utilization for hostengine. Return: {}", errorString(heCpuReturn));
@@ -155,8 +158,11 @@ string Introspect::readablePercent(double p)
     return ss.str();
 }
 
-DisplayIntrospectSummary::DisplayIntrospectSummary(std::string hostname, bool forHostengine)
-    : Command()
+DisplayIntrospectSummary::DisplayIntrospectSummary(std::string hostname,
+                                                   bool forHostengine,
+                                                   DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , introspectObj(dcgmOps)
     , forHostengine(forHostengine)
 {
     m_hostName = std::move(hostname);
