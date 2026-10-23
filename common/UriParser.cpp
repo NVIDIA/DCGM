@@ -156,10 +156,10 @@ std::optional<EndpointVariant> ParseEndpoint(std::string_view uri)
             log_warning("Rejecting TCP URI {} with missing or misplaced colon", rest);
             return std::nullopt;
         }
-        // If the string starts with '[' and ends with ']', it is a valid IPv6 address in brackets,
-        // so use the whole string as the host part.
+        // A bracketed host with no port has its closing ']' as the last character.
+        // "[::1]:80]" also starts with '[' and ends with ']', but the port is still there.
         // Also use the whole string as the host part if there is no colon.
-        else if (lastColonPos == std::string_view::npos || (rest.front() == '[' && rest.back() == ']'))
+        else if (lastColonPos == std::string_view::npos || (rest.front() == '[' && rest.find(']') == rest.size() - 1))
         {
             hostPart = rest;
         }
