@@ -73,7 +73,7 @@ public:
                 auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->SetNextPart(std::forward<decltype(value)>(value));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~DcgmProfTesterAnyPtr()
@@ -187,7 +187,6 @@ private:
         void (*SetFirstTick0)(void  *, bool);
         unsigned int (*GetNextPart0)(void const *);
         void (*SetNextPart0)(void  *, unsigned int);
-
     };
 
     VTable const *m_pVTable;

@@ -115,7 +115,7 @@ def no_errors_run(handle, gpuIds, name, testname, parms=None):
     # verification, we use dcgmi diag and log output to a file for easier
     # debugging when something goes wrong.
     args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v",
-            "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
+            "--debugLevel", "DEBUG", "--log-filename", "nvvs.log"]
     if parms is not None:
         args.extend(["-p", "%s" % parms])
     dcgmi = DcgmiApp(args=args)
@@ -124,11 +124,10 @@ def no_errors_run(handle, gpuIds, name, testname, parms=None):
     logger.info("Started diag with args: %s" % args)
 
     retcode = dcgmi.wait()
-    copy_nvvs_log("/tmp/nvvs.log", log_file)
+    copy_nvvs_log(os.path.join(logger.log_dir, "nvvs", "nvvs.log"), log_file)
     if retcode != 0:
         logger.error("dcgmi_%s_no_err failed with retcode: %s" %
                      (name, retcode))
-        copy_nvvs_log("/tmp/nvvs.log", log_file)
 
     log_app_output_to_file(dcgmi, output_file)
 
@@ -150,7 +149,7 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
     gpu_list = ",".join(map(str, gpuIds))
 
     args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v",
-            "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
+            "--debugLevel", "DEBUG", "--log-filename", "nvvs.log"]
     if parms is not None:
         args.extend(["-p", "%s" % parms])
     dcgmi = DcgmiApp(args=args)
@@ -172,7 +171,7 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
 
     retcode = dcgmi.wait()
 
-    copy_nvvs_log("/tmp/nvvs.log", log_file)
+    copy_nvvs_log(os.path.join(logger.log_dir, "nvvs", "nvvs.log"), log_file)
     expected_retcode = ctypes.c_uint8(dcgm_structs.DCGM_ST_NVVS_ERROR).value
     if retcode != expected_retcode:
         logger.error(

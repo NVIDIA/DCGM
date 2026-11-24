@@ -53,7 +53,7 @@ public:
                 auto *pT = static_cast<T const *>(*std::launder(reinterpret_cast<void *const*>(pStorage)));
                 return pT->Create();
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~CudaWorkerThreadFactoryAnyPtr()
@@ -142,7 +142,6 @@ private:
     {
         // Declare type's functions
         CudaWorkerThreadAnyUniquePtr (*Create0)(void const *);
-
     };
 
     VTable const *m_pVTable;

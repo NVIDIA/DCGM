@@ -26,6 +26,7 @@
 #error "Could not find DcgmCacheManager header"
 #endif
 #include "DcgmCacheManagerAnyPtr.hpp"
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -1883,7 +1884,6 @@ private:
         void (*SendSignal0)(void  *, int);
         int (*HasExited0)(void  *);
         void (*SetHangDetectMonitor0)(void  *, class HangDetectMonitor *);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*DcgmCacheManagerMoveConstruct)(void *, void *);
         void (*DcgmCacheManagerMoveAssign)(void *, void *);

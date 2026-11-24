@@ -48,6 +48,9 @@ DCGM_DEVICE_UUID_BUFFER_SIZE = 80
 DCGM_MAX_FBC_SESSIONS = 256
 DCGM_MAX_NUM_CPUS = 8
 DCGM_MAX_NUM_CPU_CORES = 1024
+DCGM_NVLINK_MAX_LINKS = DCGM_MAX_NUM_SWITCHES * DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH
+DCGM_ENTITY_GROUP_ENTITIES_MAX = max(
+    DCGM_NVLINK_MAX_LINKS, DCGM_MAX_NUM_CPUS * DCGM_MAX_NUM_CPU_CORES)
 DCGM_CHAR_BIT = 8
 
 # When more than one value is returned from a query, which order should it
@@ -2098,6 +2101,18 @@ class c_dcgmHealthSetParams_v2(_PrintableStructure):
 
 dcgmHealthSetParams_version2 = make_dcgm_version(c_dcgmHealthSetParams_v2, 2)
 
+
+class c_dcgmHealthSupportedSystems_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint32),
+        ('systems', c_uint32)
+    ]
+
+
+dcgmHealthSupportedSystems_version1 = make_dcgm_version(
+    c_dcgmHealthSupportedSystems_v1, 1)
+dcgmHealthSupportedSystems_version = dcgmHealthSupportedSystems_version1
+
 # Pid info structs
 
 
@@ -2880,6 +2895,7 @@ class c_dcgmRunDiag_v10(_PrintableStructure):
 
 
 dcgmRunDiag_version10 = make_dcgm_version(c_dcgmRunDiag_v10, 10)
+dcgmRunDiag_version11 = make_dcgm_version(c_dcgmRunDiag_v10, 11)
 
 # Latest c_dcgmRunDiag class
 c_dcgmRunDiag_t = c_dcgmRunDiag_v10
@@ -3162,6 +3178,63 @@ class c_dcgmModuleGetStatuses_v1(_PrintableStructure):
 
 dcgmModuleGetStatuses_version1 = make_dcgm_version(
     c_dcgmModuleGetStatuses_v1, 1)
+
+# Frozen version of DcgmModuleIdCount for backward compatibility
+DCGM_MODULE_ID_COUNT_V1 = 10
+
+
+class c_dcgmStartEmbeddedV2Params_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('opMode', c_uint),  # One of DCGM_OPERATION_MODE_*
+        ('dcgmHandle', c_void_p),  # OUT
+        ('logFile', c_char_p),  # None = do not log. '-' = stdout
+        ('severity', c_int),  # One of DcgmLoggingSeverity*
+        ('denyListCount', c_uint),
+        ('denyList', c_uint * DCGM_MODULE_ID_COUNT_V1),
+    ]
+
+
+dcgmStartEmbeddedV2Params_version1 = make_dcgm_version(
+    c_dcgmStartEmbeddedV2Params_v1, 1)
+
+
+class c_dcgmStartEmbeddedV2Params_v2(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('opMode', c_uint),  # One of DCGM_OPERATION_MODE_*
+        ('dcgmHandle', c_void_p),  # OUT
+        ('logFile', c_char_p),  # None = do not log. '-' = stdout
+        ('severity', c_int),  # One of DcgmLoggingSeverity*
+        ('denyListCount', c_uint),
+        ('serviceAccount', c_char_p),
+        ('denyList', c_uint * DCGM_MODULE_ID_COUNT_V1),
+    ]
+
+
+dcgmStartEmbeddedV2Params_version2 = make_dcgm_version(
+    c_dcgmStartEmbeddedV2Params_v2, 2)
+
+# This is larger than DcgmModuleIdCount so we can add modules without
+# versioning this request
+DCGM_MODULE_ID_COUNT_V2 = 16
+
+
+class c_dcgmStartEmbeddedV2Params_v3(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('opMode', c_uint),  # One of DCGM_OPERATION_MODE_*
+        ('dcgmHandle', c_void_p),  # OUT
+        ('logFile', c_char_p),  # None = do not log. '-' = stdout
+        ('severity', c_int),  # One of DcgmLoggingSeverity*
+        ('denyListCount', c_uint),
+        ('serviceAccount', c_char_p),
+        ('denyList', c_uint * DCGM_MODULE_ID_COUNT_V2),
+    ]
+
+
+dcgmStartEmbeddedV2Params_version3 = make_dcgm_version(
+    c_dcgmStartEmbeddedV2Params_v3, 3)
 
 
 class c_dcgmModulesReloadable_v1(_PrintableStructure):

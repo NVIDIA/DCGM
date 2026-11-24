@@ -497,6 +497,17 @@ dcgmReturn_t DcgmOps::dcgmHealthSet_v2(dcgmHandle_t pDcgmHandle, dcgmHealthSetPa
     return ::dcgmHealthSet_v2(pDcgmHandle, params);
 }
 
+dcgmReturn_t DcgmOps::dcgmHealthSet_v3(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 const *params)
+{
+    return ::dcgmHealthSet_v3(pDcgmHandle, params);
+}
+
+dcgmReturn_t DcgmOps::dcgmHealthGetSupportedSystems(dcgmHandle_t pDcgmHandle,
+                                                    dcgmHealthSupportedSystems_t *supportedSystems)
+{
+    return ::dcgmHealthGetSupportedSystems(pDcgmHandle, supportedSystems);
+}
+
 dcgmReturn_t DcgmOps::dcgmHealthCheck(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_t *results)
 {
     return ::dcgmHealthCheck(pDcgmHandle, groupId, results);

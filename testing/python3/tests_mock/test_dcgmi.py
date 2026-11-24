@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,6 +33,18 @@ import dcgm_structs
 import test_utils
 
 from test_utils import trampoline  # To make introspection work.
+
+
+def test_dcgm_embedded_reports_logging_init_failure_with_missing_cwd():
+    trampoline()
+
+
+def test_dcgmi_logging_preserves_symlink_parent_path():
+    trampoline()
+
+
+def test_dcgm_diag_rejects_unsupported_run_versions():
+    trampoline()
 
 
 def test_dcgmi_group():

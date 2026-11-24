@@ -32,12 +32,12 @@ DcgmModuleHealth::~DcgmModuleHealth()
 {}
 
 /*****************************************************************************/
-dcgmReturn_t DcgmModuleHealth::ProcessSetSystems(dcgm_health_msg_set_systems_t *msg)
+dcgmReturn_t DcgmModuleHealth::ProcessSetSystemsV2(dcgm_health_msg_set_systems_v2 *msg)
 {
     unsigned int groupId;
     dcgmReturn_t dcgmReturn;
 
-    dcgmReturn = CheckVersion(&msg->header, dcgm_health_msg_set_systems_version);
+    dcgmReturn = CheckVersion(&msg->header, dcgm_health_msg_set_systems_version2);
     if (DCGM_ST_OK != dcgmReturn)
         return dcgmReturn; /* Logging handled by helper method */
 
@@ -61,6 +61,35 @@ dcgmReturn_t DcgmModuleHealth::ProcessSetSystems(dcgm_health_msg_set_systems_t *
         log_error("Set Health Watches Err: Unable to set watches");
     }
 
+    return dcgmReturn;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmModuleHealth::ProcessSetSystemsV3(dcgm_health_msg_set_systems_v3 const *msg)
+{
+    dcgmReturn_t dcgmReturn = CheckVersion(&msg->header, dcgm_health_msg_set_systems_version3);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn; /* Logging handled by helper method */
+    }
+
+    unsigned int groupId = static_cast<unsigned int>(msg->healthSet.groupId);
+    dcgmReturn           = m_coreProxy.VerifyAndUpdateGroupId(&groupId);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        log_error("Error: Bad group id parameter {}", groupId);
+        return dcgmReturn;
+    }
+
+    dcgmReturn = mpHealthWatch->SetWatchesStrict(groupId,
+                                                 msg->healthSet.systems,
+                                                 msg->header.connectionId,
+                                                 msg->healthSet.updateInterval,
+                                                 msg->healthSet.maxKeepAge);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        log_error("Unable to set health watches: {}", dcgmReturn);
+    }
     return dcgmReturn;
 }
 
@@ -91,6 +120,20 @@ dcgmReturn_t DcgmModuleHealth::ProcessGetSystems(dcgm_health_msg_get_systems_t *
     }
 
     return dcgmReturn;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmModuleHealth::ProcessGetSupportedSystems(dcgm_health_msg_get_supported_systems_t *msg)
+{
+    dcgmReturn_t const dcgmReturn = CheckVersion(&msg->header, dcgm_health_msg_get_supported_systems_version1);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn; /* Logging handled by helper method */
+    }
+
+    msg->supportedSystems.version = dcgmHealthSupportedSystems_version1;
+    msg->supportedSystems.systems = DcgmHealthWatch::GetSupportedSystems();
+    return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
@@ -261,8 +304,17 @@ dcgmReturn_t DcgmModuleHealth::ProcessMessage(dcgm_module_command_header_t *modu
                 retSt = ProcessGetSystems((dcgm_health_msg_get_systems_t *)moduleCommand);
                 break;
 
+            case DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS:
+                retSt = ProcessGetSupportedSystems(
+                    reinterpret_cast<dcgm_health_msg_get_supported_systems_t *>(moduleCommand));
+                break;
+
             case DCGM_HEALTH_SR_SET_SYSTEMS_V2:
-                retSt = ProcessSetSystems((dcgm_health_msg_set_systems_t *)moduleCommand);
+                retSt = ProcessSetSystemsV2(reinterpret_cast<dcgm_health_msg_set_systems_v2 *>(moduleCommand));
+                break;
+
+            case DCGM_HEALTH_SR_SET_SYSTEMS_V3:
+                retSt = ProcessSetSystemsV3(reinterpret_cast<dcgm_health_msg_set_systems_v3 const *>(moduleCommand));
                 break;
 
             case DCGM_HEALTH_SR_CHECK_V5:

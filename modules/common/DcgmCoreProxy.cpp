@@ -1151,6 +1151,26 @@ dcgmReturn_t DcgmCoreProxy::GetServiceAccount(std::string &serviceAccount) const
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmCoreProxy::GetConfiguredLogFilePath(std::string &logFile) const
+{
+    dcgmCoreGetConfiguredLogFilePath_v1 query {};
+    initializeCoreHeader(
+        query.header, DcgmCoreReqIdGetConfiguredLogFilePath, dcgmCoreGetConfiguredLogFilePath_version1, sizeof(query));
+
+    if (auto const ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    auto const length = strnlen(query.logFile, sizeof(query.logFile));
+    if (length == 0 || length == sizeof(query.logFile))
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    logFile.assign(query.logFile, length);
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmCoreProxy::ReserveResources(unsigned int &token)
 {
     dcgmCoreResourceReserve_t query = {};

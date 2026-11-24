@@ -39,6 +39,13 @@ inline dcgmCoreCallbacks_t MakeResourceReservationCallbacks(ResourceReservationC
                      return DCGM_ST_BADPARAM;
                  }
 
+                 if (header->subCommand == DcgmCoreReqIdLoggingGetSeverity)
+                 {
+                     auto *msg     = reinterpret_cast<dcgmCoreGetSeverity_t *>(header);
+                     msg->response = DcgmLoggingSeverityError;
+                     return DCGM_ST_OK;
+                 }
+
                  if (header->subCommand == DcgmCoreReqIdResourceReserve)
                  {
                      auto *msg = reinterpret_cast<dcgmCoreResourceReserve_t *>(header);

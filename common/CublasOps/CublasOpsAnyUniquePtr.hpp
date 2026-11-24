@@ -26,6 +26,7 @@
 #error "Could not find CublasOps header"
 #endif
 #include "CublasOpsAnyPtr.hpp"
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -653,7 +654,6 @@ private:
         cublasStatus_t (*cublasLtMatrixLayoutDestroy0)(void  *, cublasLtMatrixLayout_t);
         cublasStatus_t (*cublasLtMatrixLayoutGetAttribute0)(void  *, cublasLtMatrixLayout_t, cublasLtMatrixLayoutAttribute_t, void *, size_t, size_t *);
         cublasStatus_t (*cublasLtMatrixLayoutSetAttribute0)(void  *, cublasLtMatrixLayout_t, cublasLtMatrixLayoutAttribute_t, const void *, size_t);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*CublasOpsMoveConstruct)(void *, void *);
         void (*CublasOpsMoveAssign)(void *, void *);

@@ -34,11 +34,11 @@
 // clang-format off
 
 // GCOVR_EXCL_START
-
 namespace DcgmNs
 {
 namespace ProfTester
 {
+
 class PhysicalGpuAnyPtr
 {
 public:
@@ -105,7 +105,7 @@ public:
                 auto *pT = static_cast<T const *>(*std::launder(reinterpret_cast<void *const*>(pStorage)));
                 return pT->AllReported();
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~PhysicalGpuAnyPtr()
@@ -254,15 +254,14 @@ private:
         bool (*WorkerReported0)(void const *);
         bool (*AllStarted0)(void const *);
         bool (*AllReported0)(void const *);
-
     };
 
     VTable const *m_pVTable;
     alignas(StorageAlign) std::byte m_storage[StorageSize];
 };
-
 } // namespace ProfTester
 } // namespace DcgmNs
+
 // GCOVR_EXCL_STOP
 
 // clang-format on

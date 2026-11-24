@@ -104,6 +104,34 @@ def dcgmStartEmbedded(opMode):
 
 
 @ensure_byte_strings()
+def dcgmStartEmbedded_v2(
+        opMode,
+        logFile=None,
+        severity=dcgm_structs.DcgmLoggingSeverityUnspecified,
+        denyList=None,
+        serviceAccount=None):
+    denyList = [] if denyList is None else list(denyList)
+    if len(denyList) > dcgm_structs.DCGM_MODULE_ID_COUNT_V2:
+        raise ValueError("denyList may contain at most %d modules" %
+                         dcgm_structs.DCGM_MODULE_ID_COUNT_V2)
+
+    params = dcgm_structs.c_dcgmStartEmbeddedV2Params_v3()
+    params.version = dcgm_structs.dcgmStartEmbeddedV2Params_version3
+    params.opMode = opMode
+    params.logFile = logFile
+    params.severity = severity
+    params.denyListCount = len(denyList)
+    params.serviceAccount = serviceAccount
+    for index, moduleId in enumerate(denyList):
+        params.denyList[index] = moduleId
+
+    fn = dcgmFP("dcgmStartEmbedded_v2")
+    ret = fn(byref(params))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return c_void_p(params.dcgmHandle)
+
+
+@ensure_byte_strings()
 def dcgmStopEmbedded(dcgm_handle):
     fn = dcgmFP("dcgmStopEmbedded")
     ret = fn(dcgm_handle)
@@ -195,7 +223,7 @@ def dcgmGetDeviceAttributes(
 
 @ensure_byte_strings()
 def dcgmGetEntityGroupEntities(dcgm_handle, entityGroup, flags):
-    capacity = dcgm_structs.DCGM_GROUP_MAX_ENTITIES_V2
+    capacity = dcgm_structs.DCGM_ENTITY_GROUP_ENTITIES_MAX
     c_count = c_int32(capacity)
     entityIds = c_uint32 * capacity
     c_entityIds = entityIds()
@@ -823,12 +851,43 @@ def dcgmHealthSet_v2(
 
 
 @ensure_byte_strings()
+def dcgmHealthSet_v3(
+        dcgm_handle,
+        groupId,
+        systems,
+        updateInterval,
+        maxKeepAge):
+    params = dcgm_structs.c_dcgmHealthSetParams_v2()
+    params.version = dcgm_structs.dcgmHealthSetParams_version2
+    params.groupId = groupId
+    params.systems = systems
+    params.updateInterval = updateInterval
+    params.maxKeepAge = maxKeepAge
+
+    fn = dcgmFP("dcgmHealthSet_v3")
+    ret = fn(dcgm_handle, byref(params))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+@ensure_byte_strings()
 def dcgmHealthGet(dcgm_handle, groupId):
     c_systems = c_int32()
     fn = dcgmFP("dcgmHealthGet")
     ret = fn(dcgm_handle, groupId, byref(c_systems))
     dcgm_structs._dcgmCheckReturn(ret)
     return c_systems.value
+
+
+@ensure_byte_strings()
+def dcgmHealthGetSupportedSystems(dcgm_handle):
+    supported_systems = dcgm_structs.c_dcgmHealthSupportedSystems_v1()
+    supported_systems.version = dcgm_structs.dcgmHealthSupportedSystems_version
+
+    fn = dcgmFP("dcgmHealthGetSupportedSystems")
+    ret = fn(dcgm_handle, byref(supported_systems))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return supported_systems.systems
 
 
 @ensure_byte_strings()
@@ -1229,6 +1288,22 @@ def dcgmModuleGetStatuses(dcgmHandle):
 
 
 @ensure_byte_strings()
+def dcgmModuleIdToName(moduleId):
+    """
+    Map a dcgmModuleId_t to its string name.
+    """
+    fn = dcgmFP("dcgmModuleIdToName")
+    namePtr = c_char_p()
+    ret = fn(c_uint32(moduleId), byref(namePtr))
+    dcgm_structs._dcgmCheckReturn(ret)
+
+    if not bool(namePtr):
+        raise RuntimeError(f"No name found for module id {moduleId}")
+
+    return namePtr.value.decode('utf-8')
+
+
+@ensure_byte_strings()
 def dcgmProfGetSupportedMetricGroups(dcgmHandle, gpuId):
     msg = dcgm_structs.c_dcgmProfGetMetricGroups_v3()
     msg.version = dcgm_structs.dcgmProfGetMetricGroups_version3
@@ -1261,6 +1336,16 @@ def dcgmVersionInfo():
     msg.version = dcgm_structs.dcgmVersionInfo_version2
     fn = dcgmFP("dcgmVersionInfo")
     ret = fn(byref(msg))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return msg
+
+
+@ensure_byte_strings()
+def dcgmHostengineVersionInfo(dcgmHandle):
+    msg = dcgm_structs.c_dcgmVersionInfo_v2()
+    msg.version = dcgm_structs.dcgmVersionInfo_version2
+    fn = dcgmFP("dcgmHostengineVersionInfo")
+    ret = fn(dcgmHandle, byref(msg))
     dcgm_structs._dcgmCheckReturn(ret)
     return msg
 

@@ -53,7 +53,7 @@ public:
                 auto *pT = static_cast<T const *>(*std::launder(reinterpret_cast<void *const*>(pStorage)));
                 return pT->ReadFirstToken(std::forward<decltype(path)>(path));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~SysmonFileSystemAnyPtr()
@@ -142,7 +142,6 @@ private:
     {
         // Declare type's functions
         std::optional<std::string> (*ReadFirstToken0)(void const *, const std::string &);
-
     };
 
     VTable const *m_pVTable;

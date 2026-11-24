@@ -947,6 +947,7 @@ TEST_CASE_METHOD(MockDcgmOpsTestFixture, "MockDcgmOps::configuration policy and 
 
     SECTION("health calls copy configured data and record request state")
     {
+        DcgmNs::DcgmOpsAnyPtr dcgmOps(&mockDcgmOps);
         mockDcgmOps.m_healthState.systems = DCGM_HEALTH_WATCH_PCIE;
 
         dcgmHealthSystems_t systems {};
@@ -968,6 +969,25 @@ TEST_CASE_METHOD(MockDcgmOpsTestFixture, "MockDcgmOps::configuration policy and 
         CHECK(mockDcgmOps.m_healthState.lastSetParams.groupId == groupId);
         CHECK(mockDcgmOps.m_healthState.lastSetParams.systems == DCGM_HEALTH_WATCH_MEM);
 
+        setParams.systems                         = DCGM_HEALTH_WATCH_IMEX;
+        mockDcgmOps.m_healthState.strictSetReturn = DCGM_ST_NOT_SUPPORTED;
+        CHECK(dcgmOps->dcgmHealthSet_v3(handle, &setParams) == DCGM_ST_NOT_SUPPORTED);
+        CHECK(mockDcgmOps.m_healthState.strictSetCallCount == 1);
+        CHECK(mockDcgmOps.m_healthState.lastStrictSetParams.groupId == groupId);
+        CHECK(mockDcgmOps.m_healthState.lastStrictSetParams.systems == DCGM_HEALTH_WATCH_IMEX);
+
+        mockDcgmOps.m_healthState.supportedSystems.systems = DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_IMEX;
+        dcgmHealthSupportedSystems_t supportedSystems {};
+        REQUIRE(dcgmOps->dcgmHealthGetSupportedSystems(handle, &supportedSystems) == DCGM_ST_OK);
+        CHECK(supportedSystems.version == dcgmHealthSupportedSystems_version);
+        CHECK(supportedSystems.systems == (DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_IMEX));
+        CHECK(mockDcgmOps.m_healthState.getSupportedCallCount == 1);
+
+        mockDcgmOps.m_healthState.getSupportedReturn = DCGM_ST_FUNCTION_NOT_FOUND;
+        supportedSystems.systems                     = 0x4000;
+        CHECK(dcgmOps->dcgmHealthGetSupportedSystems(handle, &supportedSystems) == DCGM_ST_FUNCTION_NOT_FOUND);
+        CHECK(supportedSystems.systems == 0x4000);
+
         mockDcgmOps.m_healthState.response.incidentCount       = 1;
         mockDcgmOps.m_healthState.response.incidents[0].system = DCGM_HEALTH_WATCH_MEM;
         dcgmHealthResponse_t response {};
@@ -977,6 +997,8 @@ TEST_CASE_METHOD(MockDcgmOpsTestFixture, "MockDcgmOps::configuration policy and 
         CHECK(mockDcgmOps.m_healthState.checkCallCount == 1);
         CHECK(mockDcgmOps.dcgmHealthGet(handle, groupId, nullptr) == DCGM_ST_BADPARAM);
         CHECK(mockDcgmOps.dcgmHealthSet_v2(handle, nullptr) == DCGM_ST_BADPARAM);
+        CHECK(dcgmOps->dcgmHealthSet_v3(handle, nullptr) == DCGM_ST_BADPARAM);
+        CHECK(dcgmOps->dcgmHealthGetSupportedSystems(handle, nullptr) == DCGM_ST_BADPARAM);
         CHECK(mockDcgmOps.dcgmHealthCheck(handle, groupId, nullptr) == DCGM_ST_BADPARAM);
     }
 }

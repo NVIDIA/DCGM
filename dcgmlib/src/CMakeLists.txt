@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(mocks)
 add_subdirectory(tests)
 
 set(SRCS
@@ -75,6 +76,37 @@ set(DEPS
     task_context_manager
 )
 
+add_library(dcgm_module_transport STATIC)
+target_sources(dcgm_module_transport
+    PRIVATE
+        DcgmModuleTransport.cpp
+        DcgmModuleTransport.hpp
+)
+target_include_directories(dcgm_module_transport PRIVATE "${INCLUDES}")
+target_link_libraries(dcgm_module_transport
+    PRIVATE
+        common_interface
+        dcgm_interface
+        modules_interface
+        transport_interface
+)
+
+add_library(dcgm_module_transport_entry STATIC)
+target_sources(dcgm_module_transport_entry
+    PRIVATE
+        DcgmModuleTransportEntry.cpp
+)
+target_include_directories(dcgm_module_transport_entry PRIVATE "${INCLUDES}")
+target_link_libraries(dcgm_module_transport_entry
+    PUBLIC
+        dcgm_module_transport
+    PRIVATE
+        common_interface
+        dcgm_interface
+        modules_interface
+        transport_interface
+)
+
 target_sources(dcgm_entity_types PRIVATE DcgmEntityTypes.cpp)
 target_include_directories(dcgm_entity_types PRIVATE "${INCLUDES}")
 target_link_libraries(dcgm_entity_types PRIVATE ${DEPS})
@@ -95,6 +127,7 @@ target_link_libraries(dcgm
     PRIVATE
         ${DEPS}
         modules_objects
+        dcgm_module_transport
         dcgm_entity_types
         -Wl,--whole-archive
         buildinfo_objects

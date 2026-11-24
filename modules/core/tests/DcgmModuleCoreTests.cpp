@@ -155,6 +155,16 @@ struct LatestValuesMessageTraits<dcgm_core_msg_entities_get_latest_values_v4>
 
 } // namespace
 
+TEST_CASE("DcgmModuleCore entity-group enumeration uses the expanded v3 envelope")
+{
+    using EntityArray = decltype(dcgmGetEntityGroupEntities_v3::entities);
+
+    STATIC_REQUIRE(
+        std::is_same_v<dcgm_core_msg_get_entity_group_entities_t, dcgm_core_msg_get_entity_group_entities_v3>);
+    STATIC_REQUIRE(std::extent_v<EntityArray> == DCGM_ENTITY_GROUP_ENTITIES_MAX);
+    STATIC_REQUIRE(DCGM_ENTITY_GROUP_ENTITIES_MAX > DCGM_GROUP_MAX_ENTITIES_V2);
+}
+
 TEMPLATE_TEST_CASE("DcgmModuleCore latest values rejects version mismatch",
                    "[core]",
                    dcgm_core_msg_entities_get_latest_values_v3,

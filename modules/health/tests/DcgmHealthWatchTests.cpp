@@ -5104,6 +5104,114 @@ SCENARIO("DcgmHealthWatch public GPU monitoring aggregates subsystem outcomes", 
     }
 }
 
+TEST_CASE("DcgmHealthWatch reports only implemented health systems", "[health]")
+{
+    auto constexpr expected = static_cast<dcgmHealthSystems_t>(
+        DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_NVLINK | DCGM_HEALTH_WATCH_MEM | DCGM_HEALTH_WATCH_INFOROM
+        | DCGM_HEALTH_WATCH_THERMAL | DCGM_HEALTH_WATCH_POWER | DCGM_HEALTH_WATCH_DRIVER
+        | DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL | DCGM_HEALTH_WATCH_NVSWITCH_FATAL | DCGM_HEALTH_WATCH_CONNECTX
+        | DCGM_HEALTH_WATCH_IMEX);
+
+    auto constexpr supported = DcgmHealthWatch::GetSupportedSystems();
+
+    CHECK(supported == expected);
+    CHECK((supported & DCGM_HEALTH_WATCH_IMEX) != 0);
+    CHECK((supported & DCGM_HEALTH_WATCH_PMU) == 0);
+    CHECK((supported & DCGM_HEALTH_WATCH_MCU) == 0);
+    CHECK((supported & DCGM_HEALTH_WATCH_SM) == 0);
+    CHECK((supported & static_cast<dcgmHealthSystems_t>(0x4000)) == 0);
+}
+
+SCENARIO_METHOD(DcgmHealthWatchRecordingFixture,
+                "DcgmHealthWatch strict set accepts supported systems and ALL",
+                "[health]")
+{
+    GIVEN("a recording health watch with an empty group")
+    {
+        SECTION("a supported mask is stored unchanged")
+        {
+            auto constexpr requested
+                = static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_POWER | DCGM_HEALTH_WATCH_IMEX);
+            auto const setResult           = healthWatch.SetWatchesStrict(20, requested, 9, 1000, 60.0);
+            dcgmHealthSystems_t configured = static_cast<dcgmHealthSystems_t>(0);
+            auto const getResult           = healthWatch.GetWatches(20, &configured);
+
+            REQUIRE(setResult == DCGM_ST_OK);
+            REQUIRE(getResult == DCGM_ST_OK);
+            CHECK(configured == requested);
+        }
+
+        SECTION("ALL is stored as the supported mask")
+        {
+            auto const setResult           = healthWatch.SetWatchesStrict(21, DCGM_HEALTH_WATCH_ALL, 9, 1000, 60.0);
+            dcgmHealthSystems_t configured = static_cast<dcgmHealthSystems_t>(0);
+            auto const getResult           = healthWatch.GetWatches(21, &configured);
+
+            REQUIRE(setResult == DCGM_ST_OK);
+            REQUIRE(getResult == DCGM_ST_OK);
+            CHECK(configured == DcgmHealthWatch::GetSupportedSystems());
+        }
+    }
+}
+
+SCENARIO_METHOD(DcgmHealthWatchRecordingFixture,
+                "DcgmHealthWatch strict set rejects unsupported bits without changing state",
+                "[health]")
+{
+    GIVEN("a group with a supported watch already configured")
+    {
+        REQUIRE(healthWatch.SetWatchesStrict(22, DCGM_HEALTH_WATCH_POWER, 9, 1000, 60.0) == DCGM_ST_OK);
+        auto const updatesBeforeReject = recordingContext.updateAllFieldsCalls;
+
+        auto checkRejectedMask = [this, updatesBeforeReject](dcgmHealthSystems_t requested) {
+            auto const setResult           = healthWatch.SetWatchesStrict(22, requested, 9, 1000, 60.0);
+            dcgmHealthSystems_t configured = static_cast<dcgmHealthSystems_t>(0);
+            auto const getResult           = healthWatch.GetWatches(22, &configured);
+
+            CHECK(setResult == DCGM_ST_NOT_SUPPORTED);
+            REQUIRE(getResult == DCGM_ST_OK);
+            CHECK(configured == DCGM_HEALTH_WATCH_POWER);
+            CHECK(recordingContext.updateAllFieldsCalls == updatesBeforeReject);
+        };
+
+        SECTION("an unknown-only mask is rejected")
+        {
+            checkRejectedMask(static_cast<dcgmHealthSystems_t>(0x4000));
+        }
+
+        SECTION("a mixed known and unknown mask is rejected")
+        {
+            checkRejectedMask(static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_POWER | 0x4000));
+        }
+    }
+}
+
+SCENARIO_METHOD(DcgmHealthWatchRecordingFixture, "DcgmHealthWatch legacy set keeps the caller's raw mask", "[health]")
+{
+    GIVEN("a recording health watch with an empty group")
+    {
+        auto const checkLegacyMask = [this](dcgmHealthSystems_t requested) {
+            auto const setResult           = healthWatch.SetWatches(23, requested, 9, 1000, 60.0);
+            dcgmHealthSystems_t configured = static_cast<dcgmHealthSystems_t>(0);
+            auto const getResult           = healthWatch.GetWatches(23, &configured);
+
+            REQUIRE(setResult == DCGM_ST_OK);
+            REQUIRE(getResult == DCGM_ST_OK);
+            CHECK(configured == requested);
+        };
+
+        SECTION("an unknown-only mask is accepted and stored")
+        {
+            checkLegacyMask(static_cast<dcgmHealthSystems_t>(0x4000));
+        }
+
+        SECTION("a mixed known and unknown mask is accepted and stored")
+        {
+            checkLegacyMask(static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_POWER | 0x4000));
+        }
+    }
+}
+
 SCENARIO("DcgmHealthWatch public watch state follows SetWatches and GetWatches", "[health]")
 {
     GIVEN("a mock group containing one GPU and a PCIe plus memory watch mask")

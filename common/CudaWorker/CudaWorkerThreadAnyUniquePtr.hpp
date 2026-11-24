@@ -25,6 +25,7 @@
 #else
 #error "Could not find CudaWorkerThread header"
 #endif
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -291,7 +292,6 @@ private:
         void (*SetWorkerToIdle0)(void  *);
         double (*GetCurrentAchievedLoad0)(void  *);
         void (*SetPeerByBusId0)(void  *, std::string);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*CudaWorkerThreadMoveConstruct)(void *, void *);
         void (*CudaWorkerThreadMoveAssign)(void *, void *);

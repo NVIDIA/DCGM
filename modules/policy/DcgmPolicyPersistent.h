@@ -54,14 +54,14 @@ public:
     ~DcgmPolicyPersistence();
 
     /**
-     * Parse YAML file and replace all registry policies with the parsed set (invalid entries skipped).
+     * Parse YAML file and replace all registry policies with the parsed set.
      *
      * @return DCGM_ST_OK on success
      * @return DCGM_ST_BADPARAM if path is outside allowed directories, file too large,
-     *         schema version unsupported, or YAML is malformed
+     *         schema version unsupported, YAML is malformed, or any policy entry is invalid
      * @return DCGM_ST_FILE_IO_ERROR if file doesn't exist or is a symlink
      */
-    dcgmReturn_t LoadPolicies();
+    dcgmReturn_t LoadPolicies(bool rejectEmptyPoliciesSequence = false);
 
     /**
      * Save registered policies to YAML file (atomic write)
@@ -117,11 +117,14 @@ private:
      * @param[in] filePath Path to YAML file
      * @param[out] policies Parsed policies appended here
      *
-     * @return DCGM_ST_OK on success (partial success if some entries fail validation)
+     * @return DCGM_ST_OK on success
      * @return DCGM_ST_FILE_IO_ERROR if file doesn't exist or is a symlink
-     * @return DCGM_ST_BADPARAM if file too large, schema version unsupported, or YAML is malformed
+     * @return DCGM_ST_BADPARAM if file too large, schema version unsupported, YAML is malformed,
+     *         or any policy entry is invalid
      */
-    dcgmReturn_t ParseYamlFile(std::filesystem::path const &filePath, std::vector<DcgmPolicy> &policies);
+    dcgmReturn_t ParseYamlFile(std::filesystem::path const &filePath,
+                               std::vector<DcgmPolicy> &policies,
+                               bool rejectEmptyPoliciesSequence = false);
 
     /**
      * Parse a single YAML policy node into a DcgmPolicy.

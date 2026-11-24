@@ -31,10 +31,8 @@ class DcgmDiag:
     # Maps version codes to simple version values for range comparisons
     _versionMap = {
         dcgm_structs.dcgmRunDiag_version: 10,
-        dcgm_structs.dcgmRunDiag_version7: 7,
-        dcgm_structs.dcgmRunDiag_version8: 8,
-        dcgm_structs.dcgmRunDiag_version9: 9,
         dcgm_structs.dcgmRunDiag_version10: 10,
+        dcgm_structs.dcgmRunDiag_version11: 11,
     }
 
     def __init__(
@@ -53,19 +51,7 @@ class DcgmDiag:
                 "'%s' is not a valid version for dcgmRunDiag." % version)
         self.version = version
 
-        if self.version == dcgm_structs.dcgmRunDiag_version10:
-            self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
-        elif self.version == dcgm_structs.dcgmRunDiag_version9:
-            self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
-        elif self.version == dcgm_structs.dcgmRunDiag_version8:
-            self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
-        elif self.version == dcgm_structs.dcgmRunDiag_version7:
-            self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
-        else:
-            if logger:
-                logger.info("Unexpected runDiag version " +
-                            self.version + " using RunDiag_t")
-            self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_t()
+        self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
 
         self.runDiagInfo.flags = 0
         self.numTests = 0
@@ -144,7 +130,8 @@ class DcgmDiag:
             self.runDiagInfo.expectedNumEntities = self.expectedNumGpus
 
         if logger and logger.nvvs_trace_log_filename is not None:
-            self.SetDebugLogFile(logger.nvvs_trace_log_filename)
+            self.SetDebugLogFile(os.path.basename(
+                logger.nvvs_trace_log_filename))
             self.SetDebugLevel(5)  # Collect logs at highest level for nvvs.
 
     def SetVerbose(self, val):
@@ -167,10 +154,6 @@ class DcgmDiag:
 
     def AddParameter(self, parameterStr):
         maxTestParamsLen = dcgm_structs.DCGM_MAX_TEST_PARMS_LEN
-        if self.version == dcgm_structs.dcgmRunDiag_version8 or self.version == dcgm_structs.dcgmRunDiag_version9:
-            maxTestParamsLen = dcgm_structs.DCGM_MAX_TEST_PARMS_LEN_V2
-        elif self.version == dcgm_structs.dcgmRunDiag_version7:
-            maxTestParamsLen = dcgm_structs.DCGM_MAX_TEST_PARMS_LEN
         if len(parameterStr) >= maxTestParamsLen:
             err = 'DcgmDiag cannot add parameter \'%s\' because it exceeds max length %d.' % \
                   (parameterStr, maxTestParamsLen)

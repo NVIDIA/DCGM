@@ -613,9 +613,12 @@ dcgmReturn_t DcgmModuleCore::ProcessGetEntityGroupEntities(dcgm_core_msg_get_ent
         return DCGM_ST_OK;
     }
 
-    if (entities.size() > DCGM_GROUP_MAX_ENTITIES_V2)
+    if (entities.size() > DCGM_ENTITY_GROUP_ENTITIES_MAX)
     {
-        msg.entities.cmdRet = DCGM_ST_INSUFFICIENT_SIZE;
+        log_error("Entity group enumeration returned {} entities, exceeding the internal maximum of {}",
+                  entities.size(),
+                  DCGM_ENTITY_GROUP_ENTITIES_MAX);
+        msg.entities.cmdRet = DCGM_ST_GENERIC_ERROR;
         return DCGM_ST_OK;
     }
 

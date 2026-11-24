@@ -493,7 +493,7 @@ public:
                 auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->SetHangDetectMonitor(std::forward<decltype(monitor)>(monitor));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~DcgmCacheManagerAnyPtr()
@@ -1132,7 +1132,6 @@ private:
         void (*SendSignal0)(void  *, int);
         int (*HasExited0)(void  *);
         void (*SetHangDetectMonitor0)(void  *, class HangDetectMonitor *);
-
     };
 
     VTable const *m_pVTable;

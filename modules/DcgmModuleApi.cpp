@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,22 @@
 #include "DcgmRequest.h"
 #include "dcgm_module_structs.h"
 #include "dcgm_test_apis.h" /* DCGM_EMBEDDED_HANDLE */
+#include <DcgmModuleTransport.hpp>
 #include <vector>
 
 /*****************************************************************************/
-/* Stubs */
-dcgmReturn_t processModuleCommandAtHostEngine(dcgmHandle_t pDcgmHandle,
-                                              dcgm_module_command_header_t *moduleCommand,
-                                              size_t maxResponseSize               = 0,
-                                              std::unique_ptr<DcgmRequest> request = nullptr,
-                                              unsigned int timeout                 = 60000);
-
-/*****************************************************************************/
+/**
+ * Send a blocking module request to the DCGM host engine.
+ *
+ * @param[in] pDcgmHandle     Connection handle to the DCGM host engine.
+ * @param[in] moduleCommand   Module command header and payload. Results are written back here.
+ * @param[in] maxResponseSize Maximum size of the response buffer.
+ * @param[in] request         Optional request used to peek at messages as they arrive.
+ * @param[in] timeout         Timeout in milliseconds. Currently used only for remote requests.
+ *
+ * @return DCGM_ST_OK on success, DCGM_ST_BADPARAM if the command is invalid, or a DCGM error
+ *         status from the host engine.
+ */
 DCGM_PUBLIC_API dcgmReturn_t dcgmModuleSendBlockingFixedRequest(dcgmHandle_t pDcgmHandle,
                                                                 dcgm_module_command_header_t *moduleCommand,
                                                                 size_t maxResponseSize,
@@ -37,7 +42,9 @@ DCGM_PUBLIC_API dcgmReturn_t dcgmModuleSendBlockingFixedRequest(dcgmHandle_t pDc
                                                                 unsigned int timeout)
 {
     if (!moduleCommand)
+    {
         return DCGM_ST_BADPARAM;
+    }
 
     if (moduleCommand->length < sizeof(*moduleCommand))
     {

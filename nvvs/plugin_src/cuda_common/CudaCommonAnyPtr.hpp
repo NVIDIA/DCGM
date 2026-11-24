@@ -101,7 +101,7 @@ public:
                 auto *pT = static_cast<T const *>(*std::launder(reinterpret_cast<void *const*>(pStorage)));
                 return pT->GetAdditionalCuInitDetail(std::forward<decltype(cuSt)>(cuSt));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~CudaCommonAnyPtr()
@@ -250,7 +250,6 @@ private:
         std::string (*AddCublasError1)(void const *, Plugin *, const std::string &, const char *, cublasStatus_t, unsigned int, size_t);
         std::string (*AddCublasError2)(void const *, Plugin *, const std::string &, const char *, cublasStatus_t, unsigned int, size_t, bool);
         const char * (*GetAdditionalCuInitDetail0)(void const *, CUresult);
-
     };
 
     VTable const *m_pVTable;

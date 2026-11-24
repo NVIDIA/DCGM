@@ -165,7 +165,7 @@ public:
                 auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->cublasLtMatrixLayoutSetAttribute(std::forward<decltype(matLayout)>(matLayout), std::forward<decltype(attr)>(attr), std::forward<decltype(buf)>(buf), std::forward<decltype(sizeInBytes)>(sizeInBytes));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~CublasOpsAnyPtr()
@@ -394,7 +394,6 @@ private:
         cublasStatus_t (*cublasLtMatrixLayoutDestroy0)(void  *, cublasLtMatrixLayout_t);
         cublasStatus_t (*cublasLtMatrixLayoutGetAttribute0)(void  *, cublasLtMatrixLayout_t, cublasLtMatrixLayoutAttribute_t, void *, size_t, size_t *);
         cublasStatus_t (*cublasLtMatrixLayoutSetAttribute0)(void  *, cublasLtMatrixLayout_t, cublasLtMatrixLayoutAttribute_t, const void *, size_t);
-
     };
 
     VTable const *m_pVTable;

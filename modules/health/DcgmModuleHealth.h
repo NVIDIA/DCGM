@@ -43,7 +43,9 @@ private:
     /* Subrequest helpers
      */
     dcgmReturn_t ProcessGetSystems(dcgm_health_msg_get_systems_t *msg);
-    dcgmReturn_t ProcessSetSystems(dcgm_health_msg_set_systems_t *msg);
+    dcgmReturn_t ProcessGetSupportedSystems(dcgm_health_msg_get_supported_systems_t *msg);
+    dcgmReturn_t ProcessSetSystemsV2(dcgm_health_msg_set_systems_v2 *msg);
+    dcgmReturn_t ProcessSetSystemsV3(dcgm_health_msg_set_systems_v3 const *msg);
     dcgmReturn_t ProcessCheckV5(dcgm_health_msg_check_v5 *msg);
     dcgmReturn_t ProcessCheckGpus(dcgm_health_msg_check_gpus_t *msg);
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);

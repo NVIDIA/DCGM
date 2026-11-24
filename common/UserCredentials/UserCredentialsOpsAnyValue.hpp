@@ -25,6 +25,7 @@
 #else
 #error "Could not find UserCredentials header"
 #endif
+
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -204,7 +205,6 @@ private:
     {
         // Declare type's functions
         std::optional<UserCredentials> (*GetUserCredentials0)(void const *, const char *);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*UserCredentialsOpsCopyConstruct)(void *, void const *);
         void (*UserCredentialsOpsCopyAssign)(void *, void const *);

@@ -32,6 +32,7 @@ import threading
 import time
 import sys
 import os
+import re
 import signal
 import utils
 import json
@@ -284,161 +285,66 @@ def helper_check_diag_high_temp_fail(handle, gpuIds):
 @test_utils.run_with_injection_nvml_using_specific_sku('A100x4-and-DGX.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
-def test_dcgm_run_diag_backwards_compatibility_standalone(handle, gpuIds):
-    """
-    Verifies that the dcgmActionValidate_v2 API supports older versions of the dcgmRunDiag struct
-    by using the old structs to run a short validation test.
-    """
+def test_dcgm_run_diag_current_format_standalone(handle, gpuIds):
+    run_diag = dcgm_structs.c_dcgmRunDiag_v10()
+    run_diag.version = dcgm_structs.dcgmRunDiag_version10
+    run_diag.entityIds = str(gpuIds[0])
+    run_diag.groupId = dcgm_structs.DCGM_GROUP_NULL
+    run_diag.validate = 1
+    response = dcgm_structs.c_dcgmDiagResponse_v12()
+    response.version = dcgm_structs.dcgmDiagResponse_version12
 
-    def localDcgmActionValidate_v2(dcgm_handle, runDiagInfo, response):
-        fn = dcgm_structs._dcgmGetFunctionPointer("dcgmActionValidate_v2")
-        ret = fn(dcgm_handle, byref(runDiagInfo), byref(response))
-        return ret
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmActionValidate_v2")
+    ret = fn(handle, byref(run_diag), byref(response))
 
-    def _test_run_diag_v9_and_v10():
-        runDiagVersions = {
-            dcgm_structs.dcgmRunDiag_version9: dcgm_structs.c_dcgmRunDiag_v9(),
-            dcgm_structs.dcgmRunDiag_version10: dcgm_structs.c_dcgmRunDiag_v10(),
-        }
-        diagResponseVersions = {
-            dcgm_structs.dcgmRunDiag_version9: [
-                dcgm_structs.c_dcgmDiagResponse_v11(),
-                dcgm_structs.dcgmDiagResponse_version11],
-            dcgm_structs.dcgmRunDiag_version10: [
-                dcgm_structs.c_dcgmDiagResponse_v12(),
-                dcgm_structs.dcgmDiagResponse_version12],
-        }
-
-        for runDiagVer, runDiag in runDiagVersions.items():
-            drd = runDiag
-            drd.version = runDiagVer
-            drd.entityIds = str(gpuIds[0])
-            drd.groupId = dcgm_structs.DCGM_GROUP_NULL
-            drd.validate = 1
-            response, responseVer = diagResponseVersions[runDiagVer]
-            response.version = responseVer
-            response.numTests = 0
-            ret = localDcgmActionValidate_v2(handle, drd, response)
-            assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}] for RunDiag version {runDiagVer}"
-            assert response.version == responseVer, (
-                f"expected {responseVer:x} actual "
-                f"{response.version:x}")
-            assert response.numTests == 1, (
-                f"response.numTests: [{response.numTests}] for "
-                f"RunDiag version {runDiagVer}")
-            assert response.tests[0].name == "software", (
-                f"response.tests[0].name: [{response.tests[0].name}] "
-                f"for RunDiag version {runDiagVer}")
-
-    # Test runDiag_v9 and runDiag_v10 (may be redundant with some tests below)
-    _test_run_diag_v9_and_v10()
-
-    # Test dcgmRunDiag_v8 with dcgmDiagResponse_v10
-    drd = dcgm_structs.c_dcgmRunDiag_v8()
-    drd.version = dcgm_structs.dcgmRunDiag_version8
-    drd.gpuList = str(gpuIds[0])
-    drd.validate = 1
-    response = dcgm_structs.c_dcgmDiagResponse_v10()
-    response.version = dcgm_structs.dcgmDiagResponse_version10
-    response.levelOneTestCount = 0
-    ret = localDcgmActionValidate_v2(handle, drd, response)
     assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}]"
-    assert response.version == dcgm_structs.dcgmDiagResponse_version10
-    assert response.levelOneTestCount != 0, (
-        f"response.levelOneTestCount: "
-        f"[{response.levelOneTestCount}]")
-
-    # Test dcgmRunDiag_v7 with dcgmDiagResponse_v10
-    drd = dcgm_structs.c_dcgmRunDiag_v7()
-    drd.version = dcgm_structs.dcgmRunDiag_version7
-    drd.gpuList = str(gpuIds[0])
-    drd.validate = 1
-    response = dcgm_structs.c_dcgmDiagResponse_v10()
-    response.version = dcgm_structs.dcgmDiagResponse_version10
-    response.levelOneTestCount = 0
-    ret = localDcgmActionValidate_v2(handle, drd, response)
-    assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}]"
-    assert response.version == dcgm_structs.dcgmDiagResponse_version10
-    assert response.levelOneTestCount != 0, (
-        f"response.levelOneTestCount: "
-        f"[{response.levelOneTestCount}]")
-
-    # Test dcgmRunDiag_v7 with dcgmDiagResponse_v9
-    drd = dcgm_structs.c_dcgmRunDiag_v7()
-    drd.version = dcgm_structs.dcgmRunDiag_version7
-    drd.gpuList = str(gpuIds[0])
-    drd.validate = 1
-    response = dcgm_structs.c_dcgmDiagResponse_v9()
-    response.version = dcgm_structs.dcgmDiagResponse_version9
-    response.levelOneTestCount = 0
-    ret = localDcgmActionValidate_v2(handle, drd, response)
-    assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}]"
-    assert response.version == dcgm_structs.dcgmDiagResponse_version9
-    assert response.levelOneTestCount != 0, (
-        f"response.levelOneTestCount: "
-        f"[{response.levelOneTestCount}]")
-
+    assert response.version == dcgm_structs.dcgmDiagResponse_version12
+    assert response.numTests == 1, f"response.numTests: [{response.numTests}]"
+    assert response.tests[0].name == "software", (
+        f"response.tests[0].name: [{response.tests[0].name}]")
+    test = response.tests[0]
+    responseInfoCount = min(response.numInfo, len(response.info))
+    testInfo = [
+        response.info[infoIdx]
+        for infoIdx in test.infoIndices[:min(
+            test.numInfo,
+            len(test.infoIndices))]
+        if infoIdx < responseInfoCount]
+    runtimeInfo = [
+        info for info in testInfo
+        if re.fullmatch(r"Test runtime: \d+\.\d{3} seconds", info.msg)]
+    assert len(runtimeInfo) == 1, (
+        f"expected one runtime info for response version {response.version:x}, "
+        f"found {[info.msg for info in testInfo]}")
+    assert runtimeInfo[0].testId == 0
+    assert runtimeInfo[0].entity.entityGroupId == dcgm_fields.DCGM_FE_NONE
+    assert runtimeInfo[0].entity.entityId == 0
 
 # NO HARDWARE
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('A100x4-and-DGX.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
-def test_dcgm_run_diagnostic_backwards_compatibility(handle, gpuIds):
-    def localDcgmRunDiagnostic(dcgm_handle, group_id, response):
-        fn = dcgm_structs._dcgmGetFunctionPointer("dcgmRunDiagnostic")
-        ret = fn(dcgm_handle, group_id,
-                 dcgm_structs.DCGM_DIAG_LVL_SHORT, byref(response))
-        return ret
-
+def test_dcgm_run_diagnostic_current_format(handle, gpuIds):
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     createdGroup = dcgmSystem.GetGroupWithGpuIds(
         "capoo_as_group_name", [gpuIds[0]])
     createdGroupId = createdGroup.GetId().value
 
-    # Test "latest" (may be redundant with some tests below)
     response = dcgm_structs.c_dcgmDiagResponse_v12()
     response.version = dcgm_structs.dcgmDiagResponse_version12
-    response.numTests = 0
-    ret = localDcgmRunDiagnostic(handle, createdGroupId, response)
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmRunDiagnostic")
+    ret = fn(handle, createdGroupId,
+             dcgm_structs.DCGM_DIAG_LVL_SHORT, byref(response))
+
     assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}]"
     assert response.version == dcgm_structs.dcgmDiagResponse_version12
     assert response.numTests == 1, f"response.numTests: [{response.numTests}]"
     assert response.tests[0].name == "software", (
         f"response.tests[0].name: [{response.tests[0].name}]")
-
-    # Test dcgmDiagResponse_v11
-    response = dcgm_structs.c_dcgmDiagResponse_v11()
-    response.version = dcgm_structs.dcgmDiagResponse_version11
-    response.numTests = 0
-    ret = localDcgmRunDiagnostic(handle, createdGroupId, response)
-    assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}]"
-    assert response.version == dcgm_structs.dcgmDiagResponse_version11
-    assert response.numTests == 1, f"response.numTests: [{response.numTests}]"
-    assert response.tests[0].name == "software", (
-        f"response.tests[0].name: [{response.tests[0].name}]")
-
-    # Test dcgmDiagResponse_v10
-    response = dcgm_structs.c_dcgmDiagResponse_v10()
-    response.version = dcgm_structs.dcgmDiagResponse_version10
-    response.levelOneTestCount = 0
-    ret = localDcgmRunDiagnostic(handle, createdGroupId, response)
-    assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}]"
-    assert response.version == dcgm_structs.dcgmDiagResponse_version10
-    assert response.levelOneTestCount != 0, (
-        f"response.levelOneTestCount: [{response.levelOneTestCount}]")
-
-    # Test dcgmDiagResponse_v9
-    response = dcgm_structs.c_dcgmDiagResponse_v9()
-    response.version = dcgm_structs.dcgmDiagResponse_version9
-    response.levelOneTestCount = 0
-    ret = localDcgmRunDiagnostic(handle, createdGroupId, response)
-    assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}]"
-    assert response.version == dcgm_structs.dcgmDiagResponse_version9
-    assert response.levelOneTestCount != 0, (
-        f"response.levelOneTestCount: [{response.levelOneTestCount}]")
 
 
 checked_gpus = {}  # Used to track that a GPU has been verified as passing
@@ -563,7 +469,6 @@ def test_thermal_violations_standalone(handle, gpuIds):
             dcgm_structs.c_dcgmGroupEntityPair_t(
                 dcgm_fields.DCGM_FE_GPU, gpuId)], testName, "hermal violations")
     if foundError:
-        import re
         match = re.search(r"totaling.*?seconds", errmsg)
         assert match, "Expected to find 'totaling <seconds> seconds' in error message but found %s" % errmsg
     else:
@@ -940,7 +845,7 @@ def test_dcgm_diag_stop_on_signal_standalone(handle, gpuIds):
         wait_host_engine_ready(handle, gpuIds[0])
 
         args = ["diag", "-r", "memtest", "-i", "%s" %
-                gpuIds[0], "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"]
+                gpuIds[0], "-d", "INFO", "--log-filename", "nvvs.log"]
         if enableHeartbeat:
             args.append("--enable-heartbeat")
 
@@ -1029,8 +934,8 @@ def test_dcgm_diag_stop_on_interrupt_signals_dcgmi_embedded_itself():
             "memtest.test_duration=2",
             "-d",
             "INFO",
-            "--debugLogFile",
-            "/tmp/nvvs.log"],
+            "--log-filename",
+            "nvvs.log"],
         env=test_utils.smallFbModeEnv)
     start_time = time.time()
     diagApp.start(timeout=None)
@@ -1044,7 +949,7 @@ def test_dcgm_diag_stop_on_interrupt_signals_dcgmi_embedded_itself():
 
     def verify_exit_code_on_signal(signum, enableHeartbeat=False):
         args = ["diag", "-r", "memtest", "-i", "0", "-d",
-                "INFO", "--debugLogFile", "/tmp/nvvs.log"]
+                "INFO", "--log-filename", "nvvs.log"]
         if enableHeartbeat:
             args.append("--enable-heartbeat")
         diagApp = AppRunner(dcgmi_path, args=args,
@@ -1118,7 +1023,10 @@ def test_dcgm_diag_stop_on_interrupt_signals_dcgmi_embedded_itself():
 # NO HARDWARE
 
 @test_utils.run_with_standalone_host_engine(120,
-                                            heEnv=test_utils.smallFbModeEnv)
+                                            heEnv=lambda: {
+                                                **test_utils.smallFbModeEnv,
+                                                "__DCGM_DBG_FILE": os.path.join(
+                                                    test_utils.logger.log_dir, "hostengine.log")})
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_verify_log_file_creation_standalone(handle, gpuIds):
     testName = TEST_MEMTEST
@@ -1128,8 +1036,13 @@ def test_dcgm_diag_verify_log_file_creation_standalone(handle, gpuIds):
         testNames=testName,
         params="memtest.test_duration=10",
         useFakeGpus=True)
-    logname = '/tmp/tmp_test_debug_log'
-    dd.SetDebugLogFile(logname)
+    fd, temp_path = tempfile.mkstemp(
+        prefix="tmp_test_debug_log_", dir=logger.log_dir)
+    os.close(fd)
+    os.unlink(temp_path)
+    log_filename = os.path.basename(temp_path)
+    logname = os.path.join(logger.log_dir, "nvvs", log_filename)
+    dd.SetDebugLogFile(log_filename)
     dd.SetDebugLevel(5)
     response = test_utils.diag_execute_wrapper(dd, handle)
 
@@ -1888,7 +1801,7 @@ def test_dcgm_diag_hbm_temperature_pass(handle, gpuIds):
     helper_hbm_temperature_check(handle, gpuIds, "pass")
 
 
-def helper_dcgm_diag_timing_out(handle, gpuIds, version):
+def helper_dcgm_diag_timing_out(handle, gpuIds):
     # First check if there's already a diagnostic running - skip if so
     try:
         # Try to stop any running diagnostic first (this is a safe no-op if
@@ -1904,7 +1817,7 @@ def helper_dcgm_diag_timing_out(handle, gpuIds, version):
 
     # Run the actual timeout test
     dd = DcgmDiag.DcgmDiag(
-        gpuIds=gpuIds, testNamesStr="pcie", timeout=1, version=version)
+        gpuIds=gpuIds, testNamesStr="pcie", timeout=1)
     try:
         test_utils.diag_execute_wrapper(dd, handle)
     except Exception as e:
@@ -1944,17 +1857,7 @@ def helper_dcgm_diag_timing_out(handle, gpuIds, version):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_diag_timing_out(handle, gpuIds):
-    helper_dcgm_diag_timing_out(
-        handle, gpuIds, dcgm_structs.dcgmRunDiag_version9)
-
-
-@test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_only_with_live_gpus()
-@test_utils.for_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_diag_timing_out_v7(handle, gpuIds):
-    helper_dcgm_diag_timing_out(
-        handle, gpuIds, dcgm_structs.dcgmRunDiag_version7)
+    helper_dcgm_diag_timing_out(handle, gpuIds)
 
 
 # NO HARDWARE
@@ -2268,8 +2171,8 @@ def test_dcgm_diag_stop_when_dcgmi_gets_killed(handle, gpuIds):
             gpuId,
             "-d",
             "INFO",
-            "--debugLogFile",
-            "/tmp/nvvs.log",
+            "--log-filename",
+            "nvvs.log",
             "--enable-heartbeat"])
     # Start the diag
     diagApp.start(timeout=60)
@@ -2345,8 +2248,8 @@ def test_dcgm_diag_when_already_running(handle, gpuIds):
             gpuId,
             "-d",
             "INFO",
-            "--debugLogFile",
-            "/tmp/nvvs.log"])
+            "--log-filename",
+            "nvvs.log"])
     # Start the diag
     diagApp.start(timeout=60)
     logger.info("Launched dcgmi process with pid: %s" % diagApp.getpid())

@@ -23,6 +23,7 @@
 #include <DcgmStringHelpers.h>
 #include <Diag.h>
 #include <MockDcgmOps.h>
+#include <NvcmTCLAP.h>
 #include <NvvsJsonStrings.h>
 #include <PluginStrings.h>
 #include <UniquePtrUtil.h>
@@ -217,6 +218,7 @@ struct DiagTestFixture
     DcgmNs::MockDcgmOps mockDcgmOps;
     DcgmNs::DcgmOpsAnyPtr dcgmOps { &mockDcgmOps };
 };
+
 } // namespace
 
 TEST_CASE("Diag file helpers")
@@ -412,6 +414,7 @@ TEST_CASE_METHOD(DiagTestFixture, "Diag JSON helper building blocks")
         AddError(response, test, 0, { DCGM_FE_NONE, 0 }, "global warning");
         AddError(response, test, 1, { DCGM_FE_GPU, 0 }, "gpu warning");
         AddInfo(response, test, 0, { DCGM_FE_NONE, 0 }, "global info");
+        AddInfo(response, test, 1, { DCGM_FE_NONE, 0 }, "Test runtime: 1.234 seconds");
 
         Json::Value category;
         diag.HelperJsonAddTestSummary(category, 0, test, response);
@@ -421,8 +424,9 @@ TEST_CASE_METHOD(DiagTestFixture, "Diag JSON helper building blocks")
         REQUIRE(summary[NVVS_WARNINGS].size() == 2);
         REQUIRE(summary[NVVS_WARNINGS][0][NVVS_WARNING].asString() == "global warning");
         REQUIRE(summary[NVVS_WARNINGS][1][NVVS_WARNING].asString() == "gpu warning");
-        REQUIRE(summary[NVVS_INFO].size() == 1);
+        REQUIRE(summary[NVVS_INFO].size() == 2);
         REQUIRE(summary[NVVS_INFO][0].asString() == "global info");
+        REQUIRE(summary[NVVS_INFO][1].asString() == "Test runtime: 1.234 seconds");
         REQUIRE_FALSE(summary.isMember(NVVS_ENTITY_GRP_ID));
     }
 
@@ -1301,6 +1305,7 @@ TEST_CASE_METHOD(DiagTestFixture, "Diag result display helpers")
         AddError(response, test, 0, { DCGM_FE_NONE, 0 }, "global warning");
         AddError(response, test, 1, { DCGM_FE_GPU, 0 }, "gpu warning should be hidden");
         AddInfo(response, test, 0, { DCGM_FE_NONE, 0 }, "global info should be hidden");
+        AddInfo(response, test, 1, { DCGM_FE_NONE, 0 }, "Test runtime: 1.234 seconds");
 
         CommandOutputController view;
         CoutCapture redirect;
@@ -1312,6 +1317,7 @@ TEST_CASE_METHOD(DiagTestFixture, "Diag result display helpers")
         REQUIRE(output.contains("global warning"));
         REQUIRE_FALSE(output.contains("gpu warning should be hidden"));
         REQUIRE_FALSE(output.contains("global info should be hidden"));
+        REQUIRE_FALSE(output.contains("Test runtime: 1.234 seconds"));
     }
 
     SECTION("HelperDisplayGlobalResult emits global info when verbose")
@@ -1320,7 +1326,8 @@ TEST_CASE_METHOD(DiagTestFixture, "Diag result display helpers")
         dcgmDiagResponse_v12 &response = *(responseUptr.get());
         dcgmDiagTestRun_v2 &test       = AddTest(response, 0, "memory", 0, DCGM_DIAG_RESULT_PASS);
         AddInfo(response, test, 0, { DCGM_FE_NONE, 0 }, "global info");
-        AddInfo(response, test, 1, { DCGM_FE_GPU, 0 }, "gpu info should be hidden");
+        AddInfo(response, test, 1, { DCGM_FE_NONE, 0 }, "Test runtime: 1.234 seconds");
+        AddInfo(response, test, 2, { DCGM_FE_GPU, 0 }, "gpu info should be hidden");
 
         CommandOutputController view;
         CoutCapture redirect;
@@ -1330,6 +1337,7 @@ TEST_CASE_METHOD(DiagTestFixture, "Diag result display helpers")
         REQUIRE(output.contains("memory"));
         REQUIRE(output.contains("Pass"));
         REQUIRE(output.contains("global info"));
+        REQUIRE(output.contains("Test runtime: 1.234 seconds"));
         REQUIRE_FALSE(output.contains("gpu info should be hidden"));
     }
 
@@ -1543,5 +1551,103 @@ SCENARIO_METHOD(DiagTestFixture, "StartDiag constructor: config file is populate
                 CHECK(std::string(drd.configFileContents) == c_configContents);
             }
         }
+    }
+}
+
+
+SCENARIO_METHOD(DiagTestFixture, "StartDiag constructor validates parameter and configuration inputs")
+{
+    GIVEN("a default diagnostic run configuration")
+    {
+        dcgmRunDiag_v10 drd {};
+
+        WHEN("parameters are missing an assignment operator")
+        {
+            THEN("construction reports the malformed parameter string")
+            {
+                REQUIRE_THROWS_MATCHES(StartDiag("localhost", true, "memory.test_duration", "", false, drd, 1, dcgmOps),
+                                       TCLAP::CmdLineParseException,
+                                       Catch::Matchers::MessageMatches(
+                                           Catch::Matchers::ContainsSubstring("Improperly formatted parameters")));
+            }
+        }
+
+        WHEN("one entry in a semicolon-separated parameter list is malformed")
+        {
+            THEN("construction rejects the complete parameter expression")
+            {
+                REQUIRE_THROWS_MATCHES(
+                    StartDiag("localhost",
+                              true,
+                              "memory.test_duration=30;pcie.h2d_d2h_single_pinned",
+                              "",
+                              false,
+                              drd,
+                              1,
+                              dcgmOps),
+                    TCLAP::CmdLineParseException,
+                    Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring("pcie.h2d_d2h_single_pinned")));
+            }
+        }
+
+        WHEN("the requested config file does not exist")
+        {
+            auto tempDir                 = TempDir::Random("dcgmi-test-missing-config-");
+            auto const missingConfigPath = tempDir.Path() / "missing.yaml";
+            REQUIRE_FALSE(std::filesystem::exists(missingConfigPath));
+
+            THEN("construction reports the missing file")
+            {
+                REQUIRE_THROWS_MATCHES(
+                    StartDiag("localhost", true, "", missingConfigPath.string(), false, drd, 1, dcgmOps),
+                    TCLAP::CmdLineParseException,
+                    Catch::Matchers::MessageMatches(
+                        Catch::Matchers::ContainsSubstring("Could not open configuration file")));
+            }
+        }
+    }
+}
+
+SCENARIO_METHOD(DiagTestFixture, "StartDiag preserves the caller's diagnostic request version")
+{
+    dcgmRunDiag_v10 drd {};
+    drd.version = dcgmRunDiag_version11;
+
+    StartDiag command("localhost", false, "", "", false, drd, 1, dcgmOps);
+
+    CHECK(drd.version == dcgmRunDiag_version11);
+}
+
+TEST_CASE_METHOD(DiagTestFixture, "StartDiag connection policy is observable through command execution")
+{
+    dcgmRunDiag_v10 drd {};
+    mockDcgmOps.m_connectionState.connectV3Return = DCGM_ST_CONNECTION_NOT_VALID;
+
+    SECTION("the default host suppresses the initial connection error before embedded fallback")
+    {
+        StartDiag command("localhost", false, "", "", false, drd, 1, dcgmOps);
+        CoutCapture capture;
+
+        CHECK(command.Execute() == DCGM_ST_NOT_SUPPORTED);
+        auto const output = capture.str();
+
+        CHECK(mockDcgmOps.m_connectionState.connectV3CallCount == 1);
+        CHECK(mockDcgmOps.m_connectionState.lastConnectionString == "localhost");
+        CHECK(output.find("unable to establish a connection") == std::string::npos);
+        CHECK(output.find("Unable to start an embedded host engine") != std::string::npos);
+    }
+
+    SECTION("an explicit host reports the initial connection error before embedded fallback")
+    {
+        StartDiag command("remote-host", true, "", "", false, drd, 1, dcgmOps);
+        CoutCapture capture;
+
+        CHECK(command.Execute() == DCGM_ST_NOT_SUPPORTED);
+        auto const output = capture.str();
+
+        CHECK(mockDcgmOps.m_connectionState.connectV3CallCount == 1);
+        CHECK(mockDcgmOps.m_connectionState.lastConnectionString == "remote-host");
+        CHECK(output.find("unable to establish a connection to the specified host: remote-host") != std::string::npos);
+        CHECK(output.find("Unable to start an embedded host engine") != std::string::npos);
     }
 }

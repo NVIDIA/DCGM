@@ -17,84 +17,48 @@
 #include "DcgmStringHelpers.h"
 #include "EntityListHelpers.h"
 
-#include <cstring>
+#include <cctype>
+#include <filesystem>
 #include <sstream>
 #include <vector>
 
-namespace
+bool dcgm_diag_common_is_valid_log_filename(std::string_view filename)
 {
-template <typename LegacyDrdT>
-void SetGroupAndEntityIds(LegacyDrdT const &legacyDrd, dcgmRunDiag_v10 &newDrd)
-{
-    // In drd7 and drd8, gpuList takes precedence over groupId. Conversely, in drd9 and drd10,
-    // groupId has higher priority than entityId. To maintain legacy drd's prioritization scheme,
-    // we set groupId to DCGM_GROUP_NULL unless the gpuList is empty.
-    newDrd.groupId = DCGM_GROUP_NULL;
-    if (legacyDrd.gpuList[0] == '\0')
+    if (filename.empty() || filename.size() >= DCGM_PATH_LEN || filename.front() == '.' || filename.front() == '-'
+        || filename.find("..") != std::string_view::npos)
     {
-        newDrd.groupId = legacyDrd.groupId;
+        return false;
     }
-    SafeCopyTo<sizeof(newDrd.entityIds), sizeof(legacyDrd.gpuList)>(newDrd.entityIds, legacyDrd.gpuList);
-}
 
-template <typename LegacyDrdT>
-void SetExpectedNumEntities(LegacyDrdT const &legacyDrd, dcgmRunDiag_v10 &newDrd)
-{
-    SafeCopyTo<sizeof(newDrd.expectedNumEntities), sizeof(legacyDrd.expectedNumEntities)>(
-        newDrd.expectedNumEntities, legacyDrd.expectedNumEntities);
-}
-
-void CustomRunDiagSettings(dcgmRunDiag_v7 const &legacyDrd, dcgmRunDiag_v10 &newDrd)
-{
-    SetGroupAndEntityIds(legacyDrd, newDrd);
-}
-
-void CustomRunDiagSettings(dcgmRunDiag_v8 const &legacyDrd, dcgmRunDiag_v10 &newDrd)
-{
-    SetGroupAndEntityIds(legacyDrd, newDrd);
-    SetExpectedNumEntities(legacyDrd, newDrd);
-}
-
-void CustomRunDiagSettings(dcgmRunDiag_v9 const &legacyDrd, dcgmRunDiag_v10 &newDrd)
-{
-    SetExpectedNumEntities(legacyDrd, newDrd);
-    SafeCopyTo<sizeof(newDrd.entityIds), sizeof(legacyDrd.entityIds)>(newDrd.entityIds, legacyDrd.entityIds);
-    newDrd.watchFrequency = legacyDrd.watchFrequency;
-}
-
-template <typename T>
-dcgmRunDiag_v10 ConvertToLatestRunDiag(T const &legacyDrd)
-{
-    dcgmRunDiag_v10 newDrd {};
-
-    newDrd.version    = dcgmRunDiag_version10;
-    newDrd.flags      = legacyDrd.flags;
-    newDrd.debugLevel = legacyDrd.debugLevel;
-    newDrd.groupId    = legacyDrd.groupId;
-    newDrd.validate   = legacyDrd.validate;
-    std::memcpy(&newDrd.testNames, &legacyDrd.testNames, sizeof(newDrd.testNames));
-    for (unsigned int i = 0; i < DCGM_MAX_TEST_PARMS; ++i)
+    for (char const ch : filename)
     {
-        SafeCopyTo(newDrd.testParms[i], legacyDrd.testParms[i]);
+        if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-' || ch == '.')
+        {
+            continue;
+        }
+        return false;
     }
-    SafeCopyTo<sizeof(newDrd.fakeGpuList), sizeof(legacyDrd.fakeGpuList)>(newDrd.fakeGpuList, legacyDrd.fakeGpuList);
-    SafeCopyTo<sizeof(newDrd.debugLogFile), sizeof(legacyDrd.debugLogFile)>(newDrd.debugLogFile,
-                                                                            legacyDrd.debugLogFile);
-    SafeCopyTo<sizeof(newDrd.statsPath), sizeof(legacyDrd.statsPath)>(newDrd.statsPath, legacyDrd.statsPath);
-    SafeCopyTo<sizeof(newDrd.configFileContents), sizeof(legacyDrd.configFileContents)>(newDrd.configFileContents,
-                                                                                        legacyDrd.configFileContents);
-    SafeCopyTo<sizeof(newDrd.clocksEventMask), sizeof(legacyDrd.clocksEventMask)>(newDrd.clocksEventMask,
-                                                                                  legacyDrd.clocksEventMask);
-    SafeCopyTo<sizeof(newDrd.pluginPath), sizeof(legacyDrd.pluginPath)>(newDrd.pluginPath, legacyDrd.pluginPath);
-    newDrd.currentIteration  = legacyDrd.currentIteration;
-    newDrd.totalIterations   = legacyDrd.totalIterations;
-    newDrd.timeoutSeconds    = legacyDrd.timeoutSeconds;
-    newDrd.failCheckInterval = legacyDrd.failCheckInterval;
-
-    CustomRunDiagSettings(legacyDrd, newDrd);
-    return newDrd;
+    return true;
 }
-} // namespace
+
+std::optional<std::string> dcgm_diag_common_resolve_log_filename(std::string_view configuredHostengineLogFile,
+                                                                 std::string_view filename)
+{
+    if (!dcgm_diag_common_is_valid_log_filename(filename) || configuredHostengineLogFile.empty()
+        || configuredHostengineLogFile == "-")
+    {
+        return std::nullopt;
+    }
+
+    std::filesystem::path const configuredLogPath(configuredHostengineLogFile);
+    if (!configuredLogPath.is_absolute() || !configuredLogPath.has_filename())
+    {
+        return std::nullopt;
+    }
+
+    auto const resolved = configuredLogPath.parent_path() / "nvvs" / filename;
+    return resolved.string();
+}
 
 bool is_valid_gpu_list(const std::string &gpuList)
 {
@@ -305,19 +269,4 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v10 &drd,
 void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v10 &drd)
 {
     snprintf(drd.configFileContents, sizeof(drd.configFileContents), "%s", configFileContents.c_str());
-}
-
-dcgmRunDiag_v10 dcgm_diag_common_convert_to_latest_run_diag(dcgmRunDiag_v7 const &legacyDrd)
-{
-    return ConvertToLatestRunDiag(legacyDrd);
-}
-
-dcgmRunDiag_v10 dcgm_diag_common_convert_to_latest_run_diag(dcgmRunDiag_v8 const &legacyDrd)
-{
-    return ConvertToLatestRunDiag(legacyDrd);
-}
-
-dcgmRunDiag_v10 dcgm_diag_common_convert_to_latest_run_diag(dcgmRunDiag_v9 const &legacyDrd)
-{
-    return ConvertToLatestRunDiag(legacyDrd);
 }

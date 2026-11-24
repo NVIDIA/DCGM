@@ -475,6 +475,26 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
 }
 
 /*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::SetWatchesStrict(unsigned int groupId,
+                                               dcgmHealthSystems_t systems,
+                                               dcgm_connection_id_t connectionId,
+                                               long long updateInterval,
+                                               double maxKeepAge)
+{
+    auto const supportedSystems = GetSupportedSystems();
+    if (systems == DCGM_HEALTH_WATCH_ALL)
+    {
+        systems = supportedSystems;
+    }
+    else if ((static_cast<unsigned int>(systems) & ~static_cast<unsigned int>(supportedSystems)) != 0)
+    {
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    return SetWatches(groupId, systems, connectionId, updateInterval, maxKeepAge);
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmHealthWatch::GetWatches(unsigned int groupId, dcgmHealthSystems_t *systems)
 {
     dcgmReturn_t ret = DCGM_ST_OK;

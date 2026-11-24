@@ -99,6 +99,14 @@ public:
     {
         groups[groupName].push_back(arg);
     }
+    /**
+     * Hide a registered argument from generated help.
+     * @param[in] name Long argument name.
+     */
+    void hideArg(std::string name)
+    {
+        m_hiddenArgs.insert(std::move(name));
+    }
     void addDescription(std::string description)
     {
         this->description = std::move(description);
@@ -213,7 +221,7 @@ private:
             }
             for (auto const &arg : *group)
             {
-                if (arg->getName() == "host" || arg->getName() == "group")
+                if (ArgIsHidden(arg->getName()) || arg->getName() == "host" || arg->getName() == "group")
                 {
                     continue;
                 }

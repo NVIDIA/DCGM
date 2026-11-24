@@ -26,6 +26,7 @@
 #error "Could not find CudaCommon header"
 #endif
 #include "CudaCommonAnyPtr.hpp"
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -413,7 +414,6 @@ private:
         std::string (*AddCublasError1)(void const *, Plugin *, const std::string &, const char *, cublasStatus_t, unsigned int, size_t);
         std::string (*AddCublasError2)(void const *, Plugin *, const std::string &, const char *, cublasStatus_t, unsigned int, size_t, bool);
         const char * (*GetAdditionalCuInitDetail0)(void const *, CUresult);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*CudaCommonMoveConstruct)(void *, void *);
         void (*CudaCommonMoveAssign)(void *, void *);

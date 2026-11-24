@@ -57,7 +57,7 @@ struct ConsoleErrorLogger
     template <class T>
     ConsoleErrorLogger &operator<<(T const &msg)
     {
-        IF_PLOG_(BASE_LOGGER, plog::error)
+        IF_DCGM_LOG_ERROR
         {
             record << msg;
         }
@@ -68,7 +68,7 @@ struct ConsoleErrorLogger
 
     ~ConsoleErrorLogger()
     {
-        IF_PLOG_(BASE_LOGGER, plog::debug)(*plog::get<BASE_LOGGER>()) += record;
+        IF_DCGM_LOG_DEBUG(*plog::get<BASE_LOGGER>()) += record;
         fmt::print(stderr, "\n");
         fflush(stderr);
     }

@@ -22,10 +22,18 @@
 #include <DcgmDiagResponseWrapper.h>
 #include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
+#include <FileHandle.hpp>
+#include <UserCredentials.hpp>
 #include <dcgm_api_export.h>
 #include <dcgm_structs.h>
 
 #include <bit>
+#include <cerrno>
+#include <fcntl.h>
+#include <filesystem>
+#include <string_view>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace
 {
@@ -66,309 +74,76 @@ DcgmModuleDiag::DcgmModuleDiag(dcgmCoreCallbacks_t &dcc)
 DcgmModuleDiag::~DcgmModuleDiag() = default;
 
 /*****************************************************************************/
-/**
- * Process a diagnostic run request version 12
- * Compatibility:
- * - Supports diagResponse_v12, v11, v10
- * - Supports diagRun_v10
- */
-dcgmReturn_t DcgmModuleDiag::ProcessRun_v12(dcgm_diag_msg_run_v12 *msg)
+dcgmReturn_t DcgmModuleDiag::ProcessRun_v13(dcgm_diag_msg_run_v12 *msg)
 {
-    dcgmReturn_t dcgmReturn;
-    DcgmDiagResponseWrapper drw;
-
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version12);
-    if (DCGM_ST_OK != dcgmReturn)
+    if (auto const ret = CheckVersion(&msg->header, dcgm_diag_msg_run_version13); ret != DCGM_ST_OK)
     {
-        return dcgmReturn; /* Logging handled by helper method */
+        return ret;
     }
 
-    drw.SetVersion(&msg->diagResponse);
+    DcgmDiagResponseWrapper response;
+    response.SetVersion(&msg->diagResponse);
     DiagRunTerminateCharBuffer(msg->runDiag);
 
-    /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&msg->runDiag, msg->action, drw, msg->header.connectionId);
-    if (DCGM_ST_OK != dcgmReturn)
+    std::string resolvedLogFile;
+    if (std::string_view(msg->runDiag.debugLogFile) == DCGM_LOGGING_CONSTANT_HYPHEN)
     {
-        log_error("RunDiagAndAction returned {}", dcgmReturn);
+        resolvedLogFile = DCGM_LOGGING_CONSTANT_HYPHEN;
+    }
+    else if (msg->runDiag.debugLogFile[0] != '\0')
+    {
+        if (!dcgm_diag_common_is_valid_log_filename(msg->runDiag.debugLogFile))
+        {
+            return DCGM_ST_BADPARAM;
+        }
+        std::string configuredLogFile;
+        if (auto const ret = m_coreProxy.GetConfiguredLogFilePath(configuredLogFile); ret != DCGM_ST_OK)
+        {
+            return ret;
+        }
+
+        auto const resolved = dcgm_diag_common_resolve_log_filename(configuredLogFile, msg->runDiag.debugLogFile);
+        if (!resolved.has_value())
+        {
+            return DCGM_ST_BADPARAM;
+        }
+
+        auto const directory = std::filesystem::path(*resolved).parent_path();
+        if (mkdir(directory.c_str(), 0700) != 0 && errno != EEXIST)
+        {
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        DcgmNs::Utils::FileHandle directoryFd(open(directory.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        if (directoryFd.Get() < 0)
+        {
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        std::string serviceAccount;
+        if (auto const ret = m_coreProxy.GetServiceAccount(serviceAccount); ret != DCGM_ST_OK)
+        {
+            return ret;
+        }
+        if (!serviceAccount.empty())
+        {
+            auto const credentials = GetUserCredentials(serviceAccount.c_str());
+            if (!credentials.has_value())
+            {
+                return DCGM_ST_BADPARAM;
+            }
+            if (fchown(directoryFd.Get(), credentials->uid, credentials->gid) != 0
+                || fchmod(directoryFd.Get(), S_IRWXU) != 0)
+            {
+                return DCGM_ST_GENERIC_ERROR;
+            }
+        }
+
+        resolvedLogFile = *resolved;
     }
 
-    return dcgmReturn;
-}
-
-/*****************************************************************************/
-/**
- * Process a diagnostic run request version 11
- * Compatibility:
- * - Supports diagResponse_v11, v10
- * - Supports diagRun_v10
- */
-dcgmReturn_t DcgmModuleDiag::ProcessRun_v11(dcgm_diag_msg_run_v11 *msg)
-{
-    dcgmReturn_t dcgmReturn;
-    DcgmDiagResponseWrapper drw;
-
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version11);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        return dcgmReturn; /* Logging handled by helper method */
-    }
-
-    drw.SetVersion(&msg->diagResponse);
-    DiagRunTerminateCharBuffer(msg->runDiag);
-
-    /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&msg->runDiag, msg->action, drw, msg->header.connectionId);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        log_error("RunDiagAndAction returned {}", dcgmReturn);
-    }
-
-    return dcgmReturn;
-}
-
-/*****************************************************************************/
-/**
- * Process a diagnostic run request version 10
- * Compatibility:
- * - Supports diagResponse_v11, v10, v9
- * - Supports diagRun_v9
- */
-dcgmReturn_t DcgmModuleDiag::ProcessRun_v10(dcgm_diag_msg_run_v10 *msg)
-{
-    dcgmReturn_t dcgmReturn;
-    DcgmDiagResponseWrapper drw;
-
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version10);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        return dcgmReturn; /* Logging handled by helper method */
-    }
-
-    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
-
-    // Upgrade v10 -> v11
-    drw.SetVersion<dcgmDiagResponse_v11>(std::bit_cast<dcgmDiagResponse_v11 *>(&msg->diagResponse));
-    DiagRunTerminateCharBuffer(drd);
-
-    /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd, msg->action, drw, msg->header.connectionId);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        log_error("RunDiagAndAction returned {}", dcgmReturn);
-    }
-
-    return dcgmReturn;
-}
-
-/*****************************************************************************/
-/**
- * Process a diagnostic run request version 9
- * Compatibility:
- * - Supports diagResponse_v10, v9, v8
- * - Supports diagRun_v8
- */
-dcgmReturn_t DcgmModuleDiag::ProcessRun_v9(dcgm_diag_msg_run_v9 *msg)
-{
-    dcgmReturn_t dcgmReturn;
-    DcgmDiagResponseWrapper drw;
-
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version9);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        return dcgmReturn; /* Logging handled by helper method */
-    }
-
-    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
-
-    // Upgrade to v10
-    drw.SetVersion<dcgmDiagResponse_v10>(std::bit_cast<dcgmDiagResponse_v10 *>(&msg->diagResponse));
-    DiagRunTerminateCharBuffer(drd);
-
-    /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd, msg->action, drw, msg->header.connectionId);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        log_error("RunDiagAndAction returned {}", dcgmReturn);
-    }
-
-    return dcgmReturn;
-}
-
-/*****************************************************************************/
-/**
- * Process a diagnostic run request version 8
- * Compatibility:
- * - Supports diagResponse_v10, v9, v8, v7
- * - Supports diagRun_v7
- */
-dcgmReturn_t DcgmModuleDiag::ProcessRun_v8(dcgm_diag_msg_run_v8 *msg)
-{
-    dcgmReturn_t dcgmReturn;
-    DcgmDiagResponseWrapper drw;
-
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version8);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        return dcgmReturn; /* Logging handled by helper method */
-    }
-
-    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
-
-    // Upgrade to v10
-    drw.SetVersion<dcgmDiagResponse_v10>(std::bit_cast<dcgmDiagResponse_v10 *>(&msg->diagResponse));
-    DiagRunTerminateCharBuffer(drd);
-
-    /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd, msg->action, drw, msg->header.connectionId);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        log_error("RunDiagAndAction returned {}", dcgmReturn);
-    }
-
-    return dcgmReturn;
-}
-
-/*****************************************************************************/
-/**
- * Process a diagnostic run request version 7
- * Compatibility:
- * - Supports diagResponse_v9, v8, v7
- * - Supports diagRun_v7
- */
-dcgmReturn_t DcgmModuleDiag::ProcessRun_v7(dcgm_diag_msg_run_v7 *msg)
-{
-    dcgmReturn_t dcgmReturn;
-    DcgmDiagResponseWrapper drw;
-
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version7);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        return dcgmReturn; /* Logging handled by helper method */
-    }
-
-    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
-
-    // Upgrade to v9
-    drw.SetVersion<dcgmDiagResponse_v9>(std::bit_cast<dcgmDiagResponse_v9 *>(&msg->diagResponse));
-    DiagRunTerminateCharBuffer(drd);
-    /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd, msg->action, drw, msg->header.connectionId);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        log_error("RunDiagAndAction returned {}", dcgmReturn);
-    }
-
-    return dcgmReturn;
-}
-
-/*****************************************************************************/
-/**
- * Process a diagnostic run request version 6
- * Compatibility:
- * - Supports diagResponse_v8, v7
- * - Supports diagRun_v7
- */
-dcgmReturn_t DcgmModuleDiag::ProcessRun_v6(dcgm_diag_msg_run_v6 *msg)
-{
-    dcgmReturn_t dcgmReturn;
-    DcgmDiagResponseWrapper drw;
-
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version6);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        return dcgmReturn; /* Logging handled by helper method */
-    }
-
-    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
-
-    // Upgrade to v8
-    drw.SetVersion<dcgmDiagResponse_v8>(std::bit_cast<dcgmDiagResponse_v8 *>(&msg->diagResponse));
-    DiagRunTerminateCharBuffer(drd);
-
-    /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd, msg->action, drw, msg->header.connectionId);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        log_error("RunDiagAndAction returned {}", dcgmReturn);
-    }
-
-    return dcgmReturn;
-}
-
-/*****************************************************************************/
-/**
- * Process a diagnostic run request version 5
- * Compatibility:
- * - Supports diagResponse_v7
- * - Supports diagRun_v7
- */
-dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
-{
-    dcgmReturn_t dcgmReturn;
-    DcgmDiagResponseWrapper drw;
-
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version5);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        return dcgmReturn; /* Logging handled by helper method */
-    }
-
-    dcgmRunDiag_v10 drd = dcgm_diag_common_convert_to_latest_run_diag(msg->runDiag);
-
-    // Upgrade to v7
-    drw.SetVersion<dcgmDiagResponse_v7>(std::bit_cast<dcgmDiagResponse_v7 *>(&msg->diagResponse));
-    DiagRunTerminateCharBuffer(drd);
-
-    /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd, msg->action, drw, msg->header.connectionId);
-    if (DCGM_ST_OK != dcgmReturn)
-    {
-        DCGM_LOG_ERROR << "RunDiagAndAction returned " << dcgmReturn;
-    }
-
-    return dcgmReturn;
-}
-
-/*****************************************************************************/
-
-inline dcgmReturn_t DcgmModuleDiag::ProcessRun(dcgm_module_command_header_t *moduleCommand)
-{
-    if (moduleCommand->version == dcgm_diag_msg_run_version12)
-    {
-        return ProcessRun_v12(std::bit_cast<dcgm_diag_msg_run_v12 *>(moduleCommand));
-    }
-    else if (moduleCommand->version == dcgm_diag_msg_run_version11)
-    {
-        return ProcessRun_v11(std::bit_cast<dcgm_diag_msg_run_v11 *>(moduleCommand));
-    }
-    else if (moduleCommand->version == dcgm_diag_msg_run_version10)
-    {
-        return ProcessRun_v10(std::bit_cast<dcgm_diag_msg_run_v10 *>(moduleCommand));
-    }
-    else if (moduleCommand->version == dcgm_diag_msg_run_version9)
-    {
-        return ProcessRun_v9(std::bit_cast<dcgm_diag_msg_run_v9 *>(moduleCommand));
-    }
-    else if (moduleCommand->version == dcgm_diag_msg_run_version8)
-    {
-        return ProcessRun_v8(std::bit_cast<dcgm_diag_msg_run_v8 *>(moduleCommand));
-    }
-    else if (moduleCommand->version == dcgm_diag_msg_run_version7)
-    {
-        return ProcessRun_v7((dcgm_diag_msg_run_v7 *)moduleCommand);
-    }
-    else if (moduleCommand->version == dcgm_diag_msg_run_version6)
-    {
-        return ProcessRun_v6((dcgm_diag_msg_run_v6 *)moduleCommand);
-    }
-    else if (moduleCommand->version == dcgm_diag_msg_run_version5)
-    {
-        return ProcessRun_v5((dcgm_diag_msg_run_v5 *)moduleCommand);
-    }
-
-    log_error("Version mismatch {:x} != {:x}", moduleCommand->version, dcgm_diag_msg_run_version);
-    return DCGM_ST_VER_MISMATCH;
+    return mpDiagManager->RunDiagAndAction(
+        &msg->runDiag, msg->action, response, msg->header.connectionId, resolvedLogFile);
 }
 
 /*****************************************************************************/
@@ -449,14 +224,18 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
         switch (moduleCommand->subCommand)
         {
             case DCGM_DIAG_SR_RUN:
-                if (m_isPaused.load(std::memory_order_relaxed))
+                if (moduleCommand->version != dcgm_diag_msg_run_version13)
+                {
+                    retSt = DCGM_ST_VER_MISMATCH;
+                }
+                else if (m_isPaused.load(std::memory_order_relaxed))
                 {
                     log_info("The Diag module is paused. Ignoring the run command.");
                     retSt = DCGM_ST_PAUSED;
                 }
                 else
                 {
-                    retSt = ProcessRun(moduleCommand);
+                    retSt = ProcessRun_v13(std::bit_cast<dcgm_diag_msg_run_v12 *>(moduleCommand));
                 }
                 break;
 

@@ -1172,6 +1172,30 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetServiceAccount(dcgm_module_command
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmCoreCommunication::ProcessGetConfiguredLogFilePath(dcgm_module_command_header_t *header)
+{
+    if (header == nullptr || header->length != sizeof(dcgmCoreGetConfiguredLogFilePath_v1))
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    if (auto const ret = DcgmModule::CheckVersion(header, dcgmCoreGetConfiguredLogFilePath_version1); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    dcgmCoreGetConfiguredLogFilePath_v1 query {};
+    auto const logFile = GetConfiguredLogFilePath();
+    if (logFile.empty() || logFile.size() >= sizeof(query.logFile))
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    memcpy(&query, header, sizeof(query));
+    SafeCopyTo(query.logFile, logFile.c_str());
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmCoreCommunication::ProcessGetGpuInstanceHierarchy(dcgm_module_command_header_t *header)
 {
     if (header == nullptr || header->length != sizeof(dcgmCoreGetGpuInstanceHierarchy_t))
@@ -1744,6 +1768,12 @@ dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_hea
         case DcgmCoreReqIdGetCudaVersion:
         {
             ret = ProcessGetCudaVersion(header);
+            break;
+        }
+
+        case DcgmCoreReqIdGetConfiguredLogFilePath:
+        {
+            ret = ProcessGetConfiguredLogFilePath(header);
             break;
         }
 

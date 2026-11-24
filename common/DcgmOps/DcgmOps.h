@@ -224,6 +224,9 @@ public:
 
     static dcgmReturn_t dcgmHealthGet(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t *systems);
     static dcgmReturn_t dcgmHealthSet_v2(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 *params);
+    static dcgmReturn_t dcgmHealthSet_v3(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 const *params);
+    static dcgmReturn_t dcgmHealthGetSupportedSystems(dcgmHandle_t pDcgmHandle,
+                                                      dcgmHealthSupportedSystems_t *supportedSystems);
     static dcgmReturn_t dcgmHealthCheck(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_t *results);
     static dcgmReturn_t dcgmWatchPidFields(dcgmHandle_t pDcgmHandle,
                                            dcgmGpuGrp_t groupId,

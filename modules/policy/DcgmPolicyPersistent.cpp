@@ -219,7 +219,7 @@ dcgmReturn_t DcgmPolicyPersistence::SetConfigPath(std::filesystem::path const &p
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmPolicyPersistence::LoadPolicies()
+dcgmReturn_t DcgmPolicyPersistence::LoadPolicies(bool rejectEmptyPoliciesSequence)
 {
     // Resolve and validate the target path
     std::filesystem::path filePath = GetConfigPath();
@@ -234,7 +234,7 @@ dcgmReturn_t DcgmPolicyPersistence::LoadPolicies()
 
     // Parse YAML into a local vector first — no registry interaction until we have a complete set
     std::vector<DcgmPolicy> parsed;
-    ret = ParseYamlFile(filePath, parsed);
+    ret = ParseYamlFile(filePath, parsed, rejectEmptyPoliciesSequence);
     if (ret != DCGM_ST_OK)
     {
         log_error("Failed to parse YAML file: {}", filePath.native());
@@ -396,8 +396,11 @@ dcgmReturn_t DcgmPolicyPersistence::ParsePolicyNode(YAML::Node const &node, Dcgm
 
 /*****************************************************************************/
 dcgmReturn_t DcgmPolicyPersistence::ParseYamlFile(std::filesystem::path const &filePath,
-                                                  std::vector<DcgmPolicy> &policies)
+                                                  std::vector<DcgmPolicy> &policies,
+                                                  bool rejectEmptyPoliciesSequence)
 {
+    policies.clear();
+    std::vector<DcgmPolicy> parsedPolicies;
     std::error_code ec;
 
     // Guard against missing files, symlinks, and oversized inputs before parsing
@@ -443,9 +446,24 @@ dcgmReturn_t DcgmPolicyPersistence::ParseYamlFile(std::filesystem::path const &f
             // Future: Add migration logic here when schema changes
         }
 
-        if (!root[YAML_KEY_POLICIES.data()] || !root[YAML_KEY_POLICIES.data()].IsSequence())
+        if (!root[YAML_KEY_POLICIES.data()])
         {
-            log_debug("No policies found in file");
+            log_error("Config file missing required '{}' sequence", YAML_KEY_POLICIES);
+            return DCGM_ST_BADPARAM;
+        }
+        if (!root[YAML_KEY_POLICIES.data()].IsSequence())
+        {
+            log_error("Config file '{}' must be a YAML sequence", YAML_KEY_POLICIES);
+            return DCGM_ST_BADPARAM;
+        }
+        if (root[YAML_KEY_POLICIES.data()].size() == 0)
+        {
+            if (rejectEmptyPoliciesSequence)
+            {
+                log_error("Config file '{}' sequence is empty", YAML_KEY_POLICIES);
+                return DCGM_ST_BADPARAM;
+            }
+            log_debug("Config file '{}' sequence is empty", YAML_KEY_POLICIES);
             return DCGM_ST_OK;
         }
 
@@ -471,7 +489,7 @@ dcgmReturn_t DcgmPolicyPersistence::ParseYamlFile(std::filesystem::path const &f
 
             if (parseRet == DCGM_ST_OK)
             {
-                policies.push_back(std::move(policy));
+                parsedPolicies.push_back(std::move(policy));
                 parsedCount++;
             }
             else
@@ -482,21 +500,13 @@ dcgmReturn_t DcgmPolicyPersistence::ParseYamlFile(std::filesystem::path const &f
 
         if (skippedCount > 0)
         {
-            log_warning("Policy parse summary: {} parsed, {} skipped", parsedCount, skippedCount);
-        }
-        else
-        {
-            log_debug("Policy parse summary: {} parsed, {} skipped", parsedCount, skippedCount);
-        }
-
-        // Treat all-skipped as an error — a file where every entry is invalid should not
-        // silently wipe the registry via RemoveAllPolicies + AddPolicies({}).
-        if (parsedCount == 0 && skippedCount > 0)
-        {
-            log_error("All {} policies in config file were invalid — refusing to replace registry", skippedCount);
+            log_error("Policy parse summary: {} parsed, {} skipped — refusing to load file", parsedCount, skippedCount);
             return DCGM_ST_BADPARAM;
         }
 
+        log_debug("Policy parse summary: {} parsed", parsedCount);
+
+        policies = std::move(parsedPolicies);
         return DCGM_ST_OK;
     }
     catch (YAML::Exception const &e)

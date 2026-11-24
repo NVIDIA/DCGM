@@ -1355,8 +1355,11 @@ StartDiag::StartDiag(const std::string &hostname,
 
 {
     std::string configFileContents;
-    drd.version = dcgmRunDiag_version10;
-    m_hostName  = hostname;
+    if (drd.version == 0)
+    {
+        drd.version = dcgmRunDiag_version10;
+    }
+    m_hostName = hostname;
 
     /* If the host address was overridden, complain if we can't connect.
        Otherwise, don't complain and just start an embedded host engine instead */

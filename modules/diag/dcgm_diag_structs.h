@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +31,8 @@
 
 /*****************************************************************************/
 /**
- * Subrequest DCGM_DIAG_SR_RUN version 12
- * Compatibility:
- * - Supports diagResponse_v12, v11, v10
- * - Supports diagRun_v10
- * @note This structure is not byte-for-byte compatible with v11. Conversion is required.
+ * Run request layout shared by wire versions 12 and 13. Only version 13 is accepted.
+ * Version 13 carries a v10-layout run request and a v12 diagnostic response.
  */
 typedef struct dcgm_diag_msg_run_v12
 {
@@ -46,14 +43,15 @@ typedef struct dcgm_diag_msg_run_v12
 } dcgm_diag_msg_run_v12;
 
 #define dcgm_diag_msg_run_version12 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v12, 12)
-#define dcgm_diag_msg_run_version   dcgm_diag_msg_run_version12
+#define dcgm_diag_msg_run_version13 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v12, 13)
+#define dcgm_diag_msg_run_version   dcgm_diag_msg_run_version13
 
 typedef dcgm_diag_msg_run_v12 dcgm_diag_msg_run_t;
 
 /*****************************************************************************/
 /**
  * Subrequest DCGM_DIAG_SR_RUN version 11
- * @deprecated Use dcgm_diag_msg_run_v12 instead.
+ * @deprecated Use dcgm_diag_msg_run_t with dcgm_diag_msg_run_version13 instead.
  * Compatibility:
  * - Supports diagResponse_v11, v10
  * - Supports diagRun_v10
@@ -71,7 +69,7 @@ typedef struct dcgm_diag_msg_run_v11
 /*****************************************************************************/
 /**
  * Subrequest DCGM_DIAG_SR_RUN version 10
- * @deprecated Use dcgm_diag_msg_run_v12 instead.
+ * @deprecated Use dcgm_diag_msg_run_t with dcgm_diag_msg_run_version13 instead.
  * Compatibility:
  * - Supports diagResponse_v11, v10, v9
  * - Supports diagRun_v9
@@ -89,7 +87,7 @@ typedef struct dcgm_diag_msg_run_v10
 /*****************************************************************************/
 /**
  * Subrequest DCGM_DIAG_SR_RUN version 9
- * @deprecated Use dcgm_diag_msg_run_v12 instead.
+ * @deprecated Use dcgm_diag_msg_run_t with dcgm_diag_msg_run_version13 instead.
  * Compatibility:
  * - Supports diagResponse_v10, v9, v8
  * - Supports diagRun_v8
@@ -107,7 +105,7 @@ typedef struct dcgm_diag_msg_run_v9
 /*****************************************************************************/
 /**
  * Subrequest DCGM_DIAG_SR_RUN version 8
- * @deprecated Use dcgm_diag_msg_run_v12 instead.
+ * @deprecated Use dcgm_diag_msg_run_t with dcgm_diag_msg_run_version13 instead.
  * Compatibility:
  * - Supports diagResponse_v10, v9, v8, v7
  * - Supports diagRun_v7
@@ -125,7 +123,7 @@ typedef struct dcgm_diag_msg_run_v8
 /*****************************************************************************/
 /**
  * Subrequest DCGM_DIAG_SR_RUN version 7
- * @deprecated Use dcgm_diag_msg_run_v12 instead.
+ * @deprecated Use dcgm_diag_msg_run_t with dcgm_diag_msg_run_version13 instead.
  * Compatibility:
  * - Supports diagResponse_v9, v8, v7
  * - Supports diagRun_v7
@@ -143,7 +141,7 @@ typedef struct dcgm_diag_msg_run_v7
 /*****************************************************************************/
 /**
  * Subrequest DCGM_DIAG_SR_RUN version 6
- * @deprecated Use dcgm_diag_msg_run_v12 instead.
+ * @deprecated Use dcgm_diag_msg_run_t with dcgm_diag_msg_run_version13 instead.
  * Compatibility:
  * - Supports diagResponse_v8, v7
  * - Supports diagRun_v7
@@ -161,7 +159,7 @@ typedef struct dcgm_diag_msg_run_v6
 /*****************************************************************************/
 /**
  * Subrequest DCGM_DIAG_SR_RUN version 5
- * @deprecated Use dcgm_diag_msg_run_v12 instead.
+ * @deprecated Use dcgm_diag_msg_run_t with dcgm_diag_msg_run_version13 instead.
  * Compatibility:
  * - Supports diagResponse_v7
  * - Supports diagRun_v7

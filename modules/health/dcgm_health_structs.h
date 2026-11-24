@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,9 +27,11 @@
 #define DCGM_HEALTH_SR_CHECK_GPUS 5
 //#define DCGM_HEALTH_SR_CHECK_V3    6 - Retired
 //#define DCGM_HEALTH_SR_CHECK_V4       7 - Retired
-#define DCGM_HEALTH_SR_SET_SYSTEMS_V2 8
-#define DCGM_HEALTH_SR_CHECK_V5       9
-#define DCGM_HEALTH_SR_COUNT          10 /* Keep as last entry and 1 greater */
+#define DCGM_HEALTH_SR_SET_SYSTEMS_V2        8
+#define DCGM_HEALTH_SR_CHECK_V5              9
+#define DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS 10
+#define DCGM_HEALTH_SR_SET_SYSTEMS_V3        11
+#define DCGM_HEALTH_SR_COUNT                 12 /* Keep as last entry and 1 greater */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -53,6 +55,20 @@ typedef dcgm_health_msg_get_systems_v1 dcgm_health_msg_get_systems_t;
 
 /*****************************************************************************/
 /**
+ * Subrequest DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS
+ */
+typedef struct dcgm_health_msg_get_supported_systems_v1
+{
+    dcgm_module_command_header_t header;            /* Command header */
+    dcgmHealthSupportedSystems_v1 supportedSystems; /* OUT: Supported health systems */
+} dcgm_health_msg_get_supported_systems_v1;
+
+#define dcgm_health_msg_get_supported_systems_version1 MAKE_DCGM_VERSION(dcgm_health_msg_get_supported_systems_v1, 1)
+
+typedef dcgm_health_msg_get_supported_systems_v1 dcgm_health_msg_get_supported_systems_t;
+
+/*****************************************************************************/
+/**
  * Subrequest DCGM_HEALTH_SR_SET_SYSTEMS_V2
  */
 typedef struct dcgm_health_msg_set_systems_v2
@@ -66,6 +82,18 @@ typedef struct dcgm_health_msg_set_systems_v2
 #define dcgm_health_msg_set_systems_version  dcgm_health_msg_set_systems_version2
 
 typedef dcgm_health_msg_set_systems_v2 dcgm_health_msg_set_systems_t;
+
+/*****************************************************************************/
+/**
+ * Subrequest DCGM_HEALTH_SR_SET_SYSTEMS_V3
+ */
+typedef struct dcgm_health_msg_set_systems_v3
+{
+    dcgm_module_command_header_t header; /* Command header */
+    dcgmHealthSetParams_v2 healthSet;    /* Health set parameters */
+} dcgm_health_msg_set_systems_v3;
+
+#define dcgm_health_msg_set_systems_version3 MAKE_DCGM_VERSION(dcgm_health_msg_set_systems_v3, 3)
 
 /*****************************************************************************/
 /**

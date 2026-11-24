@@ -64,8 +64,10 @@
         dcgmGroupRemoveEntity;
         dcgmHealthCheck;
         dcgmHealthGet;
+        dcgmHealthGetSupportedSystems;
         dcgmHealthSet;
         dcgmHealthSet_v2;
+        dcgmHealthSet_v3;
         dcgmHostengineVersionInfo;
         dcgmHostengineIsHealthy;
         dcgmHostengineSetLoggingSeverity;

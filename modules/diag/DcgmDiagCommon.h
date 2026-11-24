@@ -21,7 +21,27 @@ Common helper functions and classes relating to DCGM GPU Diagnostics
 
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
+#include <optional>
 #include <string>
+#include <string_view>
+
+/**
+ * Check whether a diagnostic log filename is a single safe basename.
+ *
+ * @param[in] filename Requested filename.
+ * @return True when the filename can be used beneath the diagnostic log directory.
+ */
+bool dcgm_diag_common_is_valid_log_filename(std::string_view filename);
+
+/**
+ * Resolve a diagnostic log basename beside the configured hostengine log.
+ *
+ * @param[in] configuredHostengineLogFile Absolute pathname configured for the hostengine log.
+ * @param[in] filename Requested diagnostic log basename.
+ * @return Path under the sibling nvvs directory, or no value for invalid input.
+ */
+std::optional<std::string> dcgm_diag_common_resolve_log_filename(std::string_view configuredHostengineLogFile,
+                                                                 std::string_view filename);
 
 /*****************************************************************************/
 dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v10 &drd,
@@ -49,38 +69,3 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v10 &drd,
 
 /*****************************************************************************/
 void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v10 &drd);
-
-/*****************************************************************************/
-/**
- * Convert a dcgmRunDiag_v7 request to the latest dcgmRunDiag_v10 shape.
- *
- * @param[in] legacyDrd Legacy diagnostic run request. Its gpuList takes
- * precedence over groupId when entity selection is converted.
- * @return Converted dcgmRunDiag_v10 request. This conversion does not report
- * runtime errors.
- */
-dcgmRunDiag_v10 dcgm_diag_common_convert_to_latest_run_diag(dcgmRunDiag_v7 const &legacyDrd);
-
-/*****************************************************************************/
-/**
- * Convert a dcgmRunDiag_v8 request to the latest dcgmRunDiag_v10 shape.
- *
- * @param[in] legacyDrd Legacy diagnostic run request. Its gpuList takes
- * precedence over groupId and expectedNumEntities is preserved.
- * @return Converted dcgmRunDiag_v10 request. This conversion does not report
- * runtime errors.
- */
-dcgmRunDiag_v10 dcgm_diag_common_convert_to_latest_run_diag(dcgmRunDiag_v8 const &legacyDrd);
-
-/*****************************************************************************/
-/**
- * Convert a dcgmRunDiag_v9 request to the latest dcgmRunDiag_v10 shape.
- *
- * @param[in] legacyDrd Legacy diagnostic run request. Its entityIds,
- * expectedNumEntities, and watchFrequency fields are preserved.
- * @return Converted dcgmRunDiag_v10 request. This conversion does not report
- * runtime errors.
- */
-dcgmRunDiag_v10 dcgm_diag_common_convert_to_latest_run_diag(dcgmRunDiag_v9 const &legacyDrd);
-
-/*****************************************************************************/

@@ -93,6 +93,25 @@ TEST_CASE("DcgmModuleHealth::ProcessMessage handles health routing errors")
                 CHECK(healthModule.ProcessMessage(&msg.header) == DCGM_ST_VER_MISMATCH);
             }
 
+            SECTION("strict set systems")
+            {
+                dcgm_health_msg_set_systems_v3 msg {};
+                PopulateHealthHeader(
+                    msg.header, DCGM_HEALTH_SR_SET_SYSTEMS_V3, dcgm_health_msg_set_systems_version3 - 1);
+
+                CHECK(healthModule.ProcessMessage(&msg.header) == DCGM_ST_VER_MISMATCH);
+            }
+
+            SECTION("get supported systems")
+            {
+                dcgm_health_msg_get_supported_systems_t msg {};
+                PopulateHealthHeader(msg.header,
+                                     DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS,
+                                     dcgm_health_msg_get_supported_systems_version1 - 1);
+
+                CHECK(healthModule.ProcessMessage(&msg.header) == DCGM_ST_VER_MISMATCH);
+            }
+
             SECTION("check v5")
             {
                 dcgm_health_msg_check_v5 msg {};
@@ -109,6 +128,55 @@ TEST_CASE("DcgmModuleHealth::ProcessMessage handles health routing errors")
                 CHECK(healthModule.ProcessMessage(&msg.header) == DCGM_ST_VER_MISMATCH);
             }
         }
+    }
+}
+
+TEST_CASE("DcgmModuleHealth::ProcessMessage reports supported health systems")
+{
+    auto dcc = MakeCallbacks();
+    DcgmModuleHealth healthModule(dcc);
+    dcgm_health_msg_get_supported_systems_t msg {};
+    PopulateHealthHeader(
+        msg.header, DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS, dcgm_health_msg_get_supported_systems_version1);
+
+    auto const result = healthModule.ProcessMessage(&msg.header);
+
+    REQUIRE(result == DCGM_ST_OK);
+    CHECK(msg.supportedSystems.version == dcgmHealthSupportedSystems_version1);
+    CHECK(msg.supportedSystems.systems == DcgmHealthWatch::GetSupportedSystems());
+}
+
+TEST_CASE("DcgmModuleHealth::ProcessMessage applies strict health-set validation")
+{
+    auto dcc = MakeCallbacks();
+    DcgmModuleHealth healthModule(dcc);
+
+    SECTION("an empty supported mask is accepted")
+    {
+        dcgm_health_msg_set_systems_v3 msg {};
+        PopulateHealthHeader(msg.header, DCGM_HEALTH_SR_SET_SYSTEMS_V3, dcgm_health_msg_set_systems_version3);
+        msg.healthSet.version = dcgmHealthSetParams_version2;
+        msg.healthSet.groupId = static_cast<dcgmGpuGrp_t>(1);
+
+        CHECK(healthModule.ProcessMessage(&msg.header) == DCGM_ST_OK);
+    }
+
+    SECTION("an unknown bit is rejected")
+    {
+        dcgm_health_msg_set_systems_v3 msg {};
+        PopulateHealthHeader(msg.header, DCGM_HEALTH_SR_SET_SYSTEMS_V3, dcgm_health_msg_set_systems_version3);
+        msg.healthSet.version       = dcgmHealthSetParams_version2;
+        msg.healthSet.groupId       = static_cast<dcgmGpuGrp_t>(1);
+        auto const supportedSystems = static_cast<unsigned int>(DcgmHealthWatch::GetSupportedSystems());
+        unsigned int unsupportedBit = 1U;
+        while (unsupportedBit != 0U && (unsupportedBit & supportedSystems) != 0U)
+        {
+            unsupportedBit <<= 1U;
+        }
+        REQUIRE(unsupportedBit != 0U);
+        msg.healthSet.systems = static_cast<dcgmHealthSystems_t>(unsupportedBit);
+
+        CHECK(healthModule.ProcessMessage(&msg.header) == DCGM_ST_NOT_SUPPORTED);
     }
 }
 

@@ -20,6 +20,25 @@
 #include <ScopedEnvVars.hpp>
 
 #include <limits>
+#include <type_traits>
+#include <utility>
+
+SCENARIO("DcgmLogging: initialization preserves the legacy interface and supports an explicit status")
+{
+    THEN("the existing three-argument call returns void")
+    {
+        STATIC_REQUIRE(
+            std::is_same_v<decltype(DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone)), void>);
+    }
+
+    THEN("the four-argument overload reports status through a reference")
+    {
+        STATIC_REQUIRE(
+            std::is_same_v<decltype(DcgmLoggingInit(
+                               "-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone, std::declval<dcgmReturn_t &>())),
+                           void>);
+    }
+}
 
 
 template <class... TArgs>

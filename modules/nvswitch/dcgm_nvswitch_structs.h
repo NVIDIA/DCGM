@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -178,7 +178,7 @@ typedef struct
 {
     dcgm_module_command_header_t header; // Command header
     unsigned int linkCount;
-    unsigned int linkIds[DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH];
+    unsigned int linkIds[DCGM_NVLINK_MAX_LINKS];
     int64_t flags;
 } dcgm_nvswitch_msg_get_links_v1, dcgm_nvswitch_msg_get_links_t;
 

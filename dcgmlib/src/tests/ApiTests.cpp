@@ -13,13 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <DcgmFvBuffer.h>
+#include <DcgmRequest.h>
+#include <DcgmStatus.h>
+#include <DcgmStringHelpers.h>
 #include <Defer.hpp>
-#include <array>
-#include <catch2/catch_all.hpp>
-#include <cstring>
+#include <UniquePtrUtil.h>
+#include <config/dcgm_config_structs.h>
 #include <dcgm_agent.h>
 #include <dcgm_agent_3x.h>
 #include <dcgm_core_structs.h>
+#include <dcgm_errors.h>
 #include <dcgm_multinode_internal.h>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
@@ -28,19 +32,23 @@
 #include <health/dcgm_health_structs.h>
 #include <introspect/dcgm_introspect_structs.h>
 #include <mndiag/dcgm_mndiag_structs.hpp>
+#include <mocks/MockModuleSendFake.hpp>
+#include <policy/dcgm_policy_structs.h>
 #include <profiling/dcgm_profiling_structs.h>
+#include <sysmon/dcgm_sysmon_structs.h>
+
+#include <catch2/catch_all.hpp>
+
+#include <algorithm>
+#include <array>
+#include <climits>
+#include <cstdio>
+#include <cstring>
+#include <initializer_list>
 #include <set>
 #include <string>
-#include <sysmon/dcgm_sysmon_structs.h>
 #include <utility>
-
-#include "DcgmFvBuffer.h"
-#include "DcgmStatus.h"
-#include "DcgmStringHelpers.h"
-#include "UniquePtrUtil.h"
-#include "config/dcgm_config_structs.h"
-#include <policy/dcgm_policy_structs.h>
-
+#include <vector>
 
 dcgmGpuTopologyLevel_t GetSlowestPath(dcgmTopology_t &topology);
 dcgmReturn_t helperFillCpuHierarchyV1(dcgmCpuHierarchy_v1 *cpuHierarchy, dcgm_sysmon_msg_get_cpus_t const &sysmonMsg);
@@ -147,7 +155,9 @@ dcgmReturn_t helperPolicySet(dcgmHandle_t dcgmHandle,
                              dcgmPolicy_t *dcgmPolicy,
                              dcgmStatus_t dcgmStatusList);
 dcgmReturn_t helperHealthSet(dcgmHandle_t dcgmHandle, dcgmHealthSetParams_v2 *healthSetParams);
+dcgmReturn_t helperHealthSetV3(dcgmHandle_t dcgmHandle, dcgmHealthSetParams_v2 const *healthSetParams);
 dcgmReturn_t helperHealthGet(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t *systems);
+dcgmReturn_t helperHealthGetSupportedSystems(dcgmHandle_t dcgmHandle, dcgmHealthSupportedSystems_t *supportedSystems);
 dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
                                  dcgmRunDiag_v10 *drd,
                                  dcgmPolicyAction_t action,
@@ -804,7 +814,7 @@ SCENARIO("DcgmApi: embedded and connection entry points validate local contracts
 }
 
 
-TEST_CASE("DcgmApi: public entry points return uninitialized before dcgmInit")
+TEST_CASE("DcgmApi public entry points return uninitialized before dcgmInit")
 {
     dcgmHandle_t handle = 0;
     dcgmGpuGrp_t groupId {};
@@ -835,6 +845,8 @@ TEST_CASE("DcgmApi: public entry points return uninitialized before dcgmInit")
     dcgmAllFieldGroup_t allFieldGroups {};
     dcgmHealthSystems_t healthSystems {};
     dcgmHealthSetParams_v2 healthSetParams {};
+    dcgmHealthSetParams_v2 strictHealthSetParams {};
+    dcgmHealthSupportedSystems_t supportedHealthSystems {};
     dcgmHealthResponse_t healthResponse {};
     dcgmRunDiag_v10 runDiag {};
     dcgmDiagResponse_v12 diagResponse {};
@@ -872,6 +884,9 @@ TEST_CASE("DcgmApi: public entry points return uninitialized before dcgmInit")
     dcgmWorkloadPowerProfile_t workloadPowerProfile {};
     dcgmEnvVarInfo_t envVarInfo {};
     dcgmModulesReloadable_v1 modulesReloadable {};
+
+    strictHealthSetParams.version  = dcgmHealthSetParams_version2;
+    supportedHealthSystems.version = dcgmHealthSupportedSystems_version;
 
     dcgmReturn_t shutdownResult = dcgmShutdown();
     REQUIRE((shutdownResult == DCGM_ST_OK || shutdownResult == DCGM_ST_UNINITIALIZED));
@@ -932,7 +947,9 @@ TEST_CASE("DcgmApi: public entry points return uninitialized before dcgmInit")
         CHECK(dcgmPolicyUnregister(handle, groupId, DCGM_POLICY_COND_DBE) != DCGM_ST_OK);
         CHECK(dcgmHealthSet(handle, groupId, DCGM_HEALTH_WATCH_ALL) != DCGM_ST_OK);
         CHECK(dcgmHealthSet_v2(handle, &healthSetParams) != DCGM_ST_OK);
+        CHECK(dcgmHealthSet_v3(handle, &strictHealthSetParams) != DCGM_ST_OK);
         CHECK(dcgmHealthGet(handle, groupId, &healthSystems) != DCGM_ST_OK);
+        CHECK(dcgmHealthGetSupportedSystems(handle, &supportedHealthSystems) != DCGM_ST_OK);
         CHECK(dcgmHealthCheck(handle, groupId, &healthResponse) != DCGM_ST_OK);
     }
 
@@ -1046,6 +1063,8 @@ TEST_CASE("DcgmApi: public entry points validate parameters after dcgmInit")
     dcgmChipArchitecture_t chipArchitecture {};
     dcgmMigHierarchy_v2 migHierarchy {};
     dcgmNvLinkStatus_v5 nvLinkStatus {};
+    dcgmCreateMigEntity_t createMig {};
+    dcgmDeleteMigEntity_t deleteMig {};
     dcgmNvLinkP2PStatus_v1 nvLinkP2PStatus {};
     dcgmCpuHierarchy_v1 cpuHierarchy {};
     dcgmCpuHierarchy_v2 cpuHierarchyV2 {};
@@ -1096,6 +1115,8 @@ TEST_CASE("DcgmApi: public entry points validate parameters after dcgmInit")
     SECTION("GIVEN null control payloads WHEN module APIs are called THEN bad parameters are returned")
     {
         CHECK(dcgmHealthGet(handle, groupId, nullptr) == DCGM_ST_BADPARAM);
+        CHECK(dcgmHealthGetSupportedSystems(handle, nullptr) == DCGM_ST_BADPARAM);
+        CHECK(dcgmHealthSet_v3(handle, nullptr) == DCGM_ST_BADPARAM);
         CHECK(dcgmHealthCheck(handle, groupId, nullptr) == DCGM_ST_BADPARAM);
         CHECK(dcgmActionValidate_v2(handle, nullptr, &diagResponse) == DCGM_ST_BADPARAM);
         CHECK(dcgmActionValidate_v2(handle, &runDiag, nullptr) == DCGM_ST_BADPARAM);
@@ -1217,6 +1238,39 @@ TEST_CASE("DcgmApi: public entry points validate parameters after dcgmInit")
         CHECK(dcgmPolicyEnable(handle, 0, 0) == DCGM_ST_BADPARAM);
         CHECK(dcgmPolicyDisable(handle, 0, 0) == DCGM_ST_BADPARAM);
         CHECK(dcgmPolicyUnregister_v3(handle, 0, 0) == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("GIVEN versioned payloads with unexpected versions WHEN APIs are called THEN they fail before dispatch")
+    {
+        deviceAttributes.version = 0;
+        CHECK(dcgmGetDeviceAttributes(handle, 0, &deviceAttributes) == DCGM_ST_VER_MISMATCH);
+
+        fieldSummary.version = 0;
+        CHECK(dcgmGetFieldSummary(handle, &fieldSummary) == DCGM_ST_VER_MISMATCH);
+
+        migHierarchy.version = 0;
+        CHECK(dcgmGetGpuInstanceHierarchy(handle, &migHierarchy) == DCGM_ST_VER_MISMATCH);
+
+        createMig.version = 0;
+        CHECK(dcgmCreateMigEntity(handle, &createMig) == DCGM_ST_VER_MISMATCH);
+
+        deleteMig.version = 0;
+        CHECK(dcgmDeleteMigEntity(handle, &deleteMig) == DCGM_ST_VER_MISMATCH);
+
+        nvLinkStatus.version = 0;
+        CHECK(dcgmGetNvLinkLinkStatus(handle, &nvLinkStatus) == DCGM_ST_VER_MISMATCH);
+
+        nvLinkP2PStatus.version = 0;
+        CHECK(dcgmGetNvLinkP2PStatus(handle, &nvLinkP2PStatus) == DCGM_ST_VER_MISMATCH);
+
+        cpuHierarchy.version = 0;
+        CHECK(dcgmGetCpuHierarchy(handle, &cpuHierarchy) == DCGM_ST_VER_MISMATCH);
+
+        cpuHierarchyV2.version = 0;
+        CHECK(dcgmGetCpuHierarchy_v2(handle, &cpuHierarchyV2) == DCGM_ST_VER_MISMATCH);
+
+        hostengineHealth.version = 0;
+        CHECK(dcgmHostengineIsHealthy(handle, &hostengineHealth) == DCGM_ST_VER_MISMATCH);
     }
 
     SECTION("GIVEN status handles WHEN lifecycle APIs are called THEN parameters and state are validated")
@@ -1774,6 +1828,10 @@ SCENARIO("DcgmApi: configuration, policy, health, and field-value helpers reject
         policies[1].version = dcgmPolicy_version - 1;
         dcgmHealthSetParams_v2 healthSet {};
         healthSet.version = dcgmHealthSetParams_version2 - 1;
+        dcgmHealthSetParams_v2 strictHealthSet {};
+        strictHealthSet.version = dcgmHealthSetParams_version2 - 1;
+        dcgmHealthSupportedSystems_t supportedSystems {};
+        supportedSystems.version = dcgmHealthSupportedSystems_version - 1;
 
         WHEN("local validation is applied")
         {
@@ -1784,7 +1842,11 @@ SCENARIO("DcgmApi: configuration, policy, health, and field-value helpers reject
             auto const policySetVersionRet = helperPolicySet(handle, groupId, &policies[1], 0);
             auto const healthSetNullRet    = helperHealthSet(handle, nullptr);
             auto const healthSetVersionRet = helperHealthSet(handle, &healthSet);
+            auto const strictSetNullRet    = helperHealthSetV3(handle, nullptr);
+            auto const strictSetVersionRet = helperHealthSetV3(handle, &strictHealthSet);
             auto const healthGetNullRet    = helperHealthGet(handle, groupId, nullptr);
+            auto const supportedNullRet    = helperHealthGetSupportedSystems(handle, nullptr);
+            auto const supportedVersionRet = helperHealthGetSupportedSystems(handle, &supportedSystems);
 
             THEN("invalid requests return precise status codes before dispatch")
             {
@@ -1795,7 +1857,30 @@ SCENARIO("DcgmApi: configuration, policy, health, and field-value helpers reject
                 CHECK(policySetVersionRet == DCGM_ST_VER_MISMATCH);
                 CHECK(healthSetNullRet == DCGM_ST_BADPARAM);
                 CHECK(healthSetVersionRet == DCGM_ST_VER_MISMATCH);
+                CHECK(strictSetNullRet == DCGM_ST_BADPARAM);
+                CHECK(strictSetVersionRet == DCGM_ST_VER_MISMATCH);
                 CHECK(healthGetNullRet == DCGM_ST_BADPARAM);
+                CHECK(supportedNullRet == DCGM_ST_BADPARAM);
+                CHECK(supportedVersionRet == DCGM_ST_VER_MISMATCH);
+            }
+        }
+    }
+
+    GIVEN("a supported-health output initialized by the caller")
+    {
+        dcgmHealthSupportedSystems_t supportedSystems {};
+        supportedSystems.version = dcgmHealthSupportedSystems_version;
+        supportedSystems.systems = DCGM_HEALTH_WATCH_POWER;
+
+        WHEN("module dispatch fails")
+        {
+            auto const result = helperHealthGetSupportedSystems(static_cast<dcgmHandle_t>(0), &supportedSystems);
+
+            THEN("the helper reports the failure without changing the output")
+            {
+                CHECK(result != DCGM_ST_OK);
+                CHECK(supportedSystems.version == dcgmHealthSupportedSystems_version);
+                CHECK(supportedSystems.systems == DCGM_HEALTH_WATCH_POWER);
             }
         }
     }
@@ -2026,16 +2111,20 @@ SCENARIO("DcgmApi: helper envelopes validate local-only failure cases")
             auto const unregisterInvalidConditionRet
                 = dcgmPolicyUnregister(handle, groupId, static_cast<dcgmPolicyCondition_t>(0));
             auto const healthSetNullRet     = dcgmHealthSet_v2(handle, nullptr);
+            auto const strictSetNullRet     = dcgmHealthSet_v3(handle, nullptr);
             auto const healthSetBadGroupRet = dcgmHealthSet(handle, DCGM_GROUP_NULL, systems);
             auto const healthGetNullRet     = dcgmHealthGet(handle, groupId, nullptr);
+            auto const supportedNullRet     = dcgmHealthGetSupportedSystems(handle, nullptr);
 
             THEN("public entry points report local validation failures consistently")
             {
                 CHECK(registerNullCallbackRet != DCGM_ST_OK);
                 CHECK(unregisterInvalidConditionRet != DCGM_ST_OK);
                 CHECK(healthSetNullRet == DCGM_ST_BADPARAM);
+                CHECK(strictSetNullRet == DCGM_ST_BADPARAM);
                 CHECK(healthSetBadGroupRet != DCGM_ST_OK);
                 CHECK(healthGetNullRet == DCGM_ST_BADPARAM);
+                CHECK(supportedNullRet == DCGM_ST_BADPARAM);
             }
         }
     }
@@ -2106,19 +2195,33 @@ SCENARIO("DcgmApi: diagnostic helper validates version compatibility before disp
             auto const responseTooNewRet = helperActionManager(handle, &runDiag, DCGM_POLICY_ACTION_NONE, &response);
 
             runDiag.version              = dcgmRunDiag_version9;
-            response.version             = dcgmDiagResponse_version10;
+            response.version             = dcgmDiagResponse_version12;
             auto const responseTooOldRet = helperActionManager(handle, &runDiag, DCGM_POLICY_ACTION_NONE, &response);
 
-            runDiag.version               = dcgmRunDiag_version7;
+            runDiag.version      = dcgmRunDiag_version7;
+            response.version     = dcgmDiagResponse_version12;
+            auto const oldRunRet = helperActionManager(handle, &runDiag, DCGM_POLICY_ACTION_NONE, &response);
+
+            runDiag.version               = dcgmRunDiag_version10;
             response.version              = 0;
             auto const unknownResponseRet = helperActionManager(handle, &runDiag, DCGM_POLICY_ACTION_NONE, &response);
+
+            response.version          = dcgmDiagResponse_version10;
+            auto const oldResponseRet = helperActionManager(handle, &runDiag, DCGM_POLICY_ACTION_NONE, &response);
+
+            runDiag.version                 = dcgmRunDiag_version11;
+            response.version                = dcgmDiagResponse_version11;
+            auto const newRunOldResponseRet = helperActionManager(handle, &runDiag, DCGM_POLICY_ACTION_NONE, &response);
 
             THEN("the helper returns version mismatches without module dispatch")
             {
                 CHECK(unknownRunRet == DCGM_ST_VER_MISMATCH);
                 CHECK(responseTooNewRet == DCGM_ST_VER_MISMATCH);
                 CHECK(responseTooOldRet == DCGM_ST_VER_MISMATCH);
+                CHECK(oldRunRet == DCGM_ST_VER_MISMATCH);
+                CHECK(oldResponseRet == DCGM_ST_VER_MISMATCH);
                 CHECK(unknownResponseRet == DCGM_ST_VER_MISMATCH);
+                CHECK(newRunOldResponseRet == DCGM_ST_VER_MISMATCH);
             }
         }
     }
@@ -2133,15 +2236,8 @@ SCENARIO("DcgmApi: diagnostic helper validates version compatibility before disp
         };
 
         auto const versionPair
-            = GENERATE(VersionPair { dcgmRunDiag_version10, dcgmDiagResponse_version12, dcgmDiagResponse_version12 },
-                       VersionPair { dcgmRunDiag_version10, dcgmDiagResponse_version11, dcgmDiagResponse_version11 },
-                       VersionPair { dcgmRunDiag_version9, dcgmDiagResponse_version12, dcgmDiagResponse_version11 },
-                       VersionPair { dcgmRunDiag_version9, dcgmDiagResponse_version11, dcgmDiagResponse_version11 },
-                       VersionPair { dcgmRunDiag_version8, dcgmDiagResponse_version10, dcgmDiagResponse_version10 },
-                       VersionPair { dcgmRunDiag_version7, dcgmDiagResponse_version10, dcgmDiagResponse_version10 },
-                       VersionPair { dcgmRunDiag_version7, dcgmDiagResponse_version9, dcgmDiagResponse_version9 },
-                       VersionPair { dcgmRunDiag_version7, dcgmDiagResponse_version8, dcgmDiagResponse_version8 },
-                       VersionPair { dcgmRunDiag_version7, dcgmDiagResponse_version7, dcgmDiagResponse_version7 });
+            = GENERATE(VersionPair { dcgmRunDiag_version11, dcgmDiagResponse_version12, dcgmDiagResponse_version12 },
+                       VersionPair { dcgmRunDiag_version10, dcgmDiagResponse_version12, dcgmDiagResponse_version12 });
 
         WHEN("a compatible request reaches the dispatch boundary with an invalid handle")
         {
@@ -3128,4 +3224,1819 @@ SCENARIO("DcgmApi: NVML injection wrappers validate local envelopes before dispa
         }
     }
 #endif
+}
+
+namespace
+{
+constexpr dcgmHandle_t c_fakeModuleSendHandle = DcgmNs::Testing::FakeModuleSendHandle;
+
+constexpr unsigned int c_fakeGroupIdCount     = 3;
+constexpr dcgmGpuGrp_t c_fakeGroupId0         = 3;
+constexpr dcgmGpuGrp_t c_fakeGroupId1         = 5;
+constexpr dcgmGpuGrp_t c_fakeGroupId2         = 8;
+constexpr long long c_fakeGroupInfoTimestamp  = 123456789;
+constexpr char const *c_fakeGroupName         = "api-fake-group";
+constexpr unsigned int c_fakeGroupEntityCount = 2;
+constexpr dcgm_field_eid_t c_fakeGroupGpuId   = 11;
+constexpr long long c_fakeSlowdownTempCelsius = 81;
+constexpr long long c_fakeShutdownTempCelsius = 93;
+
+void VerifyFakeGroupGetAllIds(unsigned int count, dcgmGpuGrp_t const *groupIds)
+{
+    CHECK(count == c_fakeGroupIdCount);
+    CHECK(groupIds[0] == c_fakeGroupId0);
+    CHECK(groupIds[1] == c_fakeGroupId1);
+    CHECK(groupIds[2] == c_fakeGroupId2);
+}
+
+void VerifyFakeGroupInfo(dcgmGroupInfo_t const &groupInfo)
+{
+    CHECK(groupInfo.count == c_fakeGroupEntityCount);
+    CHECK(std::strcmp(groupInfo.groupName, c_fakeGroupName) == 0);
+    CHECK(groupInfo.entityList[0].entityGroupId == DCGM_FE_GPU);
+    CHECK(groupInfo.entityList[0].entityId == c_fakeGroupGpuId);
+}
+
+void VerifyFakeDeviceAttributes(dcgmDeviceAttributes_t const &attributes)
+{
+    CHECK(attributes.thermalSettings.slowdownTemp == static_cast<unsigned int>(c_fakeSlowdownTempCelsius));
+    CHECK(attributes.thermalSettings.shutdownTemp == static_cast<unsigned int>(c_fakeShutdownTempCelsius));
+}
+
+void VerifyFakeModuleStatuses(dcgmModuleGetStatuses_t const &statuses)
+{
+    CHECK(statuses.numStatuses == 3);
+    CHECK(statuses.statuses[0].id == DcgmModuleIdCore);
+    CHECK(statuses.statuses[0].status == DcgmModuleStatusLoaded);
+    CHECK(statuses.statuses[1].id == DcgmModuleIdHealth);
+    CHECK(statuses.statuses[1].status == DcgmModuleStatusNotLoaded);
+    CHECK(statuses.statuses[2].id == DcgmModuleIdNvSwitch);
+    CHECK(statuses.statuses[2].status == DcgmModuleStatusDenylisted);
+}
+
+void VerifyFakeHealthCheck(dcgmHealthResponse_t const &response)
+{
+    CHECK(response.overallHealth == DCGM_HEALTH_RESULT_WARN);
+    CHECK(response.incidentCount == 1);
+    CHECK(response.incidents[0].system == DCGM_HEALTH_WATCH_MEM);
+    CHECK(response.incidents[0].health == DCGM_HEALTH_RESULT_WARN);
+    CHECK(response.incidents[0].entityInfo.entityGroupId == DCGM_FE_GPU);
+    CHECK(response.incidents[0].entityInfo.entityId == c_fakeGroupGpuId);
+    CHECK(response.incidents[0].error.code == DCGM_FR_XID_ERROR);
+}
+
+struct ModuleSendFake
+{
+    struct ObservedModuleCommand
+    {
+        dcgmModuleId_t moduleId {};
+        unsigned int subCommand {};
+        unsigned int version {};
+    };
+
+    static inline dcgmReturn_t m_transportReturn = DCGM_ST_OK;
+    static inline std::vector<ObservedModuleCommand> m_commands {};
+    static inline dcgmReturn_t m_createFakeEntitiesCmdRet = DCGM_ST_OK;
+
+    static void Reset()
+    {
+        m_transportReturn = DCGM_ST_OK;
+        m_commands.clear();
+        m_createFakeEntitiesCmdRet = DCGM_ST_OK;
+    }
+
+    static bool CommandIs(size_t index, dcgmModuleId_t moduleId, unsigned int subCommand)
+    {
+        return index < m_commands.size() && m_commands[index].moduleId == moduleId
+               && m_commands[index].subCommand == subCommand;
+    }
+
+    static dcgmReturn_t Hook(dcgmHandle_t /*handle*/,
+                             dcgm_module_command_header_t *header,
+                             size_t /*maxResponseSize*/,
+                             unsigned int /*timeout*/)
+    {
+        if (header == nullptr)
+        {
+            return DCGM_ST_BADPARAM;
+        }
+
+        m_commands.push_back(
+            { .moduleId = header->moduleId, .subCommand = header->subCommand, .version = header->version });
+
+        if (m_transportReturn != DCGM_ST_OK)
+        {
+            return m_transportReturn;
+        }
+
+        switch (header->moduleId)
+        {
+            case DcgmModuleIdCore:
+                return HandleCore(header);
+            case DcgmModuleIdDiag:
+                return HandleDiag(header);
+            case DcgmModuleIdConfig:
+                return HandleConfig(header);
+            case DcgmModuleIdPolicy:
+                return HandlePolicy(header);
+            case DcgmModuleIdHealth:
+                return HandleHealth(header);
+            case DcgmModuleIdIntrospect:
+                return HandleIntrospect(header);
+            case DcgmModuleIdMnDiag:
+                return HandleMnDiag(header);
+            case DcgmModuleIdProfiling:
+                return HandleProfiling(header);
+            case DcgmModuleIdSysmon:
+                return HandleSysmon(header);
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static dcgmReturn_t DispatchAtHostEngine(dcgmHandle_t handle,
+                                             dcgm_module_command_header_t *moduleCommand,
+                                             size_t maxResponseSize,
+                                             unsigned int timeout)
+    {
+        return Hook(handle, moduleCommand, maxResponseSize, timeout);
+    }
+
+private:
+    static dcgmReturn_t HandleCore(dcgm_module_command_header_t *header)
+    {
+        switch (header->subCommand)
+        {
+            case DCGM_CORE_SR_GROUP_GET_ALL_IDS:
+            {
+                auto *msg               = reinterpret_cast<dcgm_core_msg_group_get_all_ids_t *>(header);
+                msg->groups.cmdRet      = DCGM_ST_OK;
+                msg->groups.numGroups   = c_fakeGroupIdCount;
+                msg->groups.groupIds[0] = c_fakeGroupId0;
+                msg->groups.groupIds[1] = c_fakeGroupId1;
+                msg->groups.groupIds[2] = c_fakeGroupId2;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GROUP_GET_INFO:
+            {
+                auto *msg                       = reinterpret_cast<dcgm_core_msg_group_get_info_t *>(header);
+                msg->gi.cmdRet                  = DCGM_ST_OK;
+                msg->gi.timestamp               = c_fakeGroupInfoTimestamp;
+                msg->gi.groupInfo.version       = dcgmGroupInfo_version;
+                msg->gi.groupInfo.count         = c_fakeGroupEntityCount;
+                msg->gi.groupInfo.entityList[0] = { DCGM_FE_GPU, c_fakeGroupGpuId };
+                msg->gi.groupInfo.entityList[1] = { DCGM_FE_GPU, 12 };
+                SafeCopyTo(msg->gi.groupInfo.groupName, c_fakeGroupName);
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GROUP_ADD_ENTITY:
+            case DCGM_CORE_SR_REMOVE_ENTITY:
+            {
+                auto *msg      = reinterpret_cast<dcgm_core_msg_add_remove_entity_t *>(header);
+                msg->re.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_MODULE_STATUS:
+            {
+                auto *msg                       = reinterpret_cast<dcgm_core_msg_module_status_t *>(header);
+                msg->info.cmdRet                = DCGM_ST_OK;
+                msg->info.st.numStatuses        = 3;
+                msg->info.st.statuses[0].id     = DcgmModuleIdCore;
+                msg->info.st.statuses[0].status = DcgmModuleStatusLoaded;
+                msg->info.st.statuses[1].id     = DcgmModuleIdHealth;
+                msg->info.st.statuses[1].status = DcgmModuleStatusNotLoaded;
+                msg->info.st.statuses[2].id     = DcgmModuleIdNvSwitch;
+                msg->info.st.statuses[2].status = DcgmModuleStatusDenylisted;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4:
+            {
+                auto *msg = reinterpret_cast<dcgm_core_msg_entities_get_latest_values_v4 *>(header);
+                return PopulateLatestValues(msg);
+            }
+            case DCGM_CORE_SR_GET_ALL_DEVICES:
+            {
+                auto *msg           = reinterpret_cast<dcgm_core_msg_get_all_devices_t *>(header);
+                msg->dev.cmdRet     = DCGM_ST_OK;
+                msg->dev.count      = msg->dev.supported ? 2 : 3;
+                msg->dev.devices[0] = 1;
+                msg->dev.devices[1] = 3;
+                msg->dev.devices[2] = 5;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_TOPOLOGY:
+            {
+                auto *msg                                   = reinterpret_cast<dcgm_core_msg_get_topology_t *>(header);
+                msg->topo.cmdRet                            = DCGM_ST_OK;
+                msg->topo.topology.numElements              = 2;
+                msg->topo.topology.element[0].dcgmGpuA      = 1;
+                msg->topo.topology.element[0].dcgmGpuB      = 3;
+                msg->topo.topology.element[0].path          = DCGM_TOPOLOGY_NVLINK4;
+                msg->topo.topology.element[0].AtoBNvLinkIds = 0x3;
+                msg->topo.topology.element[0].BtoANvLinkIds = 0xC;
+                msg->topo.topology.element[1].dcgmGpuA      = 3;
+                msg->topo.topology.element[1].dcgmGpuB      = 5;
+                msg->topo.topology.element[1].path          = DCGM_TOPOLOGY_HOSTBRIDGE;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_TOPOLOGY_AFFINITY:
+            {
+                auto *msg                      = reinterpret_cast<dcgm_core_msg_get_topology_affinity_t *>(header);
+                msg->affinity.cmdRet           = DCGM_ST_OK;
+                msg->affinity.affinity.numGpus = 3;
+                msg->affinity.affinity.affinityMasks[0].dcgmGpuId  = 1;
+                msg->affinity.affinity.affinityMasks[0].bitmask[0] = 0x1;
+                msg->affinity.affinity.affinityMasks[1].dcgmGpuId  = 3;
+                msg->affinity.affinity.affinityMasks[1].bitmask[0] = 0x3;
+                msg->affinity.affinity.affinityMasks[2].dcgmGpuId  = 5;
+                msg->affinity.affinity.affinityMasks[2].bitmask[0] = 0x4;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_SELECT_TOPOLOGY_GPUS:
+            {
+                auto *msg           = reinterpret_cast<dcgm_core_msg_select_topology_gpus_t *>(header);
+                msg->sgt.cmdRet     = DCGM_ST_OK;
+                msg->sgt.outputGpus = msg->sgt.inputGpus & 0xA;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_ENTITY_GROUP_ENTITIES:
+            {
+                auto *msg                 = reinterpret_cast<dcgm_core_msg_get_entity_group_entities_t *>(header);
+                msg->entities.cmdRet      = DCGM_ST_OK;
+                msg->entities.numEntities = 3;
+                msg->entities.entities[0] = 10;
+                msg->entities.entities[1] = 11;
+                msg->entities.entities[2] = 12;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_GPU_CHIP_ARCHITECTURE:
+            {
+                auto *msg        = reinterpret_cast<dcgm_core_msg_get_gpu_chip_architecture_t *>(header);
+                msg->info.cmdRet = DCGM_ST_OK;
+                msg->info.data   = DCGM_CHIP_ARCH_HOPPER;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_GPU_INSTANCE_HIERARCHY:
+            {
+                auto *msg              = reinterpret_cast<dcgm_core_msg_get_gpu_instance_hierarchy_t *>(header);
+                msg->info.cmdRet       = DCGM_ST_OK;
+                msg->info.data.version = dcgmMigHierarchy_version2;
+                msg->info.data.count   = 2;
+                msg->info.data.entityList[0].entity                     = { DCGM_FE_GPU_I, 4 };
+                msg->info.data.entityList[0].parent                     = { DCGM_FE_GPU, 1 };
+                msg->info.data.entityList[0].info.nvmlInstanceId        = 6;
+                msg->info.data.entityList[1].entity                     = { DCGM_FE_GPU_CI, 9 };
+                msg->info.data.entityList[1].parent                     = { DCGM_FE_GPU_I, 4 };
+                msg->info.data.entityList[1].info.nvmlComputeInstanceId = 7;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_NVLINK_P2P_STATUS:
+            {
+                auto *msg                          = reinterpret_cast<dcgm_core_msg_get_nvlink_p2p_status_t *>(header);
+                msg->info.cmdRet                   = DCGM_ST_OK;
+                msg->info.ls.version               = dcgmNvLinkP2PStatus_version1;
+                msg->info.ls.numGpus               = 2;
+                msg->info.ls.gpus[0].entityId      = 1;
+                msg->info.ls.gpus[1].entityId      = 3;
+                msg->info.ls.gpus[0].linkStatus[1] = DcgmNvLinkP2pStatusOK;
+                msg->info.ls.gpus[1].linkStatus[0] = DcgmNvLinkP2pStatusNotSupported;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_CACHE_MANAGER_FIELD_INFO:
+            {
+                auto *msg                    = reinterpret_cast<dcgm_core_msg_get_cache_manager_field_info_t *>(header);
+                msg->fi.cmdRet               = DCGM_ST_OK;
+                msg->fi.fieldInfo.flags      = DCGM_CMI_F_WATCHED;
+                msg->fi.fieldInfo.lastStatus = DCGM_ST_OK;
+                msg->fi.fieldInfo.newestTimestamp          = 12345;
+                msg->fi.fieldInfo.oldestTimestamp          = 12000;
+                msg->fi.fieldInfo.numSamples               = 4;
+                msg->fi.fieldInfo.numWatchers              = 1;
+                msg->fi.fieldInfo.watchers[0].connectionId = 77;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_FIELD_SUMMARY:
+            {
+                auto *msg                             = reinterpret_cast<dcgm_core_msg_get_field_summary_t *>(header);
+                msg->info.cmdRet                      = DCGM_ST_OK;
+                msg->info.fsr.response.fieldType      = DCGM_FT_DOUBLE;
+                msg->info.fsr.response.summaryCount   = 2;
+                msg->info.fsr.response.values[0].fp64 = 12.5;
+                msg->info.fsr.response.values[1].fp64 = 44.0;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2:
+            {
+                auto *msg = reinterpret_cast<dcgm_core_msg_get_multiple_values_for_field_v2 *>(header);
+
+                DcgmFvBuffer buffer;
+                unsigned int const valueCount = std::min<unsigned int>(msg->fv.count, 2);
+                for (unsigned int i = 0; i < valueCount; ++i)
+                {
+                    buffer.AddInt64Value(static_cast<dcgm_field_entity_group_t>(msg->fv.entityGroupId),
+                                         msg->fv.entityId,
+                                         msg->fv.fieldId,
+                                         9000 + i,
+                                         123456 + i,
+                                         DCGM_ST_OK);
+                }
+
+                size_t bufferSize {};
+                size_t elementCount {};
+                buffer.GetSize(&bufferSize, &elementCount);
+                if (!(bufferSize <= sizeof(msg->fv.buffer)))
+                {
+                    return DCGM_ST_GENERIC_ERROR;
+                }
+                std::memcpy(msg->fv.buffer, buffer.GetBuffer(), bufferSize);
+                msg->fv.bufferSize = bufferSize;
+                msg->fv.count      = static_cast<int>(elementCount);
+                msg->fv.cmdRet     = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_HOSTENGINE_HEALTH:
+            {
+                auto *msg               = reinterpret_cast<dcgm_core_msg_hostengine_health_t *>(header);
+                msg->info.cmdRet        = DCGM_ST_OK;
+                msg->info.overallHealth = 0xBEEF;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_NVML_INJECT_FIELD_VALUE:
+            {
+                auto *msg      = reinterpret_cast<dcgm_core_msg_nvml_inject_field_value_t *>(header);
+                msg->iv.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_NVML_CREATE_FAKE_ENTITY:
+            {
+                auto *msg        = reinterpret_cast<dcgm_core_msg_nvml_create_injection_gpu_t *>(header);
+                msg->info.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_MIG_ENTITY_CREATE:
+            {
+                auto *msg = reinterpret_cast<dcgm_core_msg_create_mig_entity_t *>(header);
+                msg->cme.flags |= DCGM_MIG_RECONFIG_DELAY_PROCESSING;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_MIG_ENTITY_DELETE:
+            {
+                auto *msg = reinterpret_cast<dcgm_core_msg_delete_mig_entity_t *>(header);
+                msg->dme.flags |= DCGM_MIG_RECONFIG_DELAY_PROCESSING;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_GPU_STATUS:
+            {
+                auto *msg   = reinterpret_cast<dcgm_core_msg_get_gpu_status_t *>(header);
+                msg->status = DcgmEntityStatusFake;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_CREATE_FAKE_ENTITIES:
+            {
+                auto *msg = reinterpret_cast<dcgm_core_msg_create_fake_entities_t *>(header);
+                if (m_createFakeEntitiesCmdRet != DCGM_ST_OK)
+                {
+                    msg->info.cmdRet = m_createFakeEntitiesCmdRet;
+                    return DCGM_ST_OK;
+                }
+                msg->info.cmdRet                                = DCGM_ST_OK;
+                msg->info.fe.numToCreate                        = 1;
+                msg->info.fe.entityList[0].entity.entityId      = 88;
+                msg->info.fe.entityList[0].parent.entityGroupId = DCGM_FE_GPU;
+                msg->info.fe.entityList[0].parent.entityId      = 77;
+                msg->info.fe.entityList[0].sliceProfile         = DcgmMigProfileGpuInstanceSlice1;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_SET_ENTITY_LINK_STATE:
+            {
+                auto *msg   = reinterpret_cast<dcgm_core_msg_set_entity_nvlink_state_t *>(header);
+                msg->cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_WORKLOAD_POWER_PROFILES_STATUS:
+            {
+                auto *msg   = reinterpret_cast<dcgm_core_msg_get_workload_power_profiles_status_v1 *>(header);
+                msg->cmdRet = DCGM_ST_OK;
+                msg->pp.profilesInfo.version                           = dcgmWorkloadPowerProfileProfilesInfo_version;
+                msg->pp.profilesInfo.profileCount                      = 2;
+                msg->pp.profilesInfo.workloadPowerProfile[0].version   = dcgmWorkloadPowerProfileInfo_version;
+                msg->pp.profilesInfo.workloadPowerProfile[0].profileId = DCGM_POWER_PROFILE_COMPUTE;
+                msg->pp.profilesInfo.workloadPowerProfile[0].priority  = 7;
+                msg->pp.profilesInfo.workloadPowerProfile[1].version   = dcgmWorkloadPowerProfileInfo_version;
+                msg->pp.profilesInfo.workloadPowerProfile[1].profileId = DCGM_POWER_PROFILE_MEMORY_BOUND;
+                msg->pp.profilesInfo.workloadPowerProfile[1].priority  = 3;
+                msg->pp.profilesStatus.version                         = dcgmDeviceWorkloadPowerProfilesStatus_version;
+                msg->pp.profilesStatus.profileMask[0]                  = 0x3;
+                msg->pp.profilesStatus.requestedProfileMask[0]         = 0x2;
+                msg->pp.profilesStatus.enforcedProfileMask[0]          = 0x1;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_GET_NVLINK_STATUS:
+            {
+                auto *msg                               = reinterpret_cast<dcgm_core_msg_get_nvlink_status_t *>(header);
+                msg->info.cmdRet                        = DCGM_ST_OK;
+                msg->info.ls.version                    = dcgmNvLinkStatus_version4;
+                msg->info.ls.numGpus                    = 1;
+                msg->info.ls.gpus[0].entityId           = 17;
+                msg->info.ls.gpus[0].linkState[0]       = DcgmNvLinkLinkStateUp;
+                msg->info.ls.numNvSwitches              = 1;
+                msg->info.ls.nvSwitches[0].entityId     = 33;
+                msg->info.ls.nvSwitches[0].linkState[2] = DcgmNvLinkLinkStateDown;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_HOSTENGINE_VERSION:
+            {
+                auto *msg            = reinterpret_cast<dcgm_core_msg_hostengine_version_t *>(header);
+                msg->version.version = dcgmVersionInfo_version;
+                SafeCopyTo(msg->version.rawBuildInfoString, "version:4.7.0-test;branch:unit-test");
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_HOSTENGINE_ENV_VAR_INFO:
+            {
+                auto *msg           = reinterpret_cast<dcgm_core_msg_hostengine_env_var_t *>(header);
+                msg->envVarInfo.ret = DCGM_ST_OK;
+                SafeCopyTo(msg->envVarInfo.envVarValue, "0,2");
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_JOB_START_STATS:
+            case DCGM_CORE_SR_JOB_STOP_STATS:
+            case DCGM_CORE_SR_JOB_REMOVE:
+            case DCGM_CORE_SR_JOB_REMOVE_ALL:
+            {
+                auto *msg      = reinterpret_cast<dcgm_core_msg_job_cmd_t *>(header);
+                msg->jc.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_JOB_GET_STATS:
+            {
+                auto *msg                               = reinterpret_cast<dcgm_core_msg_job_get_stats_t *>(header);
+                msg->jc.cmdRet                          = DCGM_ST_OK;
+                msg->jc.jobStats.version                = dcgmJobInfo_version;
+                msg->jc.jobStats.numGpus                = 1;
+                msg->jc.jobStats.summary.gpuId          = DCGM_INT32_BLANK;
+                msg->jc.jobStats.summary.energyConsumed = 42;
+                msg->jc.jobStats.gpus[0].gpuId          = 3;
+                msg->jc.jobStats.gpus[0].energyConsumed = 42;
+                msg->jc.jobStats.gpus[0].numXidCriticalErrors   = 1;
+                msg->jc.jobStats.gpus[0].xidCriticalErrorsTs[0] = 123456;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_WATCH_FIELD_VALUE_V2:
+            {
+                auto *msg      = reinterpret_cast<dcgm_core_msg_watch_field_value_v2 *>(header);
+                msg->fv.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_UNWATCH_FIELD_VALUE:
+            {
+                auto *msg      = reinterpret_cast<dcgm_core_msg_unwatch_field_value_t *>(header);
+                msg->uf.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_UPDATE_ALL_FIELDS:
+            {
+                auto *msg      = reinterpret_cast<dcgm_core_msg_update_all_fields_t *>(header);
+                msg->uf.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_CLIENT_LOGIN:
+            {
+                auto *msg        = reinterpret_cast<dcgm_core_msg_client_login_t *>(header);
+                msg->info.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_PAUSE_RESUME:
+                return DCGM_ST_OK;
+            case DCGM_CORE_SR_NVSWITCH_GET_BACKEND:
+            {
+                auto *msg   = reinterpret_cast<dcgm_core_msg_nvswitch_get_backend_t *>(header);
+                msg->active = true;
+                SafeCopyTo(msg->backendName, "fake-nv");
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_ATTACH_DRIVER:
+            case DCGM_CORE_SR_DETACH_DRIVER:
+                return DCGM_ST_OK;
+            case DCGM_CORE_SR_EMPTY_CACHE:
+            {
+                auto *msg      = reinterpret_cast<dcgm_core_msg_empty_cache_t *>(header);
+                msg->ec.cmdRet = DCGM_ST_NOT_SUPPORTED;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_MARK_MODULES_RELOADABLE:
+            {
+                auto *msg        = reinterpret_cast<dcgm_core_msg_modules_reloadable_t *>(header);
+                msg->info.cmdRet = DCGM_ST_OK;
+                msg->info.moduleMask &= ~(1u << DcgmModuleIdCore);
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_SET_LOGGING_SEVERITY:
+                return DCGM_ST_OK;
+            case DCGM_CORE_SR_FIELDGROUP_GET_ALL:
+            {
+                auto *msg                   = reinterpret_cast<dcgm_core_msg_fieldgroup_get_all_t *>(header);
+                msg->info.cmdRet            = DCGM_ST_OK;
+                msg->info.fg.version        = dcgmAllFieldGroup_version;
+                msg->info.fg.numFieldGroups = 2;
+                msg->info.fg.fieldGroups[0].fieldGroupId = 41;
+                msg->info.fg.fieldGroups[0].numFieldIds  = 2;
+                msg->info.fg.fieldGroups[0].fieldIds[0]  = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
+                msg->info.fg.fieldGroups[0].fieldIds[1]  = DCGM_FI_DEV_BOARD_POWER_WATTS;
+                SafeCopyTo(msg->info.fg.fieldGroups[0].fieldGroupName, "thermal-power");
+                msg->info.fg.fieldGroups[1].fieldGroupId = 42;
+                msg->info.fg.fieldGroups[1].numFieldIds  = 1;
+                msg->info.fg.fieldGroups[1].fieldIds[0]  = DCGM_FI_DEV_FB_USED;
+                SafeCopyTo(msg->info.fg.fieldGroups[1].fieldGroupName, "memory");
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_RESET_NVML_FUNC_CALL_COUNT:
+                return DCGM_ST_OK;
+            case DCGM_CORE_SR_GET_NVML_INJECT_FUNC_CALL_COUNT:
+            {
+                auto *msg        = reinterpret_cast<dcgm_core_msg_get_nvml_inject_func_call_count_t *>(header);
+                msg->info.cmdRet = DCGM_ST_OK;
+                msg->info.funcCallCounts.numFuncs                      = 2;
+                msg->info.funcCallCounts.funcCallInfo[0].funcName[0]   = 'A';
+                msg->info.funcCallCounts.funcCallInfo[0].funcCallCount = 3;
+                msg->info.funcCallCounts.funcCallInfo[1].funcName[0]   = 'B';
+                msg->info.funcCallCounts.funcCallInfo[1].funcCallCount = 5;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_PROF_GET_METRIC_GROUPS:
+            {
+                auto *msg                         = reinterpret_cast<dcgm_core_msg_get_metric_groups_t *>(header);
+                msg->metricGroups.numMetricGroups = 2;
+                msg->metricGroups.metricGroups[0].majorId     = 7;
+                msg->metricGroups.metricGroups[0].minorId     = 0;
+                msg->metricGroups.metricGroups[0].numFieldIds = 2;
+                msg->metricGroups.metricGroups[0].fieldIds[0] = DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO;
+                msg->metricGroups.metricGroups[0].fieldIds[1] = DCGM_FI_PROF_SM_UTIL_RATIO;
+                msg->metricGroups.metricGroups[1].majorId     = 8;
+                msg->metricGroups.metricGroups[1].minorId     = 1;
+                msg->metricGroups.metricGroups[1].numFieldIds = 1;
+                msg->metricGroups.metricGroups[1].fieldIds[0] = DCGM_FI_PROF_NVLINK_TX_BYTES;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_NVML_INJECT_DEVICE:
+            {
+                auto *msg        = reinterpret_cast<dcgm_core_msg_nvml_inject_device_t *>(header);
+                msg->info.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_NVML_INJECT_DEVICE_FOR_FOLLOWING_CALLS:
+            {
+                auto *msg        = reinterpret_cast<dcgm_core_msg_nvml_inject_device_for_following_calls_t *>(header);
+                msg->info.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_NVML_INJECTED_DEVICE_RESET:
+            {
+                auto *msg        = reinterpret_cast<dcgm_core_msg_nvml_injected_device_reset_t *>(header);
+                msg->info.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_REMOVE_NVML_INJECTED_GPU:
+            case DCGM_CORE_SR_RESTORE_NVML_INJECTED_GPU:
+            {
+                auto *msg        = reinterpret_cast<dcgm_core_msg_remove_restore_nvml_injected_gpu_t *>(header);
+                msg->info.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+
+            case DCGM_CORE_SR_PID_GET_INFO:
+            {
+                auto *msg                       = reinterpret_cast<dcgm_core_msg_pid_get_info_t *>(header);
+                msg->info.cmdRet                = DCGM_ST_OK;
+                msg->info.pidInfo.version       = dcgmPidInfo_version;
+                msg->info.pidInfo.pid           = 4242;
+                msg->info.pidInfo.numGpus       = 1;
+                msg->info.pidInfo.gpus[0].gpuId = 3;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_FIELDGROUP_CREATE:
+            case DCGM_CORE_SR_FIELDGROUP_DESTROY:
+            case DCGM_CORE_SR_FIELDGROUP_GET_INFO:
+            {
+                auto *msg                 = reinterpret_cast<dcgm_core_msg_fieldgroup_op_t *>(header);
+                msg->info.cmdRet          = DCGM_ST_OK;
+                msg->info.fg.version      = dcgmFieldGroupInfo_version;
+                msg->info.fg.fieldGroupId = 41;
+                msg->info.fg.numFieldIds  = 2;
+                msg->info.fg.fieldIds[0]  = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
+                msg->info.fg.fieldIds[1]  = DCGM_FI_DEV_BOARD_POWER_WATTS;
+                SafeCopyTo(msg->info.fg.fieldGroupName, "thermal-power");
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_INJECT_FIELD_VALUE:
+            {
+                auto *msg      = reinterpret_cast<dcgm_core_msg_inject_field_value_t *>(header);
+                msg->iv.cmdRet = DCGM_ST_OK;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CORE_SR_CREATE_GROUP:
+            case DCGM_CORE_SR_GROUP_DESTROY:
+            case DCGM_CORE_SR_WATCH_FIELDS:
+            case DCGM_CORE_SR_UNWATCH_FIELDS:
+                return DCGM_ST_OK;
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static dcgmReturn_t HandleIntrospect(dcgm_module_command_header_t *header)
+    {
+        switch (header->subCommand)
+        {
+            case DCGM_INTROSPECT_SR_HOSTENGINE_MEM_USAGE:
+            {
+                auto *msg                 = reinterpret_cast<dcgm_introspect_msg_he_mem_usage_v1 *>(header);
+                msg->memoryInfo.bytesUsed = 987654321;
+                return DCGM_ST_OK;
+            }
+            case DCGM_INTROSPECT_SR_HOSTENGINE_CPU_UTIL:
+            {
+                auto *msg           = reinterpret_cast<dcgm_introspect_msg_he_cpu_util_v1 *>(header);
+                msg->cpuUtil.total  = 0.75;
+                msg->cpuUtil.kernel = 0.25;
+                msg->cpuUtil.user   = 0.50;
+                return DCGM_ST_OK;
+            }
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static dcgmReturn_t HandleProfiling(dcgm_module_command_header_t *header)
+    {
+        switch (header->subCommand)
+        {
+            case DCGM_PROFILING_SR_PAUSE_RESUME:
+                return DCGM_ST_OK;
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static dcgmReturn_t HandleDiag(dcgm_module_command_header_t *header)
+    {
+        switch (header->subCommand)
+        {
+            case DCGM_DIAG_SR_SEND_HEARTBEAT:
+                return DCGM_ST_OK;
+            case DCGM_DIAG_SR_RUN:
+                return DCGM_ST_OK;
+            case DCGM_DIAG_SR_STOP:
+                return DCGM_ST_OK;
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static dcgmReturn_t HandleConfig(dcgm_module_command_header_t *header)
+    {
+        switch (header->subCommand)
+        {
+            case DCGM_CONFIG_SR_SET:
+            {
+                auto *msg                       = reinterpret_cast<dcgm_config_msg_set_t *>(header);
+                msg->numStatuses                = 0;
+                msg->config.gpuId               = 17;
+                msg->config.perfState.syncBoost = 1;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CONFIG_SR_GET:
+            {
+                auto *msg                       = reinterpret_cast<dcgm_config_msg_get_t *>(header);
+                msg->numStatuses                = 0;
+                msg->numConfigs                 = 2;
+                msg->configs[0].version         = dcgmConfig_version;
+                msg->configs[0].gpuId           = 7;
+                msg->configs[0].eccMode         = 1;
+                msg->configs[1].version         = dcgmConfig_version;
+                msg->configs[1].gpuId           = 9;
+                msg->configs[1].powerLimit.type = DCGM_CONFIG_POWER_CAP_INDIVIDUAL;
+                msg->configs[1].powerLimit.val  = 275;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CONFIG_SR_ENFORCE_GROUP:
+            {
+                auto *msg        = reinterpret_cast<dcgm_config_msg_enforce_group_v1 *>(header);
+                msg->numStatuses = 0;
+                return DCGM_ST_OK;
+            }
+            case DCGM_CONFIG_SR_SET_WORKLOAD_POWER_PROFILE:
+                return DCGM_ST_OK;
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static dcgmReturn_t HandlePolicy(dcgm_module_command_header_t *header)
+    {
+        switch (header->subCommand)
+        {
+            case DCGM_POLICY_SR_GET_POLICIES:
+            {
+                auto *msg                  = reinterpret_cast<dcgm_policy_msg_get_policies_t *>(header);
+                msg->numPolicies           = 2;
+                msg->policies[0].version   = dcgmPolicy_version;
+                msg->policies[0].condition = DCGM_POLICY_COND_DBE;
+                msg->policies[0].parms[DCGM_POLICY_COND_DBE].tag       = dcgmPolicyConditionParams_t::LLONG;
+                msg->policies[0].parms[DCGM_POLICY_COND_DBE].val.llval = 88;
+                msg->policies[1].version                               = dcgmPolicy_version;
+                msg->policies[1].condition                             = DCGM_POLICY_COND_PCI;
+                msg->policies[1].parms[DCGM_POLICY_COND_PCI].tag       = dcgmPolicyConditionParams_t::LLONG;
+                msg->policies[1].parms[DCGM_POLICY_COND_PCI].val.llval = 99;
+                return DCGM_ST_OK;
+            }
+            case DCGM_POLICY_SR_SET_POLICY:
+                return DCGM_ST_OK;
+
+            case DCGM_POLICY_SR_GET_ALL:
+            {
+                auto *msg                  = reinterpret_cast<dcgm_policy_msg_get_all_t *>(header);
+                msg->returnedCount         = 2;
+                msg->totalCount            = 2;
+                msg->policies[0].version   = dcgmPolicyInfo_version;
+                msg->policies[0].policyId  = 11;
+                msg->policies[0].fieldId   = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
+                msg->policies[0].threshold = 90.0;
+                msg->policies[1].version   = dcgmPolicyInfo_version;
+                msg->policies[1].policyId  = 12;
+                msg->policies[1].fieldId   = DCGM_FI_DEV_BOARD_POWER_WATTS;
+                msg->policies[1].threshold = 250.0;
+                return DCGM_ST_OK;
+            }
+            case DCGM_POLICY_SR_GET_ONE:
+            {
+                auto *msg             = reinterpret_cast<dcgm_policy_msg_get_one_t *>(header);
+                msg->policy.version   = dcgmPolicyInfo_version;
+                msg->policy.policyId  = msg->policyId;
+                msg->policy.fieldId   = msg->fieldId;
+                msg->policy.threshold = 90.0;
+                return DCGM_ST_OK;
+            }
+            case DCGM_POLICY_SR_ENABLE:
+            case DCGM_POLICY_SR_DISABLE:
+                return DCGM_ST_OK;
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static dcgmReturn_t HandleHealth(dcgm_module_command_header_t *header)
+    {
+        switch (header->subCommand)
+        {
+            case DCGM_HEALTH_SR_SET_SYSTEMS_V2:
+            case DCGM_HEALTH_SR_SET_SYSTEMS_V3:
+                return DCGM_ST_OK;
+            case DCGM_HEALTH_SR_GET_SYSTEMS:
+            {
+                auto *msg    = reinterpret_cast<dcgm_health_msg_get_systems_t *>(header);
+                msg->systems = static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_POWER);
+                return DCGM_ST_OK;
+            }
+            case DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS:
+            {
+                auto *msg                     = reinterpret_cast<dcgm_health_msg_get_supported_systems_t *>(header);
+                msg->supportedSystems.version = dcgmHealthSupportedSystems_version;
+                msg->supportedSystems.systems = DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_IMEX;
+                return DCGM_ST_OK;
+            }
+
+            case DCGM_HEALTH_SR_CHECK_V5:
+            {
+                auto *msg                             = reinterpret_cast<dcgm_health_msg_check_v5 *>(header);
+                msg->response.version                 = dcgmHealthResponse_version5;
+                msg->response.overallHealth           = DCGM_HEALTH_RESULT_WARN;
+                msg->response.incidentCount           = 1;
+                msg->response.incidents[0].system     = DCGM_HEALTH_WATCH_MEM;
+                msg->response.incidents[0].health     = DCGM_HEALTH_RESULT_WARN;
+                msg->response.incidents[0].entityInfo = { DCGM_FE_GPU, c_fakeGroupGpuId };
+                msg->response.incidents[0].error.code = DCGM_FR_XID_ERROR;
+                return DCGM_ST_OK;
+            }
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static dcgmReturn_t HandleMnDiag(dcgm_module_command_header_t *header)
+    {
+        switch (header->subCommand)
+        {
+            case DCGM_MNDIAG_SR_RUN:
+            {
+                auto *msg              = reinterpret_cast<dcgm_mndiag_msg_run_t *>(header);
+                msg->response.version  = dcgmMnDiagResponse_version1;
+                msg->response.numTests = 1;
+                SafeCopyTo(msg->response.tests[0].name, "mn-smoke");
+                return DCGM_ST_OK;
+            }
+            case DCGM_MNDIAG_SR_STOP:
+                return DCGM_ST_OK;
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static dcgmReturn_t HandleSysmon(dcgm_module_command_header_t *header)
+    {
+        switch (header->subCommand)
+        {
+            case DCGM_SYSMON_SR_GET_CPUS:
+            {
+                auto *msg                          = reinterpret_cast<dcgm_sysmon_msg_get_cpus_t *>(header);
+                msg->cpuCount                      = 3;
+                msg->cpus[0].cpuId                 = 10;
+                msg->cpus[0].ownedCores.bitmask[0] = 0x3;
+                SafeCopyTo(msg->cpus[0].serial, "cpu-a");
+                msg->cpus[1].cpuId                 = 11;
+                msg->cpus[1].ownedCores.bitmask[0] = 0xC;
+                SafeCopyTo(msg->cpus[1].serial, "cpu-b");
+                msg->cpus[2].cpuId                 = 12;
+                msg->cpus[2].ownedCores.bitmask[0] = 0x30;
+                SafeCopyTo(msg->cpus[2].serial, "cpu-c");
+                return DCGM_ST_OK;
+            }
+            default:
+                return DCGM_ST_OK;
+        }
+    }
+
+    static void AddDeviceAttributeValue(DcgmFvBuffer &buffer,
+                                        dcgm_field_entity_group_t entityGroupId,
+                                        dcgm_field_eid_t entityId,
+                                        unsigned short fieldId)
+    {
+        switch (fieldId)
+        {
+            case DCGM_FI_DEV_GPU_TEMP_SLOWDOWN_CELSIUS:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, c_fakeSlowdownTempCelsius, 1000, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_GPU_TEMP_SHUTDOWN_CELSIUS:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, c_fakeShutdownTempCelsius, 1001, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_ENFORCED_WATTS:
+                buffer.AddDoubleValue(entityGroupId, entityId, fieldId, 240.0, 1002, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS:
+                buffer.AddDoubleValue(entityGroupId, entityId, fieldId, 250.0, 1003, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_DEFAULT_WATTS:
+                buffer.AddDoubleValue(entityGroupId, entityId, fieldId, 225.0, 1004, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_MAX_WATTS:
+                buffer.AddDoubleValue(entityGroupId, entityId, fieldId, 300.0, 1005, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_MIN_WATTS:
+                buffer.AddDoubleValue(entityGroupId, entityId, fieldId, 125.0, 1006, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_CLOCKS_SUPPORTED:
+            {
+                dcgmDeviceSupportedClockSets_t clocks {};
+                clocks.version              = dcgmDeviceSupportedClockSets_version;
+                clocks.count                = 1;
+                clocks.clockSet[0].version  = dcgmClockSet_version;
+                clocks.clockSet[0].memClock = 5001;
+                clocks.clockSet[0].smClock  = 1601;
+                buffer.AddBlobValue(entityGroupId, entityId, fieldId, &clocks, sizeof(clocks), 1007, DCGM_ST_OK);
+                break;
+            }
+            case DCGM_FI_DEV_GPU_UUID:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "GPU-api-fake", 1008, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VBIOS_VERSION:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "vbios-1", 1009, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_INFOROM_IMAGE_VERSION:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "info-2", 1010, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_GPU_BRAND:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "brand", 1011, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_GPU_NAME:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "fake gpu", 1012, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_BOARD_SERIAL:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "serial-3", 1013, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_PCI_BUS_ID:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "0000:65:00.0", 1014, DCGM_ST_OK);
+                break;
+            case DCGM_FI_SYSTEM_DRIVER_VERSION:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "555.66", 1015, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_PCI_COMBINED_ID:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 0x12345678, 1016, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_PCI_SUBSYS_ID:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 0x90ABCDEF, 1017, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_BAR1_TOTAL:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 100, 1018, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_FB_TOTAL:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 200, 1019, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_FB_USED:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 75, 1020, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_FB_FREE:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 125, 1021, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_GPU_VIRTUAL_MODE:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 2, 1022, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_GPU_PERSISTENCE_MODE:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 1, 1023, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_MIG_MODE:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 1, 1024, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_CC_MODE:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 3, 1025, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VGPU_SUPPORTED_INFO:
+            {
+                std::array<dcgmDeviceVgpuTypeInfo_t, 3> supportedTypes {};
+                supportedTypes[0].version                             = dcgmDeviceVgpuTypeInfo_version;
+                supportedTypes[0].vgpuTypeInfo.supportedVgpuTypeCount = 2;
+                supportedTypes[1].version                             = dcgmDeviceVgpuTypeInfo_version;
+                supportedTypes[1].vgpuTypeInfo.vgpuTypeId             = 101;
+                supportedTypes[1].deviceId                            = 0x10DE;
+                supportedTypes[1].subsystemId                         = 0x1234;
+                supportedTypes[1].maxInstances                        = 4;
+                supportedTypes[1].fbTotal                             = 8192;
+                supportedTypes[2].version                             = dcgmDeviceVgpuTypeInfo_version;
+                supportedTypes[2].vgpuTypeInfo.vgpuTypeId             = 102;
+                supportedTypes[2].deviceId                            = 0x10DF;
+                supportedTypes[2].subsystemId                         = 0x5678;
+                supportedTypes[2].maxInstances                        = 8;
+                supportedTypes[2].fbTotal                             = 16384;
+                SafeCopyTo(supportedTypes[1].vgpuTypeName, "vgpu-small");
+                SafeCopyTo(supportedTypes[2].vgpuTypeName, "vgpu-large");
+                buffer.AddBlobValue(
+                    entityGroupId, entityId, fieldId, supportedTypes.data(), sizeof(supportedTypes), 1027, DCGM_ST_OK);
+                break;
+            }
+            case DCGM_FI_DEV_VGPU_CREATABLE_IDS:
+            {
+                std::array<unsigned int, 3> creatableIds { 2, 201, 202 };
+                buffer.AddBlobValue(
+                    entityGroupId, entityId, fieldId, creatableIds.data(), sizeof(creatableIds), 1028, DCGM_ST_OK);
+                break;
+            }
+            case DCGM_FI_DEV_VGPU_INSTANCE_INFO:
+            {
+                std::array<unsigned int, 3> instanceIds { 2, 301, 302 };
+                buffer.AddBlobValue(
+                    entityGroupId, entityId, fieldId, instanceIds.data(), sizeof(instanceIds), 1029, DCGM_ST_OK);
+                break;
+            }
+            case DCGM_FI_DEV_VGPU_UTIL_INFO:
+            {
+                std::array<dcgmDeviceVgpuUtilInfo_t, 2> utilInfo {};
+                utilInfo[0].version = dcgmDeviceVgpuUtilInfo_version;
+                utilInfo[0].vgpuId  = 301;
+                utilInfo[0].smUtil  = 31;
+                utilInfo[0].memUtil = 41;
+                utilInfo[0].encUtil = 51;
+                utilInfo[0].decUtil = 61;
+                utilInfo[1].version = dcgmDeviceVgpuUtilInfo_version;
+                utilInfo[1].vgpuId  = 302;
+                utilInfo[1].smUtil  = 32;
+                utilInfo[1].memUtil = 42;
+                utilInfo[1].encUtil = 52;
+                utilInfo[1].decUtil = 62;
+                buffer.AddBlobValue(
+                    entityGroupId, entityId, fieldId, utilInfo.data(), sizeof(utilInfo), 1030, DCGM_ST_OK);
+                break;
+            }
+            case DCGM_FI_DEV_GPU_UTIL:
+            case DCGM_FI_DEV_GPU_UTIL_RATIO:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 37, 1031, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_MEM_COPY_UTIL:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 47, 1032, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_ENC_UTIL:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 57, 1033, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_DEC_UTIL:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 67, 1034, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VGPU_VM_ID:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "vm-id-17", 1035, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VGPU_VM_NAME:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "vm-name-17", 1036, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VGPU_TYPE:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 701, 1037, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VGPU_UUID:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "vgpu-uuid-17", 1038, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VGPU_DRIVER_VERSION:
+                buffer.AddStringValue(entityGroupId, entityId, fieldId, "vgpu-driver-17", 1039, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VGPU_MEMORY_USAGE:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 4096, 1040, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATUS:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 1, 1041, DCGM_ST_OK);
+                break;
+            case DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT:
+                buffer.AddInt64Value(entityGroupId, entityId, fieldId, 60, 1042, DCGM_ST_OK);
+                break;
+            default:
+                buffer.AddBlankValue(entityGroupId, entityId, fieldId, 1043, DCGM_ST_OK);
+                break;
+        }
+    }
+
+    static dcgmReturn_t PopulateLatestValues(dcgm_core_msg_entities_get_latest_values_v4 *msg)
+    {
+        DcgmFvBuffer buffer(0);
+        dcgm_field_entity_group_t entityGroupId = DCGM_FE_GPU;
+        dcgm_field_eid_t entityId               = 0;
+        if (msg->ev.entitiesCount > 0)
+        {
+            entityGroupId = msg->ev.entities[0].entityGroupId;
+            entityId      = msg->ev.entities[0].entityId;
+        }
+
+        if (msg->ev.fieldIdCount > 0)
+        {
+            for (unsigned int i = 0; i < msg->ev.fieldIdCount; ++i)
+            {
+                AddDeviceAttributeValue(buffer, entityGroupId, entityId, msg->ev.fieldIdList[i]);
+            }
+        }
+        else
+        {
+            buffer.AddInt64Value(entityGroupId, entityId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 71, 1100, DCGM_ST_OK);
+        }
+
+        size_t bufferSize   = 0;
+        size_t elementCount = 0;
+        buffer.GetSize(&bufferSize, &elementCount);
+        if (!(bufferSize <= sizeof(msg->ev.buffer)))
+        {
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        std::memcpy(msg->ev.buffer, buffer.GetBuffer(), bufferSize);
+        msg->ev.bufferSize = bufferSize;
+        msg->ev.cmdRet     = DCGM_ST_OK;
+        return DCGM_ST_OK;
+    }
+};
+
+class ModuleSendFakeGuard
+{
+public:
+    ModuleSendFakeGuard()
+    {
+        ModuleSendFake::Reset();
+    }
+
+    ~ModuleSendFakeGuard()
+    {
+        ModuleSendFake::Reset();
+    }
+};
+
+class ModuleSendHookTestFixture
+{
+protected:
+    ModuleSendHookTestFixture()
+    {
+        REQUIRE(dcgmInit() == DCGM_ST_OK);
+    }
+
+    ~ModuleSendHookTestFixture()
+    {
+        CHECK(dcgmShutdown() == DCGM_ST_OK);
+    }
+
+    ModuleSendFakeGuard fakeGuard;
+    dcgmHandle_t const handle { c_fakeModuleSendHandle };
+};
+
+void RequireCommands(std::initializer_list<std::pair<dcgmModuleId_t, unsigned int>> expected)
+{
+    REQUIRE(ModuleSendFake::m_commands.size() == expected.size());
+    size_t i = 0;
+    for (auto const &[moduleId, subCommand] : expected)
+    {
+        REQUIRE(ModuleSendFake::CommandIs(i, moduleId, subCommand));
+        ++i;
+    }
+}
+
+struct DispatchCase
+{
+    char const *name;
+    dcgmModuleId_t moduleId;
+    unsigned int subCommand;
+    dcgmReturn_t (*call)(dcgmHandle_t);
+};
+
+DispatchCase const c_dispatchCases[] = {
+    { "pause telemetry",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_PAUSE_RESUME,
+      [](dcgmHandle_t dcgmHandle) { return dcgmPauseTelemetryForDiag(dcgmHandle); } },
+    { "attach driver",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_ATTACH_DRIVER,
+      [](dcgmHandle_t dcgmHandle) { return dcgmAttachDriver(dcgmHandle); } },
+    { "job remove all",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_JOB_REMOVE_ALL,
+      [](dcgmHandle_t dcgmHandle) { return dcgmJobRemoveAll(dcgmHandle); } },
+    { "health get",
+      DcgmModuleIdHealth,
+      DCGM_HEALTH_SR_GET_SYSTEMS,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmHealthSystems_t systems {};
+          return helperHealthGet(dcgmHandle, 4, &systems);
+      } },
+    { "health set",
+      DcgmModuleIdHealth,
+      DCGM_HEALTH_SR_SET_SYSTEMS_V2,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmHealthSetParams_v2 params {};
+          params.version = dcgmHealthSetParams_version2;
+          params.groupId = 4;
+          params.systems = DCGM_HEALTH_WATCH_ALL;
+          return helperHealthSet(dcgmHandle, &params);
+      } },
+    { "strict health set",
+      DcgmModuleIdHealth,
+      DCGM_HEALTH_SR_SET_SYSTEMS_V3,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmHealthSetParams_v2 params {};
+          params.version = dcgmHealthSetParams_version2;
+          params.groupId = 4;
+          params.systems = DCGM_HEALTH_WATCH_IMEX;
+          return helperHealthSetV3(dcgmHandle, &params);
+      } },
+    { "config set",
+      DcgmModuleIdConfig,
+      DCGM_CONFIG_SR_SET,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmConfig_t config {};
+          config.version = dcgmConfig_version;
+          return helperConfigSet(dcgmHandle, 9, &config, 0);
+      } },
+    { "policy set",
+      DcgmModuleIdPolicy,
+      DCGM_POLICY_SR_SET_POLICY,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmPolicy_t policy {};
+          policy.version = dcgmPolicy_version;
+          return helperPolicySet(dcgmHandle, 6, &policy, 0);
+      } },
+    { "prof pause",
+      DcgmModuleIdProfiling,
+      DCGM_PROFILING_SR_PAUSE_RESUME,
+      [](dcgmHandle_t dcgmHandle) { return dcgmProfPause(dcgmHandle); } },
+    { "stop diag",
+      DcgmModuleIdDiag,
+      DCGM_DIAG_SR_STOP,
+      [](dcgmHandle_t dcgmHandle) { return helperStopDiag(dcgmHandle); } },
+    { "stop mndiag",
+      DcgmModuleIdMnDiag,
+      DCGM_MNDIAG_SR_STOP,
+      [](dcgmHandle_t dcgmHandle) { return helperStopMnDiag(dcgmHandle); } },
+    { "workload power profile",
+      DcgmModuleIdConfig,
+      DCGM_CONFIG_SR_SET_WORKLOAD_POWER_PROFILE,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmWorkloadPowerProfile_t profile {};
+          profile.version = dcgmWorkloadPowerProfile_version;
+          return dcgmConfigSetWorkloadPowerProfile(dcgmHandle, &profile);
+      } },
+    { "create fake entities",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_CREATE_FAKE_ENTITIES,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmCreateFakeEntities_v2 request {};
+          request.version = dcgmCreateFakeEntities_version;
+          return dcgmCreateFakeEntities(dcgmHandle, &request);
+      } },
+    { "hostengine logging",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_SET_LOGGING_SEVERITY,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmSettingsSetLoggingSeverity_t logging {};
+          logging.version = dcgmSettingsSetLoggingSeverity_version2;
+          return dcgmHostengineSetLoggingSeverity(dcgmHandle, &logging);
+      } },
+};
+
+DispatchCase const c_copyBackCases[] = {
+    { "group get all ids",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GROUP_GET_ALL_IDS,
+      [](dcgmHandle_t dcgmHandle) {
+          std::array<dcgmGpuGrp_t, 4> groupIds {};
+          unsigned int count = groupIds.size();
+          auto const ret     = dcgmGroupGetAllIds(dcgmHandle, groupIds.data(), &count);
+          if (ret == DCGM_ST_OK)
+          {
+              VerifyFakeGroupGetAllIds(count, groupIds.data());
+          }
+          return ret;
+      } },
+    { "group info",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GROUP_GET_INFO,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmGroupInfo_t groupInfo {};
+          groupInfo.version = dcgmGroupInfo_version;
+          auto const ret    = helperGroupGetInfo(dcgmHandle, 5, &groupInfo, nullptr);
+          if (ret == DCGM_ST_OK)
+          {
+              VerifyFakeGroupInfo(groupInfo);
+          }
+          return ret;
+      } },
+    { "all devices",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_ALL_DEVICES,
+      [](dcgmHandle_t dcgmHandle) {
+          unsigned int gpuIds[DCGM_MAX_NUM_DEVICES] {};
+          int count {};
+          auto const allRet       = dcgmGetAllDevices(dcgmHandle, gpuIds, &count);
+          auto const supportedRet = dcgmGetAllSupportedDevices(dcgmHandle, gpuIds, &count);
+          return allRet == DCGM_ST_OK ? supportedRet : allRet;
+      } },
+    { "device attributes",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmDeviceAttributes_t attr {};
+          attr.version   = dcgmDeviceAttributes_version;
+          auto const ret = dcgmGetDeviceAttributes(dcgmHandle, 1, &attr);
+          if (ret == DCGM_ST_OK)
+          {
+              VerifyFakeDeviceAttributes(attr);
+          }
+          return ret;
+      } },
+    { "vgpu device attributes",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmVgpuDeviceAttributes_t attr {};
+          attr.version = dcgmVgpuDeviceAttributes_version;
+          return dcgmGetVgpuDeviceAttributes(dcgmHandle, 1, &attr);
+      } },
+    { "vgpu instance attributes",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmVgpuInstanceAttributes_t attr {};
+          attr.version = dcgmVgpuInstanceAttributes_version;
+          return helperVgpuInstanceGetAttributes(dcgmHandle, 17, &attr);
+      } },
+    { "config get",
+      DcgmModuleIdConfig,
+      DCGM_CONFIG_SR_GET,
+      [](dcgmHandle_t dcgmHandle) {
+          std::array<dcgmConfig_t, 2> configs {};
+          configs[0].version = dcgmConfig_version;
+          configs[1].version = dcgmConfig_version;
+          return dcgmConfigGet(dcgmHandle, 9, DCGM_CONFIG_CURRENT_STATE, configs.size(), configs.data(), 0);
+      } },
+    { "policy get",
+      DcgmModuleIdPolicy,
+      DCGM_POLICY_SR_GET_POLICIES,
+      [](dcgmHandle_t dcgmHandle) {
+          std::array<dcgmPolicy_t, 2> policies {};
+          policies[0].version = dcgmPolicy_version;
+          policies[1].version = dcgmPolicy_version;
+          return helperPolicyGet(dcgmHandle, 6, policies.size(), policies.data(), 0);
+      } },
+    { "policy get all",
+      DcgmModuleIdPolicy,
+      DCGM_POLICY_SR_GET_ALL,
+      [](dcgmHandle_t dcgmHandle) {
+          std::array<dcgmPolicyInfo_t, 4> policies {};
+          for (auto &policy : policies)
+          {
+              policy.version = dcgmPolicyInfo_version;
+          }
+          unsigned int count = policies.size();
+          return dcgmPolicyGetAll(dcgmHandle, policies.data(), &count);
+      } },
+    { "policy get one",
+      DcgmModuleIdPolicy,
+      DCGM_POLICY_SR_GET_ONE,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmPolicyInfo_t policy {};
+          policy.version = dcgmPolicyInfo_version;
+          return dcgmPolicyGetOne(dcgmHandle, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 11, &policy);
+      } },
+    { "health supported systems",
+      DcgmModuleIdHealth,
+      DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmHealthSupportedSystems_t supportedSystems {};
+          supportedSystems.version = dcgmHealthSupportedSystems_version;
+          auto const ret           = helperHealthGetSupportedSystems(dcgmHandle, &supportedSystems);
+          if (ret == DCGM_ST_OK)
+          {
+              CHECK(supportedSystems.version == dcgmHealthSupportedSystems_version);
+              CHECK(supportedSystems.systems == (DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_IMEX));
+          }
+          return ret;
+      } },
+    { "entity group entities",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_ENTITY_GROUP_ENTITIES,
+      [](dcgmHandle_t dcgmHandle) {
+          std::array<dcgm_field_eid_t, 8> entities {};
+          int count = static_cast<int>(entities.size());
+          return dcgmGetEntityGroupEntities(dcgmHandle, DCGM_FE_GPU, entities.data(), &count, 0);
+      } },
+    { "gpu chip architecture",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_GPU_CHIP_ARCHITECTURE,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmChipArchitecture_t arch {};
+          return dcgmGetGpuChipArchitecture(dcgmHandle, 1, &arch);
+      } },
+    { "mig hierarchy",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_GPU_INSTANCE_HIERARCHY,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmMigHierarchy_v2 hierarchy {};
+          hierarchy.version = dcgmMigHierarchy_version2;
+          return dcgmGetGpuInstanceHierarchy(dcgmHandle, &hierarchy);
+      } },
+    { "nvlink p2p",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_NVLINK_P2P_STATUS,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmNvLinkP2PStatus_v1 status {};
+          status.version = dcgmNvLinkP2PStatus_version1;
+          return dcgmGetNvLinkP2PStatus(dcgmHandle, &status);
+      } },
+    { "nvlink status",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_NVLINK_STATUS,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmNvLinkStatus_v5 status {};
+          status.version = dcgmNvLinkStatus_version5;
+          return dcgmGetNvLinkLinkStatus(dcgmHandle, &status);
+      } },
+    { "cache manager field info",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_CACHE_MANAGER_FIELD_INFO,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmCacheManagerFieldInfo_v4_t info {};
+          info.version = dcgmCacheManagerFieldInfo_version4;
+          return dcgmGetCacheManagerFieldInfo(dcgmHandle, &info);
+      } },
+    { "field summary",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_FIELD_SUMMARY,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmFieldSummaryRequest_t request {};
+          request.version = dcgmFieldSummaryRequest_version1;
+          request.fieldId = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
+          return dcgmGetFieldSummary(dcgmHandle, &request);
+      } },
+    { "multiple field values",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2,
+      [](dcgmHandle_t dcgmHandle) {
+          std::array<dcgmFieldValue_v1, 4> values {};
+          int count = static_cast<int>(values.size());
+          return helperGetMultipleValuesForFieldFV1s(dcgmHandle,
+                                                     DCGM_FE_GPU,
+                                                     1,
+                                                     DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                                                     &count,
+                                                     0,
+                                                     0,
+                                                     DCGM_ORDER_ASCENDING,
+                                                     values.data());
+      } },
+    { "topology affinity",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_TOPOLOGY_AFFINITY,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmAffinity_t affinity {};
+          return helperGetTopologyAffinity(dcgmHandle, 5, &affinity);
+      } },
+    { "pci topology",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_TOPOLOGY,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmTopology_t topology {};
+          return helperGetTopologyPci(dcgmHandle, 5, &topology);
+      } },
+    { "device topology",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_TOPOLOGY,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmDeviceTopology_t topology {};
+          topology.version = dcgmDeviceTopology_version;
+          return dcgmGetDeviceTopology(dcgmHandle, 1, &topology);
+      } },
+    { "select topology gpus",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_SELECT_TOPOLOGY_GPUS,
+      [](dcgmHandle_t dcgmHandle) {
+          uint64_t output {};
+          return helperSelectGpusByTopology(dcgmHandle, 0xF, 2, &output, 0);
+      } },
+    { "cpu hierarchy",
+      DcgmModuleIdSysmon,
+      DCGM_SYSMON_SR_GET_CPUS,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmCpuHierarchy_v1 v1 {};
+          v1.version       = dcgmCpuHierarchy_version1;
+          auto const v1Ret = dcgmGetCpuHierarchy(dcgmHandle, &v1);
+          dcgmCpuHierarchy_v2 v2 {};
+          v2.version       = dcgmCpuHierarchy_version2;
+          auto const v2Ret = dcgmGetCpuHierarchy_v2(dcgmHandle, &v2);
+          return v1Ret == DCGM_ST_OK ? v2Ret : v1Ret;
+      } },
+    { "introspect memory and cpu",
+      DcgmModuleIdIntrospect,
+      DCGM_INTROSPECT_SR_HOSTENGINE_MEM_USAGE,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmIntrospectMemory_t memory {};
+          memory.version    = dcgmIntrospectMemory_version1;
+          auto const memRet = dcgmIntrospectGetHostengineMemoryUsage(dcgmHandle, &memory, 1);
+          dcgmIntrospectCpuUtil_t cpu {};
+          cpu.version       = dcgmIntrospectCpuUtil_version1;
+          auto const cpuRet = dcgmIntrospectGetHostengineCpuUtilization(dcgmHandle, &cpu, 0);
+          return memRet == DCGM_ST_OK ? cpuRet : memRet;
+      } },
+    { "module statuses",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_MODULE_STATUS,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmModuleGetStatuses_t statuses {};
+          statuses.version = dcgmModuleGetStatuses_version;
+          auto const ret   = dcgmModuleGetStatuses(dcgmHandle, &statuses);
+          if (ret == DCGM_ST_OK)
+          {
+              VerifyFakeModuleStatuses(statuses);
+          }
+          return ret;
+      } },
+    { "job stats",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_JOB_GET_STATS,
+      [](dcgmHandle_t dcgmHandle) {
+          char jobId[64] = "job-hook";
+          dcgmJobInfo_t jobInfo {};
+          jobInfo.version = dcgmJobInfo_version;
+          return dcgmJobGetStats(dcgmHandle, jobId, &jobInfo);
+      } },
+    { "nvswitch backend",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_NVSWITCH_GET_BACKEND,
+      [](dcgmHandle_t dcgmHandle) {
+          bool active {};
+          char backendName[16] {};
+          return dcgmNvswitchGetBackend(dcgmHandle, &active, backendName, sizeof(backendName));
+      } },
+    { "hostengine version",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_HOSTENGINE_VERSION,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmVersionInfo_t version {};
+          version.version = dcgmVersionInfo_version;
+          return dcgmHostengineVersionInfo(dcgmHandle, &version);
+      } },
+    { "prof metric groups",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_PROF_GET_METRIC_GROUPS,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmProfGetMetricGroups_t groups {};
+          groups.version = dcgmProfGetMetricGroups_version;
+          return dcgmProfGetSupportedMetricGroups(dcgmHandle, &groups);
+      } },
+    { "workload power profiles",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_WORKLOAD_POWER_PROFILES_STATUS,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmWorkloadPowerProfileProfilesInfo_v1 info {};
+          info.version = dcgmWorkloadPowerProfileProfilesInfo_version;
+          dcgmDeviceWorkloadPowerProfilesStatus_v1 status {};
+          status.version = dcgmDeviceWorkloadPowerProfilesStatus_version;
+          return dcgmGetDeviceWorkloadPowerProfileInfo(dcgmHandle, 11, &info, &status);
+      } },
+    { "field group get all",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_FIELDGROUP_GET_ALL,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmAllFieldGroup_t all {};
+          all.version = dcgmAllFieldGroup_version;
+          return dcgmFieldGroupGetAll(dcgmHandle, &all);
+      } },
+    { "field group get info",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_FIELDGROUP_GET_INFO,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmFieldGroupInfo_t info {};
+          info.version = dcgmFieldGroupInfo_version;
+          return dcgmFieldGroupGetInfo(dcgmHandle, &info);
+      } },
+    { "gpu status",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_GPU_STATUS,
+      [](dcgmHandle_t dcgmHandle) {
+          DcgmEntityStatus_t status {};
+          return dcgmGetGpuStatus(dcgmHandle, 13, &status);
+      } },
+    { "pid info",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_PID_GET_INFO,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmPidInfo_t pidInfo {};
+          pidInfo.version = dcgmPidInfo_version;
+          pidInfo.pid     = 4242;
+          return dcgmGetPidInfo(dcgmHandle, 5, &pidInfo);
+      } },
+    { "health check",
+      DcgmModuleIdHealth,
+      DCGM_HEALTH_SR_CHECK_V5,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmHealthResponse_t response {};
+          response.version = dcgmHealthResponse_version;
+          auto const ret   = dcgmHealthCheck(dcgmHandle, 4, &response);
+          if (ret == DCGM_ST_OK)
+          {
+              VerifyFakeHealthCheck(response);
+          }
+          return ret;
+      } },
+    { "watch and latest values",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_WATCH_FIELD_VALUE_V2,
+      [](dcgmHandle_t dcgmHandle) {
+          auto const watchRet = helperWatchFieldValue(dcgmHandle, 1, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 1000000, 1.0, 8);
+          if (watchRet != DCGM_ST_OK)
+          {
+              return watchRet;
+          }
+          unsigned short fieldIds[] = { DCGM_FI_DEV_GPU_TEMP_CELSIUS, DCGM_FI_DEV_GPU_UTIL };
+          DcgmFvBuffer fvBuffer(0);
+          dcgmGroupEntityPair_t entity { DCGM_FE_GPU, 1 };
+          return helperGetLatestValuesForFields(dcgmHandle, 0, &entity, 1, 0, fieldIds, 2, &fvBuffer, 0);
+      } },
+    { "field values since",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2,
+      [](dcgmHandle_t dcgmHandle) {
+          unsigned short fieldIds[] = { DCGM_FI_DEV_GPU_TEMP_CELSIUS };
+          long long nextTs {};
+          auto enumCb = [](unsigned int, dcgmFieldValue_v1 *, int, void *) -> int {
+              return 0;
+          };
+          return dcgmGetFieldValuesSince(dcgmHandle, 5, 0, fieldIds, 1, &nextTs, enumCb, nullptr);
+      } },
+    { "action manager v12",
+      DcgmModuleIdDiag,
+      DCGM_DIAG_SR_RUN,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmRunDiag_v10 runDiag {};
+          runDiag.version = dcgmRunDiag_version10;
+          dcgmDiagResponse_v12 response {};
+          response.version = dcgmDiagResponse_version12;
+          return helperActionManager(dcgmHandle, &runDiag, DCGM_POLICY_ACTION_NONE, &response);
+      } },
+    { "group add remove",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_GROUP_ADD_ENTITY,
+      [](dcgmHandle_t dcgmHandle) {
+          auto const addRet    = dcgmGroupAddEntity(dcgmHandle, 0x51, DCGM_FE_GPU, 7);
+          auto const removeRet = dcgmGroupRemoveEntity(dcgmHandle, 0x51, DCGM_FE_GPU, 7);
+          return addRet == DCGM_ST_OK ? removeRet : addRet;
+      } },
+    { "inject field value",
+      DcgmModuleIdCore,
+      DCGM_CORE_SR_INJECT_FIELD_VALUE,
+      [](dcgmHandle_t dcgmHandle) {
+          dcgmInjectFieldValue_t value {};
+          value.version   = dcgmInjectFieldValue_version;
+          value.fieldId   = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
+          value.fieldType = DCGM_FT_INT64;
+          value.value.i64 = 64;
+          return helperInjectFieldValue(dcgmHandle, 1, &value);
+      } },
+};
+
+} // namespace
+
+dcgmReturn_t DcgmNs::Testing::DispatchModuleSendFake(dcgmHandle_t pDcgmHandle,
+                                                     dcgm_module_command_header_t *moduleCommand,
+                                                     size_t maxResponseSize,
+                                                     unsigned int timeout)
+{
+    return ModuleSendFake::DispatchAtHostEngine(pDcgmHandle, moduleCommand, maxResponseSize, timeout);
+}
+
+SCENARIO_METHOD(ModuleSendHookTestFixture, "DcgmApi: module-send hook dispatches wrappers without a hostengine")
+{
+    for (auto const &testCase : c_dispatchCases)
+    {
+        DYNAMIC_SECTION(testCase.name)
+        {
+            ModuleSendFake::Reset();
+            CHECK(testCase.call(handle) == DCGM_ST_OK);
+            RequireCommands({ { testCase.moduleId, testCase.subCommand } });
+        }
+    }
+}
+
+SCENARIO_METHOD(ModuleSendHookTestFixture, "DcgmApi: supported diagnostic requests use only the current run message")
+{
+    auto const requestVersion = GENERATE(dcgmRunDiag_version10, dcgmRunDiag_version11);
+    CAPTURE(requestVersion);
+
+    dcgmRunDiag_v10 runDiag {};
+    dcgmDiagResponse_v12 response {};
+    response.version = dcgmDiagResponse_version12;
+    runDiag.version  = requestVersion;
+
+    CHECK(helperActionManager(handle, &runDiag, DCGM_POLICY_ACTION_NONE, &response) == DCGM_ST_OK);
+    REQUIRE(ModuleSendFake::m_commands.size() == 1);
+    CHECK(ModuleSendFake::m_commands[0].version == dcgm_diag_msg_run_version13);
+}
+
+
+SCENARIO_METHOD(ModuleSendHookTestFixture,
+                "DcgmApi: module-send fake fills GET payloads and copy-back returns expected values")
+{
+    for (auto const &testCase : c_copyBackCases)
+    {
+        DYNAMIC_SECTION(testCase.name)
+        {
+            ModuleSendFake::Reset();
+            CHECK(testCase.call(handle) == DCGM_ST_OK);
+        }
+    }
+}
+
+SCENARIO_METHOD(ModuleSendHookTestFixture, "DcgmApi: module-send transport errors skip copy-back")
+{
+    ModuleSendFake::m_transportReturn = DCGM_ST_CONNECTION_NOT_VALID;
+
+    GIVEN("callers with sentinel output storage")
+    {
+        std::array<dcgmGpuGrp_t, 2> groupIds { 55, 66 };
+        unsigned int groupCount     = groupIds.size();
+        dcgmHealthSystems_t systems = DCGM_HEALTH_WATCH_ALL;
+        dcgmHealthSupportedSystems_t supportedSystems {};
+        supportedSystems.version = dcgmHealthSupportedSystems_version;
+        supportedSystems.systems = 0x4000;
+        dcgmWorkloadPowerProfileProfilesInfo_v1 profilesInfo {};
+        profilesInfo.version = dcgmWorkloadPowerProfileProfilesInfo_version;
+        dcgmDeviceWorkloadPowerProfilesStatus_v1 profilesStatus {};
+        profilesStatus.version        = dcgmDeviceWorkloadPowerProfilesStatus_version;
+        profilesStatus.profileMask[0] = 0xA;
+
+        WHEN("module send reports a transport error")
+        {
+            auto const groupRet     = dcgmGroupGetAllIds(handle, groupIds.data(), &groupCount);
+            auto const healthRet    = helperHealthGet(handle, 4, &systems);
+            auto const supportedRet = helperHealthGetSupportedSystems(handle, &supportedSystems);
+            auto const workloadRet  = dcgmGetDeviceWorkloadPowerProfileInfo(handle, 11, &profilesInfo, &profilesStatus);
+
+            THEN("helpers return the transport error and leave caller-owned outputs unchanged")
+            {
+                CHECK(groupRet == DCGM_ST_CONNECTION_NOT_VALID);
+                CHECK(healthRet == DCGM_ST_CONNECTION_NOT_VALID);
+                CHECK(supportedRet == DCGM_ST_CONNECTION_NOT_VALID);
+                CHECK(workloadRet == DCGM_ST_CONNECTION_NOT_VALID);
+                CHECK(groupCount == 2);
+                CHECK(groupIds[0] == 55);
+                CHECK(groupIds[1] == 66);
+                CHECK(systems == DCGM_HEALTH_WATCH_ALL);
+                CHECK(supportedSystems.version == dcgmHealthSupportedSystems_version);
+                CHECK(supportedSystems.systems == 0x4000);
+                CHECK(profilesStatus.profileMask[0] == 0xA);
+                RequireCommands({
+                    { DcgmModuleIdCore, DCGM_CORE_SR_GROUP_GET_ALL_IDS },
+                    { DcgmModuleIdHealth, DCGM_HEALTH_SR_GET_SYSTEMS },
+                    { DcgmModuleIdHealth, DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS },
+                    { DcgmModuleIdCore, DCGM_CORE_SR_GET_WORKLOAD_POWER_PROFILES_STATUS },
+                });
+            }
+        }
+    }
+}
+
+SCENARIO_METHOD(ModuleSendHookTestFixture, "DcgmApi: public wrappers reject invalid parameters before module dispatch")
+{
+    GIVEN("callers with null outputs, stale versions, and too-small buffers")
+    {
+        dcgmModuleGetStatuses_t statuses {};
+        statuses.version = dcgmModuleGetStatuses_version - 1;
+
+        dcgmModulesReloadable_v1 modulesReloadable {};
+        modulesReloadable.version = dcgmModulesReloadable_version - 1;
+
+        dcgmCreateFakeEntities_v2 fakeEntities {};
+        fakeEntities.version = dcgmCreateFakeEntities_version - 1;
+
+        std::array<dcgm_field_eid_t, 1> entities {};
+        int zeroEntityCapacity = 0;
+
+        bool active = true;
+        char backendName[1] {};
+
+        WHEN("the invalid public requests are submitted")
+        {
+            auto const nullStatusesRet      = dcgmModuleGetStatuses(handle, nullptr);
+            auto const staleStatusesRet     = dcgmModuleGetStatuses(handle, &statuses);
+            auto const nullReloadableRet    = dcgmMarkModulesReloadable(handle, nullptr);
+            auto const staleReloadableRet   = dcgmMarkModulesReloadable(handle, &modulesReloadable);
+            auto const nullFakeEntitiesRet  = dcgmCreateFakeEntities(handle, nullptr);
+            auto const staleFakeEntitiesRet = dcgmCreateFakeEntities(handle, &fakeEntities);
+            auto const nullActiveRet        = dcgmNvswitchGetBackend(handle, nullptr, backendName, sizeof(backendName));
+            auto const nullBackendNameRet   = dcgmNvswitchGetBackend(handle, &active, nullptr, sizeof(backendName));
+            auto const shortBackendNameRet  = dcgmNvswitchGetBackend(handle, &active, backendName, sizeof(backendName));
+            auto const nullEntitiesRet
+                = dcgmGetEntityGroupEntities(handle, DCGM_FE_GPU, nullptr, &zeroEntityCapacity, 0);
+            auto const nullEntityCountRet
+                = dcgmGetEntityGroupEntities(handle, DCGM_FE_GPU, entities.data(), nullptr, 0);
+            auto const zeroEntityCapacityRet
+                = dcgmGetEntityGroupEntities(handle, DCGM_FE_GPU, entities.data(), &zeroEntityCapacity, 0);
+            auto const nullLoggingRet = dcgmHostengineSetLoggingSeverity(handle, nullptr);
+
+            THEN("bad-parameter version-mismatch and insufficient-size results are local")
+            {
+                CHECK(nullStatusesRet == DCGM_ST_BADPARAM);
+                CHECK(staleStatusesRet == DCGM_ST_VER_MISMATCH);
+                CHECK(nullReloadableRet == DCGM_ST_BADPARAM);
+                CHECK(staleReloadableRet == DCGM_ST_VER_MISMATCH);
+                CHECK(nullFakeEntitiesRet == DCGM_ST_BADPARAM);
+                CHECK(staleFakeEntitiesRet == DCGM_ST_VER_MISMATCH);
+                CHECK(nullActiveRet == DCGM_ST_BADPARAM);
+                CHECK(nullBackendNameRet == DCGM_ST_BADPARAM);
+                CHECK(shortBackendNameRet == DCGM_ST_INSUFFICIENT_SIZE);
+                CHECK(nullEntitiesRet == DCGM_ST_BADPARAM);
+                CHECK(nullEntityCountRet == DCGM_ST_BADPARAM);
+                CHECK(zeroEntityCapacityRet == DCGM_ST_BADPARAM);
+                CHECK(nullLoggingRet == DCGM_ST_BADPARAM);
+                CHECK(ModuleSendFake::m_commands.empty());
+            }
+        }
+    }
+}
+
+SCENARIO_METHOD(ModuleSendHookTestFixture, "DcgmApi: fake-entity wrapper distinguishes transport and command failures")
+{
+    GIVEN("a valid fake-entity creation request")
+    {
+        dcgmCreateFakeEntities_v2 request {};
+        request.version                            = dcgmCreateFakeEntities_version;
+        request.numToCreate                        = 2;
+        request.entityList[0].entity.entityGroupId = DCGM_FE_GPU;
+        request.entityList[0].entity.entityId      = 77;
+
+        WHEN("the module transport fails before the command response is populated")
+        {
+            ModuleSendFake::m_transportReturn = DCGM_ST_CONNECTION_NOT_VALID;
+
+            auto const ret = dcgmCreateFakeEntities(handle, &request);
+
+            THEN("the transport status is returned and the caller request is preserved")
+            {
+                CHECK(ret == DCGM_ST_CONNECTION_NOT_VALID);
+                CHECK(request.numToCreate == 2);
+                CHECK(request.entityList[0].entity.entityId == 77);
+                RequireCommands({ { DcgmModuleIdCore, DCGM_CORE_SR_CREATE_FAKE_ENTITIES } });
+            }
+        }
+
+        WHEN("the core command reports an embedded fake-entity failure")
+        {
+            ModuleSendFake::m_createFakeEntitiesCmdRet = DCGM_ST_NOT_SUPPORTED;
+
+            auto const ret = dcgmCreateFakeEntities(handle, &request);
+
+            THEN("the embedded command status is returned without inventing created entities")
+            {
+                CHECK(ret == DCGM_ST_NOT_SUPPORTED);
+                CHECK(request.numToCreate == 2);
+                CHECK(request.entityList[0].entity.entityId == 77);
+                RequireCommands({ { DcgmModuleIdCore, DCGM_CORE_SR_CREATE_FAKE_ENTITIES } });
+            }
+        }
+    }
 }

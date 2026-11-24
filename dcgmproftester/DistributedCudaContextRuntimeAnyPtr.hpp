@@ -34,11 +34,11 @@
 // clang-format off
 
 // GCOVR_EXCL_START
-
 namespace DcgmNs
 {
 namespace ProfTester
 {
+
 class DistributedCudaContextRuntimeAnyPtr
 {
 public:
@@ -69,7 +69,7 @@ public:
                 auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->Kill(std::forward<decltype(pid)>(pid), std::forward<decltype(signal)>(signal));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~DistributedCudaContextRuntimeAnyPtr()
@@ -173,15 +173,14 @@ private:
         pid_t (*Fork0)(void  *);
         pid_t (*WaitPid0)(void  *, pid_t, int *, int);
         int (*Kill0)(void  *, pid_t, int);
-
     };
 
     VTable const *m_pVTable;
     alignas(StorageAlign) std::byte m_storage[StorageSize];
 };
-
 } // namespace ProfTester
 } // namespace DcgmNs
+
 // GCOVR_EXCL_STOP
 
 // clang-format on

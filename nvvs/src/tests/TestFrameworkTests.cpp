@@ -49,6 +49,7 @@ template class TestFramework<MockPluginLib,
 #include <sys/stat.h>
 
 #include <CpuSet.h>
+#include <DcgmDiagRuntimeInfo.hpp>
 #include <DcgmHandle.h>
 #include <DcgmLogging.h>
 #include <DcgmSystem.h>
@@ -348,6 +349,10 @@ TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go invokes plugin Run
     tf.Go(entitySets);
 
     CHECK(pluginLib->RunCount("hardware_test") == 1);
+    auto const &response = tf.m_diagResponse.ConstResponse<dcgmDiagResponse_v12>();
+    REQUIRE(response.numInfo == 1);
+    CHECK(DcgmNs::IsDiagTestRuntimeInfo(response.info[0]));
+    CHECK(response.info[0].testId == 0);
 }
 
 TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go omits skipped entities from later RunTest entity lists")
@@ -445,6 +450,12 @@ TEST_CASE_METHOD(TestFrameworkTestFixture,
     CHECK(mockPtr->RunCount("no_entities_left_test") == 0);
     CHECK(mockPtr->GetRunEntityIdSnapshots("no_entities_left_test").empty());
     CHECK(gpuPtr->GetSkippedEntities().size() == 2);
+    auto const &response = tf.m_diagResponse.ConstResponse<dcgmDiagResponse_v12>();
+    auto runtimeInfos    = std::span(response.info, std::min<size_t>(response.numInfo, std::size(response.info)))
+                           | std::views::filter(DcgmNs::IsDiagTestRuntimeInfo);
+    REQUIRE(std::ranges::distance(runtimeInfos) == 1);
+    auto const &runtimeInfo = *runtimeInfos.begin();
+    CHECK(std::string_view(response.tests[runtimeInfo.testId].name) == "skip_all_test");
 }
 
 TEST_CASE_METHOD(TestFrameworkTestFixture, "TestFramework::Go runs eud when row remap failure and EUD-only is true")
@@ -1151,6 +1162,9 @@ TEST_CASE_METHOD(TestFrameworkTestFixture,
     entitySets.push_back(std::move(gpuB));
 
     dcgmDiagPluginAttr_v1 const pluginAttr { .pluginId = 99 };
+    dcgmDiagEntityResults_v2 entityResults {};
+    REQUIRE(tf.m_diagResponse.SetSoftwareTestResult("Denylist", NVVS_RESULT_PASS, entityResults) == DCGM_ST_OK);
+    tf.m_diagResponse.IncreaseNumTests();
     tf.CreateSoftwarePluginFrameworks(entitySets);
     tf.RunSoftwarePlugin(entitySets, &pluginAttr);
 
@@ -1160,6 +1174,10 @@ TEST_CASE_METHOD(TestFrameworkTestFixture,
     CHECK(created[1]->GetRunCount() == 1);
     REQUIRE(created[1]->GetLastPluginId().has_value());
     CHECK(created[1]->GetLastPluginId().value() == 99);
+    auto const &response = tf.m_diagResponse.ConstResponse<dcgmDiagResponse_v12>();
+    REQUIRE(response.numInfo == 1);
+    CHECK(DcgmNs::IsDiagTestRuntimeInfo(response.info[0]));
+    CHECK(std::string_view(response.tests[response.info[0].testId].name) == SW_PLUGIN_NAME);
 }
 
 TEST_CASE_METHOD(TestFrameworkTestFixture,

@@ -37,6 +37,8 @@ from ctypes import *
 import sys
 import os
 import pprint
+import pwd
+import stat
 from subprocess import Popen, PIPE
 from sys import stdout
 import json
@@ -62,6 +64,121 @@ def _is_eris_diag_inforom_failure(args, stdout_lines):
             args) > 0 and args[0] == 'diag' and INFOROM_FAILURE_STRING in stdout_lines:
         return True
     return False
+
+
+def test_dcgmi_logging_preserves_symlink_parent_path():
+    executable = os.path.abspath(
+        apps.DcgmiApp.paths[utils.platform_identifier])
+    with tempfile.TemporaryDirectory(prefix="dcgmi_log_path_") as log_dir:
+        real_dir = os.path.join(log_dir, "real")
+        os.makedirs(os.path.join(real_dir, "sub"))
+        os.symlink(os.path.join(real_dir, "sub"),
+                   os.path.join(log_dir, "link"))
+        for is_absolute in (False, True):
+            basename = "absolute.log" if is_absolute else "relative.log"
+            log_path = os.path.join("link", "..", basename)
+            if is_absolute:
+                log_path = os.path.join(log_dir, log_path)
+            env = os.environ.copy()
+            env["__DCGM_DBG_FILE"] = log_path
+            env["__DCGM_DBG_LVL"] = "INFO"
+            result = subprocess.run(
+                [executable, "--help"], cwd=log_dir, env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True, timeout=10)
+            assert result.returncode == 0, result.stderr
+            expected_log = os.path.join(real_dir, basename)
+            assert os.path.isfile(expected_log), expected_log
+            assert not os.path.exists(os.path.join(log_dir, basename))
+            with open(expected_log, "r") as log_file:
+                assert "Initialized DCGMI logger" in log_file.read()
+
+
+def test_dcgm_diag_rejects_unsupported_run_versions():
+    for version in (dcgm_structs.dcgmRunDiag_version7,
+                    dcgm_structs.dcgmRunDiag_version8,
+                    dcgm_structs.dcgmRunDiag_version9):
+        with test_utils.assert_raises(ValueError):
+            DcgmDiag.DcgmDiag(version=version)
+    for version in (dcgm_structs.dcgmRunDiag_version10,
+                    dcgm_structs.dcgmRunDiag_version11):
+        diagnostic = DcgmDiag.DcgmDiag(version=version)
+        assert diagnostic.version == version
+        assert isinstance(diagnostic.GetStruct(),
+                          dcgm_structs.c_dcgmRunDiag_v10)
+
+
+def test_dcgm_embedded_reports_logging_init_failure_with_missing_cwd():
+    module_dir = os.path.dirname(os.path.abspath(dcgm_structs.__file__))
+    library_dir = os.path.abspath(utils.get_testing_framework_library_path())
+    script = """
+import os
+import sys
+sys.path.insert(0, sys.argv[1])
+import dcgm_agent
+import dcgm_structs
+dcgm_structs._dcgmInit(sys.argv[2])
+dcgm_agent.dcgmInit()
+os.rmdir(os.getcwd())
+try:
+    dcgm_agent.dcgmStartEmbedded_v2(
+        dcgm_structs.DCGM_OPERATION_MODE_AUTO, logFile="./hostengine.log")
+except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_INIT_ERROR):
+    pass
+else:
+    raise AssertionError("Expected logging initialization to fail")
+dcgm_agent.dcgmShutdown()
+"""
+    workdir = tempfile.mkdtemp(prefix="dcgm_removed_cwd_")
+    env = os.environ.copy()
+    env.pop("DCGM_HOME_DIR", None)
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", script, module_dir, library_dir],
+            cwd=workdir, env=env, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+    finally:
+        if os.path.exists(workdir):
+            os.rmdir(workdir)
+    assert result.returncode == 0, result.stderr
+
+
+@test_utils.run_only_as_root()
+@test_utils.with_service_account("dcgm-tests-service-account")
+def test_dcgmi_diag_reuses_existing_nvvs_directory_for_service_account():
+    account = "dcgm-tests-service-account"
+    with tempfile.TemporaryDirectory(prefix="dcgmi_nvvs_") as log_dir:
+        os.chmod(log_dir, 0o755)
+        nvvs_dir = os.path.join(log_dir, "nvvs")
+        os.mkdir(nvvs_dir, 0o755)
+        assert os.stat(nvvs_dir).st_uid == os.geteuid()
+
+        host_basename = "h" * (150 - len(log_dir) - len("/.log")) + ".log"
+        host_log = os.path.join(log_dir, host_basename)
+        assert len(host_log) == 150
+
+        @test_utils.run_with_standalone_host_engine(
+            30,
+            heArgs=["--service-account", account, "--log-filename",
+                    host_log, "--home-dir", nvvs_dir])
+        @test_utils.run_only_with_live_gpus()
+        def run_diag(handle, gpuIds):
+            status, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+                ["diag", "--run", "1", "-i",
+                    str(gpuIds[0]), "--log-filename", "service.log"],
+                timeout_seconds=30,
+                validate=True)
+            assert status == dcgm_structs.DCGM_ST_OK, (
+                stdout_lines, stderr_lines)
+            assert os.path.isfile(os.path.join(nvvs_dir, "service.log"))
+
+        run_diag(handle=None, gpuIds=None)
+
+        owner = pwd.getpwnam(account)
+        directory = os.stat(nvvs_dir)
+        assert directory.st_uid == owner.pw_uid
+        assert directory.st_gid == owner.pw_gid
+        assert stat.S_IMODE(directory.st_mode) == 0o700
 
 
 def _assert_valid_dcgmi_results(args, retValue, stdout_lines, stderr_lines):
@@ -786,9 +903,9 @@ def test_dcgmi_diag(handle, gpuIds):
     validArgsTestList = [
         # run diagnostic other settings currently run for too long
         ["diag", "--run", "1", "-i", allGpusCsv],
-        # Test that we can pass a long debugLogFile
+        # Test that we can pass a long log filename
         ["diag", "--run", "1", "-i",
-            str(gpuIds[0]), "--debugLogFile aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt"],
+            str(gpuIds[0]), "--log-filename", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt"],
         # verifies that --throttle-mask with SW_THERMAL reason to be ignored
         ["diag", "--run", "1", "-i", allGpusCsv,
          "--throttle-mask", "SW_THERMAL"],
@@ -818,10 +935,13 @@ def test_dcgmi_diag(handle, gpuIds):
         pciTestCmdLineArgs,
     ]
 
+    # Far-off group id that no test creates
+    nonExistentGroupId = str(2**32 - 2)
+
     # keep args in this order. Changing it may break the test
     invalidArgsTestList = [
         # Can't run on group that doesn't exist
-        ["diag", "--run", "1", "-g", str(createdGroupId + 1)],
+        ["diag", "--run", "1", "-g", nonExistentGroupId],
         # Can't run a non-existent test name
         ["diag", "--run", "\"roshar stress\""],
         # Can't run an existing test but not for CPU

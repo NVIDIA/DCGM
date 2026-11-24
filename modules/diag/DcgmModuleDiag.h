@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,17 +45,9 @@ private:
 
     dcgmReturn_t ProcessStop(dcgm_diag_msg_stop_t *msg);
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
-    inline dcgmReturn_t ProcessRun(dcgm_module_command_header_t *moduleCommand);
     void ProcessReceiveHeartbeat(dcgm_module_command_header_t *moduleCommand);
 
-    dcgmReturn_t ProcessRun_v12(dcgm_diag_msg_run_v12 *msg);
-    dcgmReturn_t ProcessRun_v11(dcgm_diag_msg_run_v11 *msg);
-    dcgmReturn_t ProcessRun_v10(dcgm_diag_msg_run_v10 *msg);
-    dcgmReturn_t ProcessRun_v9(dcgm_diag_msg_run_v9 *msg);
-    dcgmReturn_t ProcessRun_v8(dcgm_diag_msg_run_v8 *msg);
-    dcgmReturn_t ProcessRun_v7(dcgm_diag_msg_run_v7 *msg);
-    dcgmReturn_t ProcessRun_v6(dcgm_diag_msg_run_v6 *msg);
-    dcgmReturn_t ProcessRun_v5(dcgm_diag_msg_run_v5 *msg);
+    dcgmReturn_t ProcessRun_v13(dcgm_diag_msg_run_v12 *msg);
 
     /*************************************************************************/
     /* Private member variables */

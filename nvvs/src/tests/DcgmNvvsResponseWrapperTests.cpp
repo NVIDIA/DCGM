@@ -20,6 +20,7 @@
 
 #include <CpuSet.h>
 #include <DcgmBuildInfo.hpp>
+#include <DcgmDiagRuntimeInfo.hpp>
 #include <DcgmHandle.h>
 #include <DcgmStringHelpers.h>
 #include <DcgmSystem.h>
@@ -474,6 +475,170 @@ TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
         REQUIRE(std::string_view(rawResponse.tests[1].name).empty());
         this->ReleaseEntitySets(entitySets);
     }
+}
+
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper adds test runtime info",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11)
+{
+    using ResponseType             = TestType;
+    constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
+
+    auto entitySets = this->CreateFakeEntitySets("545.29.06", 1, 1);
+    DcgmNvvsResponseWrapper wrapper;
+    REQUIRE(wrapper.SetVersion(version) == DCGM_ST_OK);
+    REQUIRE(wrapper.PopulateDefault(entitySets));
+
+    dcgmDiagEntityResults_v2 entityResults {};
+    REQUIRE(wrapper.SetTestResult("plugin", "memory", entityResults, std::nullopt) == DCGM_ST_OK);
+    REQUIRE(wrapper.AddTestRuntime("memory", std::chrono::milliseconds { 1234 }) == DCGM_ST_OK);
+
+    auto const &response = wrapper.ConstResponse<ResponseType>();
+    REQUIRE(response.numInfo == 1);
+    REQUIRE(response.tests[0].numInfo == 1);
+    auto const &info = response.info[response.tests[0].infoIndices[0]];
+    CHECK(info.entity == dcgmGroupEntityPair_t { DCGM_FE_NONE, 0 });
+    CHECK(info.testId == 0);
+    CHECK(std::string_view(info.msg) == "Test runtime: 1.234 seconds");
+    CHECK(DcgmNs::IsDiagTestRuntimeInfo(info));
+
+    this->ReleaseEntitySets(entitySets);
+}
+
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper associates runtime with the newest same-named test",
+                          "",
+                          dcgmDiagResponse_v12)
+{
+    auto entitySets = this->CreateFakeEntitySets("545.29.06", 1, 1);
+    DcgmNvvsResponseWrapper wrapper;
+    REQUIRE(wrapper.SetVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
+    REQUIRE(wrapper.PopulateDefault(entitySets));
+
+    dcgmDiagEntityResults_v2 entityResults {};
+    REQUIRE(wrapper.SetTestResult("plugin", "memory", entityResults, std::nullopt) == DCGM_ST_OK);
+    REQUIRE(wrapper.AddTestRuntime("memory", std::chrono::milliseconds { 1000 }) == DCGM_ST_OK);
+    REQUIRE(wrapper.SetTestResult("plugin", "memory", entityResults, std::nullopt) == DCGM_ST_OK);
+    REQUIRE(wrapper.AddTestRuntime("memory", std::chrono::milliseconds { 2000 }) == DCGM_ST_OK);
+
+    auto const &response = wrapper.ConstResponse<dcgmDiagResponse_v12>();
+    REQUIRE(response.numTests == 2);
+    REQUIRE(response.tests[0].numInfo == 1);
+    REQUIRE(response.tests[1].numInfo == 1);
+    CHECK(std::string_view(response.info[response.tests[0].infoIndices[0]].msg) == "Test runtime: 1.000 seconds");
+    CHECK(std::string_view(response.info[response.tests[1].infoIndices[0]].msg) == "Test runtime: 2.000 seconds");
+
+    this->ReleaseEntitySets(entitySets);
+}
+
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "Failed result insertion cannot redirect runtime to an older same-named test",
+                          "",
+                          dcgmDiagResponse_v12)
+{
+    auto entitySets = this->CreateFakeEntitySets("545.29.06", 1, 1);
+    DcgmNvvsResponseWrapper wrapper;
+    REQUIRE(wrapper.SetVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
+    REQUIRE(wrapper.PopulateDefault(entitySets));
+
+    dcgmDiagEntityResults_v2 entityResults {};
+    REQUIRE(wrapper.SetTestResult("plugin", "memory", entityResults, std::nullopt) == DCGM_ST_OK);
+    REQUIRE(wrapper.AddTestRuntime("memory", std::chrono::milliseconds { 1000 }) == DCGM_ST_OK);
+    for (unsigned int i = 1; i < DCGM_DIAG_RESPONSE_TESTS_MAX; ++i)
+    {
+        REQUIRE(wrapper.SetTestResult("plugin", fmt::format("test{}", i), entityResults, std::nullopt) == DCGM_ST_OK);
+    }
+
+    auto const setResultRet = wrapper.SetTestResult("plugin", "memory", entityResults, std::nullopt);
+    REQUIRE(setResultRet == DCGM_ST_INSUFFICIENT_SIZE);
+    CHECK(wrapper.AddTestRuntime("memory", std::chrono::milliseconds { 2000 }) == DCGM_ST_BADPARAM);
+
+    auto const &response = wrapper.ConstResponse<dcgmDiagResponse_v12>();
+    REQUIRE(response.numInfo == 1);
+    CHECK(std::string_view(response.info[0].msg) == "Test runtime: 1.000 seconds");
+
+    this->ReleaseEntitySets(entitySets);
+}
+
+TEST_CASE("Diagnostic test runtime formatting and recognition")
+{
+    CHECK(DcgmNs::FormatDiagTestRuntime(std::chrono::milliseconds { -1 }) == "Test runtime: 0.000 seconds");
+    CHECK(DcgmNs::FormatDiagTestRuntime(std::chrono::milliseconds { 0 }) == "Test runtime: 0.000 seconds");
+    CHECK(DcgmNs::FormatDiagTestRuntime(std::chrono::milliseconds { 1 }) == "Test runtime: 0.001 seconds");
+    CHECK(DcgmNs::FormatDiagTestRuntime(std::chrono::milliseconds { 999 }) == "Test runtime: 0.999 seconds");
+    CHECK(DcgmNs::FormatDiagTestRuntime(std::chrono::milliseconds { 1000 }) == "Test runtime: 1.000 seconds");
+    CHECK(DcgmNs::FormatDiagTestRuntime(std::chrono::milliseconds { 1234 }) == "Test runtime: 1.234 seconds");
+    CHECK(DcgmNs::FormatDiagTestRuntime(std::chrono::milliseconds { 60001 }) == "Test runtime: 60.001 seconds");
+
+    dcgmDiagInfo_v1 info {};
+    info.entity = { DCGM_FE_NONE, 0 };
+    SafeCopyTo(info.msg, "Test runtime: 1.234 seconds");
+    CHECK(DcgmNs::IsDiagTestRuntimeInfo(info));
+
+    info.entity = { DCGM_FE_GPU, 0 };
+    CHECK_FALSE(DcgmNs::IsDiagTestRuntimeInfo(info));
+    info.entity = { DCGM_FE_NONE, 0 };
+    SafeCopyTo(info.msg, "Test runtime: 1.23 seconds");
+    CHECK_FALSE(DcgmNs::IsDiagTestRuntimeInfo(info));
+    SafeCopyTo(info.msg, "Test runtime: x.234 seconds");
+    CHECK_FALSE(DcgmNs::IsDiagTestRuntimeInfo(info));
+    std::ranges::fill(info.msg, 'x');
+    CHECK_FALSE(DcgmNs::IsDiagTestRuntimeInfo(info));
+}
+
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper preserves info at runtime capacity",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11)
+{
+    using ResponseType             = TestType;
+    constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
+
+    auto entitySets = this->CreateFakeEntitySets("545.29.06", 1, 1);
+    DcgmNvvsResponseWrapper wrapper;
+    REQUIRE(wrapper.SetVersion(version) == DCGM_ST_OK);
+    REQUIRE(wrapper.PopulateDefault(entitySets));
+
+    dcgmDiagEntityResults_v2 entityResults {};
+    auto const infoCapacity = std::size(wrapper.ConstResponse<ResponseType>().tests[0].infoIndices);
+    entityResults.numInfo   = infoCapacity;
+    for (unsigned int i = 0; i < entityResults.numInfo; ++i)
+    {
+        entityResults.info[i].entity = { DCGM_FE_NONE, 0 };
+        SafeCopyTo(entityResults.info[i].msg, fmt::format("plugin info {}", i).c_str());
+    }
+    REQUIRE(wrapper.SetTestResult("plugin", "memory", entityResults, std::nullopt) == DCGM_ST_OK);
+    REQUIRE(wrapper.AddTestRuntime("memory", std::chrono::milliseconds { 1 }) == DCGM_ST_INSUFFICIENT_SIZE);
+
+    auto const &response = wrapper.ConstResponse<ResponseType>();
+    REQUIRE(response.numInfo == infoCapacity);
+    CHECK(std::string_view(response.info[0].msg) == "plugin info 0");
+    CHECK(std::string_view(response.info[response.numInfo - 1].msg) == fmt::format("plugin info {}", infoCapacity - 1));
+
+    this->ReleaseEntitySets(entitySets);
+}
+
+TEST_CASE("DcgmNvvsResponseWrapper rejects runtime for an unknown test")
+{
+    DcgmNvvsResponseWrapper wrapper;
+    REQUIRE(wrapper.SetVersion(dcgmDiagResponse_version12) == DCGM_ST_OK);
+    CHECK(wrapper.AddTestRuntime("missing", std::chrono::milliseconds { 1 }) == DCGM_ST_BADPARAM);
+}
+
+TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper leaves legacy responses unchanged when adding runtime",
+                   "",
+                   dcgmDiagResponse_v10,
+                   dcgmDiagResponse_v9,
+                   dcgmDiagResponse_v8,
+                   dcgmDiagResponse_v7)
+{
+    constexpr unsigned int version = DcgmNs::ResponseVersionTrait<TestType>::version;
+    DcgmNvvsResponseWrapper wrapper;
+    REQUIRE(wrapper.SetVersion(version) == DCGM_ST_OK);
+    CHECK(wrapper.AddTestRuntime("memory", std::chrono::milliseconds { 1 }) == DCGM_ST_NOT_SUPPORTED);
 }
 
 TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
