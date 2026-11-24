@@ -25,6 +25,7 @@ target_include_directories(modules_interface
 
 target_link_libraries(modules_objects
     PUBLIC
+        dcgm_module_transport_entry
         modules_interface
         module_common_objects)
 

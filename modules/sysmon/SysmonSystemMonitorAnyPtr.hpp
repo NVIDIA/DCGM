@@ -81,7 +81,7 @@ public:
                 auto *pT = static_cast<T const *>(*std::launder(reinterpret_cast<void *const*>(pStorage)));
                 return pT->GetCpuModel();
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~SysmonSystemMonitorAnyPtr()
@@ -205,7 +205,6 @@ private:
         dcgmReturn_t (*GetCurrentPowerCap0)(void  *, unsigned int, double &);
         std::string (*GetCpuVendor0)(void const *);
         std::string (*GetCpuModel0)(void const *);
-
     };
 
     VTable const *m_pVTable;

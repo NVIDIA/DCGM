@@ -1243,6 +1243,7 @@ dcgmReturn_t Policy::RunFieldPolicyImport(dcgmHandle_t dcgmHandle, FieldPolicyOp
     if (ret != DCGM_ST_OK)
     {
         std::cout << "Error: Cannot import field policies. Return: " << errorString(ret) << std::endl;
+        std::cout << "Check nv-hostengine logs for policy parse details." << std::endl;
         return ret;
     }
     std::cout << "Policies imported successfully" << std::endl;

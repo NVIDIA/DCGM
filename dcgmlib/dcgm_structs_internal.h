@@ -539,6 +539,18 @@ typedef struct
 } dcgmGetEntityGroupEntities_v2;
 
 /**
+ * Version 3 of dcgmGetEntityGroupEntities_t
+ */
+typedef struct
+{
+    unsigned int entityGroup;                              //!< IN: Entity of group to list entities
+    unsigned int entities[DCGM_ENTITY_GROUP_ENTITIES_MAX]; //!< OUT: Array of entities for entityGroup
+    unsigned int numEntities;                              //!< OUT: Number of entities saved to entities
+    unsigned int flags;                                    //!< IN: See DCGM_GEGE_FLAG_*
+    unsigned int cmdRet;                                   //!< OUT: Error code generated
+} dcgmGetEntityGroupEntities_v3;
+
+/**
  * Version 1 of dcgmGroupGetAllIds_t
  */
 

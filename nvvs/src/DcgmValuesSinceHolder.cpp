@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ void DcgmEntityTimeSeries::AddValue(dcgm_field_entity_group_t entityGroupId,
 {
     if (IsValueInCache(fieldId, val))
     {
-        IF_PLOG(plog::debug)
+        IF_DCGM_LOG_DEBUG
         {
             log_debug("Skipping duplicate value for field {}", fieldId);
             const auto &valString = val.fieldType == DCGM_FT_DOUBLE  ? fmt::format("{}", val.value.dbl)

@@ -25,6 +25,7 @@
 #else
 #error "Could not find DistributedCudaContextRuntimeFactory header"
 #endif
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -34,11 +35,11 @@
 // clang-format off
 
 // GCOVR_EXCL_START
-
 namespace DcgmNs
 {
 namespace ProfTester
 {
+
 class DistributedCudaContextRuntimeFactoryAnyUniquePtr
 {
 public:
@@ -220,7 +221,6 @@ private:
     {
         // Declare type's functions
         DcgmNs::ProfTester::DistributedCudaContextRuntimeAnyUniquePtr (*Create0)(void const *);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*DistributedCudaContextRuntimeFactoryMoveConstruct)(void *, void *);
         void (*DistributedCudaContextRuntimeFactoryMoveAssign)(void *, void *);
@@ -233,9 +233,9 @@ private:
     VTable const *m_pVTable;
     alignas(StorageAlign) std::byte m_storage[StorageSize];
 };
-
 } // namespace ProfTester
 } // namespace DcgmNs
+
 // GCOVR_EXCL_STOP
 
 // clang-format on

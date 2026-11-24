@@ -428,9 +428,16 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     }
     banner();
 
+    dcgmReturn_t loggingResult = DCGM_ST_OK;
     DcgmLoggingInit(debugFile.c_str(),
                     LoggingSeverityFromString(debugLogLevel.c_str(), DcgmLoggingSeverityDebug),
-                    DcgmLoggingSeverityNone);
+                    DcgmLoggingSeverityNone,
+                    loggingResult);
+    if (loggingResult != DCGM_ST_OK)
+    {
+        mainReturnCode = NVVS_ST_GENERIC_ERROR;
+        return "Failed to initialize DCGM logging";
+    }
     RouteLogToBaseLogger(SYSLOG_LOGGER);
     log_info("Initialized NVVS logger, version: {}", DcgmNs::DcgmBuildInfo().GetVersion());
     log_debug("Build info: {}", DcgmNs::DcgmBuildInfo().GetBuildInfoStr());

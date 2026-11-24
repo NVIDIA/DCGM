@@ -16,6 +16,7 @@
 
 #include <catch2/catch_all.hpp>
 
+#include <DcgmDiagRuntimeInfo.hpp>
 #include <DcgmStringHelpers.h>
 #include <DiagResponseUtils.h>
 #include <PluginStrings.h>
@@ -52,6 +53,156 @@ void PopulateSetResultSource(ResponseType &response)
     {
         SafeCopyTo(response.systemError.msg, "legacy system error");
         response.systemError.code = DCGM_FR_INTERNAL;
+    }
+}
+
+TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper keeps only the privileged EUD runtime",
+                   "",
+                   dcgmDiagResponse_v12,
+                   dcgmDiagResponse_v11)
+{
+    using ResponseType = TestType;
+
+    auto initializeWrapper = [](TestDcgmDiagResponseWrapper &wrapper, ResponseType *response) {
+        if constexpr (std::is_same_v<ResponseType, dcgmDiagResponse_v12>)
+        {
+            wrapper.SetVersion12(response);
+        }
+        else
+        {
+            wrapper.SetVersion11(response);
+        }
+    };
+
+    SECTION("Replaces runtime and preserves unrelated info")
+    {
+        TestDcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<ResponseType>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result         = DCGM_DIAG_RESULT_PASS;
+        srcResponse->tests[0].numInfo        = 2;
+        srcResponse->tests[0].infoIndices[0] = 0;
+        srcResponse->tests[0].infoIndices[1] = 1;
+        srcResponse->numTests                = 1;
+        srcResponse->numInfo                 = 2;
+        srcResponse->info[0].entity          = { DCGM_FE_NONE, 0 };
+        srcResponse->info[0].testId          = 0;
+        SafeCopyTo(srcResponse->info[0].msg, "privileged detail");
+        srcResponse->info[1].entity = { DCGM_FE_NONE, 0 };
+        srcResponse->info[1].testId = 0;
+        SafeCopyTo(srcResponse->info[1].msg, "Test runtime: 2.000 seconds");
+        initializeWrapper(src, srcResponse.get());
+
+        TestDcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<ResponseType>();
+        SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
+        SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
+        destResponse->tests[1].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[1].numErrors       = 1;
+        destResponse->tests[1].errorIndices[0] = 0;
+        destResponse->tests[1].numInfo         = 2;
+        destResponse->tests[1].infoIndices[0]  = 0;
+        destResponse->tests[1].infoIndices[1]  = 1;
+        destResponse->errors[0].code           = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->errors[0].testId         = 1;
+        destResponse->numErrors                = 1;
+        destResponse->numTests                 = 2;
+        destResponse->numInfo                  = 2;
+        destResponse->info[0].entity           = { DCGM_FE_NONE, 0 };
+        destResponse->info[0].testId           = 1;
+        SafeCopyTo(destResponse->info[0].msg, "unprivileged detail");
+        destResponse->info[1].entity = { DCGM_FE_NONE, 0 };
+        destResponse->info[1].testId = 1;
+        SafeCopyTo(destResponse->info[1].msg, "Test runtime: 1.000 seconds");
+        initializeWrapper(dest, destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(destResponse->numInfo == 3);
+        CHECK(std::string_view(destResponse->info[0].msg) == "unprivileged detail");
+        CHECK(std::string_view(destResponse->info[1].msg) == "Test runtime: 2.000 seconds");
+        CHECK(std::string_view(destResponse->info[2].msg) == "privileged detail");
+        CHECK(DcgmNs::IsDiagTestRuntimeInfo(destResponse->info[1]));
+    }
+
+    SECTION("Replaces runtime when destination info storage is full")
+    {
+        TestDcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<ResponseType>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result         = DCGM_DIAG_RESULT_PASS;
+        srcResponse->tests[0].numInfo        = 1;
+        srcResponse->tests[0].infoIndices[0] = 0;
+        srcResponse->numTests                = 1;
+        srcResponse->numInfo                 = 1;
+        srcResponse->info[0].entity          = { DCGM_FE_NONE, 0 };
+        SafeCopyTo(srcResponse->info[0].msg, "Test runtime: 2.000 seconds");
+        initializeWrapper(src, srcResponse.get());
+
+        TestDcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<ResponseType>();
+        SafeCopyTo(destResponse->tests[0].name, EUD_PLUGIN_NAME);
+        destResponse->tests[0].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[0].numErrors       = 1;
+        destResponse->tests[0].errorIndices[0] = 0;
+        destResponse->errors[0].code           = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->numErrors                = 1;
+        destResponse->numTests                 = 1;
+        destResponse->numInfo                  = std::size(destResponse->info);
+        destResponse->tests[0].numInfo         = std::size(destResponse->tests[0].infoIndices);
+        for (unsigned int i = 0; i < destResponse->tests[0].numInfo; ++i)
+        {
+            destResponse->tests[0].infoIndices[i] = i;
+            destResponse->info[i].entity          = { DCGM_FE_NONE, 0 };
+            destResponse->info[i].testId          = 0;
+            SafeCopyTo(destResponse->info[i].msg, "unrelated info");
+        }
+        SafeCopyTo(destResponse->info[0].msg, "Test runtime: 1.000 seconds");
+        initializeWrapper(dest, destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        CHECK(destResponse->numInfo == std::size(destResponse->info));
+        CHECK(std::string_view(destResponse->info[0].msg) == "Test runtime: 2.000 seconds");
+    }
+
+    SECTION("Does not replace runtime owned by another test through a malformed index")
+    {
+        TestDcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<ResponseType>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result         = DCGM_DIAG_RESULT_PASS;
+        srcResponse->tests[0].numInfo        = 1;
+        srcResponse->tests[0].infoIndices[0] = 0;
+        srcResponse->numTests                = 1;
+        srcResponse->numInfo                 = 1;
+        srcResponse->info[0].entity          = { DCGM_FE_NONE, 0 };
+        SafeCopyTo(srcResponse->info[0].msg, "Test runtime: 2.000 seconds");
+        initializeWrapper(src, srcResponse.get());
+
+        TestDcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<ResponseType>();
+        SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
+        SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
+        destResponse->tests[1].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[1].numErrors       = 1;
+        destResponse->tests[1].errorIndices[0] = 0;
+        destResponse->tests[1].numInfo         = 1;
+        destResponse->tests[1].infoIndices[0]  = 0;
+        destResponse->errors[0].code           = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->errors[0].testId         = 1;
+        destResponse->numErrors                = 1;
+        destResponse->numTests                 = 2;
+        destResponse->numInfo                  = 1;
+        destResponse->info[0].entity           = { DCGM_FE_NONE, 0 };
+        destResponse->info[0].testId           = 0;
+        SafeCopyTo(destResponse->info[0].msg, "Test runtime: 1.000 seconds");
+        initializeWrapper(dest, destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(destResponse->numInfo == 2);
+        CHECK(destResponse->info[0].testId == 0);
+        CHECK(std::string_view(destResponse->info[0].msg) == "Test runtime: 1.000 seconds");
+        CHECK(destResponse->info[1].testId == 1);
+        CHECK(std::string_view(destResponse->info[1].msg) == "Test runtime: 2.000 seconds");
     }
 }
 

@@ -25,6 +25,7 @@
 #else
 #error "Could not find FieldWorkerFactory header"
 #endif
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -216,7 +217,6 @@ private:
     {
         // Declare type's functions
         std::unique_ptr<FieldWorkerBase> (*Create0)(void const *, const CudaWorkerDevice_t &, const std::string &, unsigned int, bool);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*FieldWorkerFactoryMoveConstruct)(void *, void *);
         void (*FieldWorkerFactoryMoveAssign)(void *, void *);

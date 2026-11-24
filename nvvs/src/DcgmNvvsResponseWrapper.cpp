@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <DcgmNvvsResponseWrapper.h>
 
 #include <DcgmBuildInfo.hpp>
+#include <DcgmDiagRuntimeInfo.hpp>
 #include <DcgmStringHelpers.h>
 #include <GpuSet.h>
 #include <NvvsCommon.h>
@@ -25,6 +26,7 @@
 #include <dcgm_errors.h>
 #include <dcgm_fields.h>
 #include <dcgm_structs.h>
+#include <ranges>
 #include <span>
 
 namespace
@@ -941,6 +943,36 @@ dcgmReturn_t AddTestCategory(std::string_view testName, std::string_view categor
     return DCGM_ST_OK;
 }
 
+template <typename T>
+    requires std::is_same_v<T, dcgmDiagResponse_v11> || std::is_same_v<T, dcgmDiagResponse_v12>
+dcgmReturn_t AddTestRuntime(std::string_view testName, std::chrono::milliseconds duration, T &diagResponse)
+{
+    if (diagResponse.numTests == 0 || diagResponse.numTests > std::size(diagResponse.tests))
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    auto const testIdx = diagResponse.numTests - 1;
+    auto &test         = diagResponse.tests[testIdx];
+    auto const *end    = std::ranges::find(test.name, '\0');
+    if (std::string_view(test.name, end - test.name) != testName)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (diagResponse.numInfo >= std::size(diagResponse.info) || test.numInfo >= std::size(test.infoIndices))
+    {
+        return DCGM_ST_INSUFFICIENT_SIZE;
+    }
+
+    auto &info  = diagResponse.info[diagResponse.numInfo];
+    info.entity = { DCGM_FE_NONE, 0 };
+    info.testId = testIdx;
+    SafeCopyTo(info.msg, DcgmNs::FormatDiagTestRuntime(duration).c_str());
+    test.infoIndices[test.numInfo++] = diagResponse.numInfo++;
+    return DCGM_ST_OK;
+}
+
 } //namespace
 
 dcgmReturn_t DcgmNvvsResponseWrapper::SetVersion(unsigned int version)
@@ -1234,6 +1266,24 @@ dcgmReturn_t DcgmNvvsResponseWrapper::SetTestResult(std::string_view pluginName,
         default:
             // should not reach
             log_error("Unknown version: [{}].", m_version);
+            return DCGM_ST_VER_MISMATCH;
+    }
+}
+
+dcgmReturn_t DcgmNvvsResponseWrapper::AddTestRuntime(std::string_view testName, std::chrono::milliseconds duration)
+{
+    switch (m_version)
+    {
+        case dcgmDiagResponse_version12:
+            return ::AddTestRuntime(testName, duration, Response<dcgmDiagResponse_v12>());
+        case dcgmDiagResponse_version11:
+            return ::AddTestRuntime(testName, duration, Response<dcgmDiagResponse_v11>());
+        case dcgmDiagResponse_version10:
+        case dcgmDiagResponse_version9:
+        case dcgmDiagResponse_version8:
+        case dcgmDiagResponse_version7:
+            return DCGM_ST_NOT_SUPPORTED;
+        default:
             return DCGM_ST_VER_MISMATCH;
     }
 }

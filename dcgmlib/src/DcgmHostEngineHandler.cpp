@@ -246,13 +246,13 @@ dcgmReturn_t DcgmHostEngineHandler::GetAllEntitiesOfEntityGroup(int activeOnly,
         }
         case DCGM_FE_LINK:
         {
-            dcgm_nvswitch_msg_get_links_t nvsMsg {};
-            nvsMsg.header.length     = sizeof(nvsMsg);
-            nvsMsg.header.version    = dcgm_nvswitch_msg_get_links_version;
-            nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
-            nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_LINK_IDS;
+            auto nvsMsg               = std::make_unique<dcgm_nvswitch_msg_get_links_t>();
+            nvsMsg->header.length     = sizeof(*nvsMsg);
+            nvsMsg->header.version    = dcgm_nvswitch_msg_get_links_version;
+            nvsMsg->header.moduleId   = DcgmModuleIdNvSwitch;
+            nvsMsg->header.subCommand = DCGM_NVSWITCH_SR_GET_LINK_IDS;
 
-            dcgmReturn_t dcgmReturn = ProcessModuleCommand(&nvsMsg.header);
+            dcgmReturn_t dcgmReturn = ProcessModuleCommand(&nvsMsg->header);
             if (dcgmReturn != DCGM_ST_OK)
             {
                 DCGM_LOG_ERROR << "ProcessModuleCommand of DCGM_NVSWITCH_SR_GET_LINK_IDS returned "
@@ -263,9 +263,17 @@ dcgmReturn_t DcgmHostEngineHandler::GetAllEntitiesOfEntityGroup(int activeOnly,
             dcgmGroupEntityPair_t entityPair;
             entityPair.entityGroupId = DCGM_FE_LINK;
 
-            for (unsigned int i = 0; i < nvsMsg.linkCount; i++)
+            if (nvsMsg->linkCount > std::size(nvsMsg->linkIds))
             {
-                entityPair.entityId = nvsMsg.linkIds[i];
+                log_error("NvSwitch module returned {} links, exceeding the maximum of {}",
+                          nvsMsg->linkCount,
+                          std::size(nvsMsg->linkIds));
+                return DCGM_ST_BADPARAM;
+            }
+
+            for (unsigned int i = 0; i < nvsMsg->linkCount; i++)
+            {
+                entityPair.entityId = nvsMsg->linkIds[i];
                 entities.push_back(entityPair);
             }
             return DCGM_ST_OK;

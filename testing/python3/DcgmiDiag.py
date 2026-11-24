@@ -231,7 +231,7 @@ class DcgmiDiag:
             cmd.append(self.paramsStr)
 
         if self.debugFile:
-            cmd.append('--debugLogFile')
+            cmd.append('--log-filename')
             cmd.append(self.debugFile)
 
             if self.debugLevel:

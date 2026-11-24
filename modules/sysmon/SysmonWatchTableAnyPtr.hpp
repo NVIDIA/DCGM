@@ -77,7 +77,7 @@ public:
                 auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->GetIsSubscribed(std::forward<decltype(entityGroupId)>(entityGroupId), std::forward<decltype(entityId)>(entityId), std::forward<decltype(fieldId)>(fieldId));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~SysmonWatchTableAnyPtr()
@@ -196,7 +196,6 @@ private:
         dcgmReturn_t (*GetFieldsToUpdate0)(void  *, timelib64_t, std::vector<dcgm_field_update_info_t> &, timelib64_t &);
         void (*GetMinAndMaxUpdateInterval0)(void  *, timelib64_t &, timelib64_t &);
         bool (*GetIsSubscribed0)(void  *, dcgm_field_entity_group_t, dcgm_field_eid_t, unsigned short);
-
     };
 
     VTable const *m_pVTable;

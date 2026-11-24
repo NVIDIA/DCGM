@@ -326,6 +326,10 @@ auto const &GetModuleCommandMetadata()
             DcgmModuleIdHealth, DCGM_HEALTH_SR_SET_SYSTEMS_V2),
         MakeCommandMetadata<dcgm_health_msg_check_v5, dcgm_health_msg_check_version5>(DcgmModuleIdHealth,
                                                                                       DCGM_HEALTH_SR_CHECK_V5),
+        MakeCommandMetadata<dcgm_health_msg_get_supported_systems_t, dcgm_health_msg_get_supported_systems_version1>(
+            DcgmModuleIdHealth, DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS),
+        MakeCommandMetadata<dcgm_health_msg_set_systems_v3, dcgm_health_msg_set_systems_version3>(
+            DcgmModuleIdHealth, DCGM_HEALTH_SR_SET_SYSTEMS_V3),
         MakeCommandMetadata<dcgm_policy_msg_get_policies_t, dcgm_policy_msg_get_policies_version>(
             DcgmModuleIdPolicy, DCGM_POLICY_SR_GET_POLICIES),
         MakeCommandMetadata<dcgm_policy_msg_set_policy_t, dcgm_policy_msg_set_policy_version>(
@@ -365,14 +369,7 @@ auto const &GetModuleCommandMetadata()
         MakeCommandMetadata<dcgm_config_msg_set_workload_power_profile_t,
                             dcgm_config_msg_set_workload_power_profile_version>(
             DcgmModuleIdConfig, DCGM_CONFIG_SR_SET_WORKLOAD_POWER_PROFILE),
-        MakeCommandMetadata<dcgm_diag_msg_run_v12, dcgm_diag_msg_run_version12>(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN),
-        MakeCommandMetadata<dcgm_diag_msg_run_v11, dcgm_diag_msg_run_version11>(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN),
-        MakeCommandMetadata<dcgm_diag_msg_run_v10, dcgm_diag_msg_run_version10>(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN),
-        MakeCommandMetadata<dcgm_diag_msg_run_v9, dcgm_diag_msg_run_version9>(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN),
-        MakeCommandMetadata<dcgm_diag_msg_run_v8, dcgm_diag_msg_run_version8>(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN),
-        MakeCommandMetadata<dcgm_diag_msg_run_v7, dcgm_diag_msg_run_version7>(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN),
-        MakeCommandMetadata<dcgm_diag_msg_run_v6, dcgm_diag_msg_run_version6>(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN),
-        MakeCommandMetadata<dcgm_diag_msg_run_v5, dcgm_diag_msg_run_version5>(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN),
+        MakeCommandMetadata<dcgm_diag_msg_run_v12, dcgm_diag_msg_run_version13>(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN),
         MakeCommandMetadata<dcgm_diag_msg_stop_t, dcgm_diag_msg_stop_version>(DcgmModuleIdDiag, DCGM_DIAG_SR_STOP),
         MakeCommandMetadata<dcgm_core_msg_diag_send_heartbeat_t, dcgm_core_msg_diag_send_heartbeat_version>(
             DcgmModuleIdDiag, DCGM_DIAG_SR_SEND_HEARTBEAT),

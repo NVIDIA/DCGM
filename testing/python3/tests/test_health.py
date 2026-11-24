@@ -54,6 +54,58 @@ def skip_test_if_unhealthy(groupObj):
         test_utils.skip_test(msg)
 
 
+@test_utils.run_with_embedded_host_engine()
+def test_dcgm_health_supported_systems(handle):
+    supported = dcgm_agent.dcgmHealthGetSupportedSystems(handle)
+    expected = (dcgm_structs.DCGM_HEALTH_WATCH_PCIE
+                | dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
+                | dcgm_structs.DCGM_HEALTH_WATCH_MEM
+                | dcgm_structs.DCGM_HEALTH_WATCH_INFOROM
+                | dcgm_structs.DCGM_HEALTH_WATCH_THERMAL
+                | dcgm_structs.DCGM_HEALTH_WATCH_POWER
+                | dcgm_structs.DCGM_HEALTH_WATCH_DRIVER
+                | dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL
+                | dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_FATAL
+                | dcgm_structs.DCGM_HEALTH_WATCH_CONNECTX
+                | dcgm_structs.DCGM_HEALTH_WATCH_IMEX)
+
+    assert supported == expected
+    assert supported & dcgm_structs.DCGM_HEALTH_WATCH_IMEX
+    assert not supported & 0x4000
+
+
+@test_utils.run_with_embedded_host_engine()
+def test_dcgm_health_set_v3_rejects_unsupported_systems(handle):
+    group_id = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_EMPTY, "strict-health-set")
+    interval_usec = 30_000_000
+    max_keep_age = 600.0
+
+    dcgm_agent.dcgmHealthSet_v3(
+        handle, group_id, dcgm_structs.DCGM_HEALTH_WATCH_ALL,
+        interval_usec, max_keep_age)
+    assert dcgm_agent.dcgmHealthGet(handle, group_id) == \
+        dcgm_agent.dcgmHealthGetSupportedSystems(handle)
+
+    for systems in (0x4000, dcgm_structs.DCGM_HEALTH_WATCH_POWER | 0x4000):
+        with test_utils.assert_raises(
+                dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED)):
+            dcgm_agent.dcgmHealthSet_v3(
+                handle, group_id, systems, interval_usec, max_keep_age)
+
+    assert dcgm_agent.dcgmHealthGet(handle, group_id) == \
+        dcgm_agent.dcgmHealthGetSupportedSystems(handle)
+
+
+@test_utils.run_with_embedded_host_engine()
+def test_dcgm_health_set_v3_rejects_invalid_group(handle):
+    with test_utils.assert_raises(
+            dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_CONFIGURED)):
+        dcgm_agent.dcgmHealthSet_v3(
+            handle, dcgm_structs.DCGM_GROUP_NULL,
+            dcgm_structs.DCGM_HEALTH_WATCH_POWER, 30_000_000, 600.0)
+
+
 def helper_dcgm_health_set_pcie(handle):
     """
     Verifies that the set/get path for the health monitor is working
@@ -2068,7 +2120,7 @@ def test_health_check_standalone_unreadable_power_usage(handle, gpuIds):
     helper_health_check_unreadable_power_usage(handle, gpuIds)
 
 
-def helper_health_set_version2(handle, gpuIds):
+def helper_health_set_versioned(handle, gpuIds, set_health):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetGroupWithGpuIds("test1", gpuIds)
@@ -2078,7 +2130,7 @@ def helper_health_set_version2(handle, gpuIds):
 
     fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_PCIE
-    groupObj.health.Set(newSystems, watchInterval, maxKeepAge)
+    set_health(handle, groupObj.GetId(), newSystems, watchInterval, maxKeepAge)
 
     for gpuId in gpuIds:
         cmfi = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
@@ -2096,7 +2148,18 @@ def helper_health_set_version2(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
 def test_health_set_version2_standalone(handle, gpuIds):
-    helper_health_set_version2(handle, gpuIds)
+    helper_health_set_versioned(
+        handle, gpuIds, dcgm_agent.dcgmHealthSet_v2)
+
+
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_injection_gpus(2)
+def test_health_set_version3_standalone(handle, gpuIds):
+    helper_health_set_versioned(
+        handle, gpuIds, dcgm_agent.dcgmHealthSet_v3)
 
 
 def helper_test_dcgm_health_check_uncontained_errors(handle, gpuIds):

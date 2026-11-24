@@ -52,7 +52,7 @@ void DcgmModuleIntrospect::Init()
 {
     SetRunInterval(std::chrono::milliseconds(DEFAULT_RUN_INTERVAL_MS));
 
-    IF_PLOG_(BASE_LOGGER, plog::debug)
+    IF_DCGM_LOG_DEBUG
     {
         SetDebugLogging(true);
     }

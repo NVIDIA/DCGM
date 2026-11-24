@@ -63,6 +63,36 @@ public:
     DcgmHealthWatch(dcgmCoreCallbacks_t &pDcc);
     ~DcgmHealthWatch();
 
+    /** Returns the health systems implemented by this module.
+     *
+     * @return Supported health-system bitmask.
+     */
+    [[nodiscard]] static constexpr dcgmHealthSystems_t GetSupportedSystems()
+    {
+        return static_cast<dcgmHealthSystems_t>(
+            DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_NVLINK | DCGM_HEALTH_WATCH_MEM | DCGM_HEALTH_WATCH_INFOROM
+            | DCGM_HEALTH_WATCH_THERMAL | DCGM_HEALTH_WATCH_POWER | DCGM_HEALTH_WATCH_DRIVER
+            | DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL | DCGM_HEALTH_WATCH_NVSWITCH_FATAL | DCGM_HEALTH_WATCH_CONNECTX
+            | DCGM_HEALTH_WATCH_IMEX);
+    }
+
+    /** Sets health watches after rejecting unsupported system bits.
+     *
+     * @param[in] groupId Group to configure.
+     * @param[in] systems Health systems to enable.
+     * @param[in] connectionId Connection that owns the watches.
+     * @param[in] updateInterval Watch update interval in microseconds.
+     * @param[in] maxKeepAge Maximum sample age in seconds.
+     * @return DCGM_ST_OK if the watches were set.
+     * @return DCGM_ST_NOT_SUPPORTED if systems contains an unsupported bit.
+     * @return Any error returned while setting the watches.
+     */
+    dcgmReturn_t SetWatchesStrict(unsigned int groupId,
+                                  dcgmHealthSystems_t systems,
+                                  dcgm_connection_id_t connectionId,
+                                  long long updateInterval,
+                                  double maxKeepAge);
+
     /*
      * This method is used to set the watches based on which bits are enabled in the
      * systems variable

@@ -233,6 +233,19 @@
 #define DCGM_MAX_NUM_CPU_CORES 1024
 
 /**
+ * Maximum number of NvLink entities across all NvSwitches
+ */
+#define DCGM_NVLINK_MAX_LINKS (DCGM_MAX_NUM_SWITCHES * DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
+
+/**
+ * Maximum number of entities returned by dcgmGetEntityGroupEntities() for any entity group
+ */
+#define DCGM_ENTITY_GROUP_ENTITIES_MAX                                      \
+    ((DCGM_NVLINK_MAX_LINKS > (DCGM_MAX_NUM_CPUS * DCGM_MAX_NUM_CPU_CORES)) \
+         ? DCGM_NVLINK_MAX_LINKS                                            \
+         : (DCGM_MAX_NUM_CPUS * DCGM_MAX_NUM_CPU_CORES))
+
+/**
  * Max length of the DCGM string field
  */
 #define DCGM_MAX_STR_LENGTH 256
@@ -2451,6 +2464,24 @@ typedef enum dcgmHealthSystems_enum
 #define DCGM_HEALTH_WATCH_COUNT_V4 14 /*!< For iterating through the dcgmHealthSystems_v4 enum */
 
 /**
+ * Health systems supported by the connected hostengine.
+ */
+typedef struct
+{
+    unsigned int version; //!< Version of this structure. Must be dcgmHealthSupportedSystems_version1.
+    uint32_t systems;     //!< Bitmask of health systems that the hostengine supports.
+} dcgmHealthSupportedSystems_v1;
+
+/** Version 1 for \ref dcgmHealthSupportedSystems_v1. */
+#define dcgmHealthSupportedSystems_version1 MAKE_DCGM_VERSION(dcgmHealthSupportedSystems_v1, 1)
+
+/** Latest version for \ref dcgmHealthSupportedSystems_t. */
+#define dcgmHealthSupportedSystems_version dcgmHealthSupportedSystems_version1
+
+/** Latest supported-systems structure. */
+typedef dcgmHealthSupportedSystems_v1 dcgmHealthSupportedSystems_t;
+
+/**
  * Health Watch test results
  */
 typedef enum dcgmHealthWatchResult_enum
@@ -2675,11 +2706,11 @@ typedef struct
 typedef dcgmHealthResponse_v5 dcgmHealthResponse_t;
 
 /**
- * Structure used to set health watches via the dcgmHealthSet_v2 API
+ * Structure used to set health watches via the dcgmHealthSet_v2 and dcgmHealthSet_v3 APIs.
  */
 typedef struct
 {
-    unsigned int version;        /*!< Version of this struct. Should be dcgmHealthSet_version2 */
+    unsigned int version;        /*!< Version of this struct. Should be dcgmHealthSetParams_version2. */
     dcgmGpuGrp_t groupId;        /*!< Group ID representing collection of one or more entities. Look
                                       at \ref dcgmGroupCreate for details on creating the group.
                                       Alternatively, pass in the group id as \a DCGM_GROUP_ALL_GPUS
@@ -2695,11 +2726,8 @@ typedef struct
                                       be at least your maximum time between calling dcgmHealthCheck */
 } dcgmHealthSetParams_v2;
 
-/**
- * Version 2 for \ref dcgmHealthSet_v2
- */
+/** Version 2 for \ref dcgmHealthSetParams_v2. */
 #define dcgmHealthSetParams_version2 MAKE_DCGM_VERSION(dcgmHealthSetParams_v2, 2)
-
 
 #define DCGM_MAX_PID_INFO_NUM 16
 /**
@@ -3523,6 +3551,7 @@ typedef dcgmIntrospectCpuUtil_v1 dcgmIntrospectCpuUtil_t;
 #define DCGM_EXPECTED_ENTITIES_LEN 50
 #define DCGM_FILE_LEN              30
 #define DCGM_PATH_LEN              128
+#define DCGM_PATH_LEN_V2           256
 #define DCGM_CLOCKS_EVENT_MASK_LEN 50
 #define DCGM_IGNORE_ERROR_MAX_LEN  512
 
@@ -3734,6 +3763,12 @@ typedef struct
  * Version 10 for \ref dcgmRunDiag_t
  */
 #define dcgmRunDiag_version10 MAKE_DCGM_VERSION(dcgmRunDiag_v10, 10)
+
+/**
+ * Version 11 uses the v10 layout and interprets debugLogFile as a filename under the nvvs subdirectory beside the
+ * configured host engine log, or as "-" to select console logging.
+ */
+#define dcgmRunDiag_version11 MAKE_DCGM_VERSION(dcgmRunDiag_v10, 11)
 
 /**
  * Maximum number of Multi Node Hosts Supported

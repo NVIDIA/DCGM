@@ -65,7 +65,7 @@ public:
                 auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->NvmlDeviceGetFieldValues(std::forward<decltype(device)>(device), std::forward<decltype(valuesCount)>(valuesCount), std::forward<decltype(values)>(values));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~TopologyNvmlTaskRunnerAnyPtr()
@@ -169,7 +169,6 @@ private:
         nvmlReturn_t (*NvmlDeviceGetNvLinkState0)(void  *, SafeNvmlHandle, unsigned int, nvmlEnableState_t *);
         nvmlReturn_t (*NvmlDeviceGetNvLinkRemotePciInfo_v20)(void  *, SafeNvmlHandle, unsigned int, nvmlPciInfo_t *);
         nvmlReturn_t (*NvmlDeviceGetFieldValues0)(void  *, SafeNvmlHandle, int, nvmlFieldValue_t *);
-
     };
 
     VTable const *m_pVTable;

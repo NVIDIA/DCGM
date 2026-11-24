@@ -35,6 +35,10 @@ import test_utils
 from test_utils import trampoline  # to make introspection work
 
 
+def test_dcgm_health_capability_versions():
+    trampoline()
+
+
 @test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_nvml_injected_gpus()

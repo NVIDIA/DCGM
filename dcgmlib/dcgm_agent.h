@@ -112,14 +112,16 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded(dcgmOperationMode_t opMode, dcgmH
  * \c dcgmUpdateAllFields which tells DCGM to wake up and perform data collection and
  * operations needed for policy management.
  *
- * @param[in,out] params    A pointer to either \c dcgmStartEmbeddedV2Params_v1 or \c dcgmStartEmbeddedV2Params_v2.
+ * @param[in,out] params    A pointer to \c dcgmStartEmbeddedV2Params_v1, \c dcgmStartEmbeddedV2Params_v2, or
+ *                           \c dcgmStartEmbeddedV2Params_v3.
  *
  * @return \c DCGM_ST_OK                if DCGM was started successfully within our process
  * @return \c DCGM_ST_UNINITIALIZED     if DCGM has not been initialized with \c dcgmInit yet
- * @note This function has a versioned argument that can be actually called with two different types. The behavior will
- *       depend on the params->version value.
+ * @note This function has a versioned argument that can be actually called with three different types. The behavior
+ *       will depend on the params->version value.
  * @see dcgmStartEmbeddedV2Params_v1
  * @see dcgmStartEmbeddedV2Params_v2
+ * @see dcgmStartEmbeddedV2Params_v3
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded_v2(dcgmStartEmbeddedV2Params_v1 *params);
 
@@ -438,8 +440,9 @@ dcgmGetDeviceWorkloadPowerProfileInfo(dcgmHandle_t pDcgmHandle,
  * @param dcgmHandle      IN: DCGM Handle
  * @param entityGroup     IN: Entity group to list entities of
  * @param entities       OUT: Array of entities for entityGroup
- * @param numEntities IN/OUT: Upon calling, this should be the number of entities that entityList[] can hold. Upon
- *                            return, this will contain the number of entities actually saved to entityList.
+ * @param numEntities IN/OUT: Upon calling, this should be the number of entities that entities[] can hold. Use
+ *                            DCGM_ENTITY_GROUP_ENTITIES_MAX to allocate enough space for any entity group. Upon
+ *                            return, this will contain the number of entities actually saved to entities.
  * @param flags           IN: Flags to modify the behavior of this request.
  *                            See DCGM_GEGE_FLAG_* #defines in dcgm_structs.h
  *
@@ -1562,6 +1565,25 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmHealthSet(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_
 dcgmReturn_t DCGM_PUBLIC_API dcgmHealthSet_v2(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 *params);
 
 /**
+ * Enable health checks after verifying that every requested system is supported by the hostengine.
+ *
+ * DCGM_HEALTH_WATCH_ALL enables every system reported by \ref dcgmHealthGetSupportedSystems. Other masks that
+ * contain an unsupported bit are rejected without changing the group's configured watches.
+ *
+ * @param[in] pDcgmHandle  DCGM handle.
+ * @param[in] params       Health watch settings. Set params->version to dcgmHealthSetParams_version2.
+ *
+ * @return
+ *       - \ref DCGM_ST_OK             if the call was successful
+ *       - \ref DCGM_ST_BADPARAM       if params is null
+ *       - \ref DCGM_ST_NOT_CONFIGURED if params->groupId does not identify an existing group
+ *       - \ref DCGM_ST_VER_MISMATCH   if params->version is not supported
+ *       - \ref DCGM_ST_NOT_SUPPORTED  if params->systems contains an unsupported bit
+ *       - \ref DCGM_ST_FUNCTION_NOT_FOUND if the connected hostengine does not provide this API
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmHealthSet_v3(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 const *params);
+
+/**
  * Retrieve the current state of the DCGM health check system
  *
  * @param pDcgmHandle        IN: DCGM Handle
@@ -1580,6 +1602,25 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmHealthSet_v2(dcgmHandle_t pDcgmHandle, dcgmHeal
 dcgmReturn_t DCGM_PUBLIC_API dcgmHealthGet(dcgmHandle_t pDcgmHandle,
                                            dcgmGpuGrp_t groupId,
                                            dcgmHealthSystems_t *systems);
+
+/**
+ * Retrieve the health systems supported by the connected hostengine.
+ *
+ * This reports hostengine capability. Use \ref dcgmHealthGet to retrieve the systems configured for a group.
+ * A reported system is recognized by the hostengine, but it may not apply to every entity type or available device.
+ *
+ * @param[in] pDcgmHandle          DCGM handle.
+ * @param[in,out] supportedSystems Supported health systems. Set supportedSystems->version to
+ *                                 dcgmHealthSupportedSystems_version before calling.
+ *
+ * @return
+ *       - \ref DCGM_ST_OK                  if the call was successful
+ *       - \ref DCGM_ST_BADPARAM            if supportedSystems is null
+ *       - \ref DCGM_ST_VER_MISMATCH        if supportedSystems->version is not supported
+ *       - \ref DCGM_ST_FUNCTION_NOT_FOUND  if the connected hostengine does not provide this API
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmHealthGetSupportedSystems(dcgmHandle_t pDcgmHandle,
+                                                           dcgmHealthSupportedSystems_t *supportedSystems);
 
 
 /**
@@ -2019,6 +2060,9 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
  *                               that should be performed. Look at \ref dcgmGroupCreate for details on creating the
  *                               group. Alternatively, pass in the group id as \a DCGM_GROUP_ALL_GPUS to perform
  *                               operation on all the GPUs.
+ *                               For supported versions 10 and 11, debugLogFile must be a filename. The host engine
+ *                               writes it under an nvvs directory beside its configured log file. Older run messages
+ *                               are rejected by the host engine.
  * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_t for details.
  *                               Note: It's a caller's responsibility to make sure the response is zero-initialized,
  *                                     except for the version field.
@@ -2359,22 +2403,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmProfPause(dcgmHandle_t pDcgmHandle);
 dcgmReturn_t DCGM_PUBLIC_API dcgmProfResume(dcgmHandle_t pDcgmHandle);
 
 /** @} */ // Closing for DCGMAPI_PROFILING
-
-/**
- * Adds fake GPU instances and or compute instances for testing purposes. The entity IDs specified for
- * the GPU instances and compute instances are only guaranteed to be used by DCGM if MIG mode is not active.
- *
- * NOTE: this API will not work on a real system reading actual values from NVML, and it may even cause
- * the real instances to malfunction. This API is for testing purposes only.
- *
- * @param pDcgmHandle        IN: DCGM Handle
- * @param hierarchy
- *
- * @return
- *        - \ref DCGM_ST_OK
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmAddFakeInstances(dcgmHandle_t pDcgmHandle, dcgmMigHierarchy_v2 *hierarchy);
 
 /**
  * Run a multi-node diagnostic test

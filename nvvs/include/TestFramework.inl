@@ -944,6 +944,7 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
             }
 
             std::chrono::milliseconds testDuration { 0 };
+            bool testWasRun = false;
             if (!skipRest && !main_should_stop)
             {
                 std::unordered_map<dcgm_field_eid_t, std::string> savedSkips;
@@ -972,6 +973,7 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
                 if (!entityInfos.empty())
                 {
                     m_plugins[pluginIndex]->RunTest(testName, entityInfos, 600, tp);
+                    testWasRun = true;
                 }
                 m_plugins[pluginIndex]->SetTestRunningState(testName, TestRuningState::Done);
                 testDuration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()
@@ -980,11 +982,19 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
                 dcgmDiagEntityResults_v2 entityResults
                     = m_plugins[pluginIndex]->template GetEntityResults<dcgmDiagEntityResults_v2>(testName);
                 AppendSkippedEntityInfos(entitySet->GetSkippedEntities(), entitySet->GetEntityGroup(), entityResults);
-                if (auto ret = m_diagResponse.SetTestResult(
-                        pluginName, testName, entityResults, m_plugins[pluginIndex]->GetAuxData(testName));
-                    ret != DCGM_ST_OK)
+                auto const setResultRet = m_diagResponse.SetTestResult(
+                    pluginName, testName, entityResults, m_plugins[pluginIndex]->GetAuxData(testName));
+                if (setResultRet != DCGM_ST_OK)
                 {
-                    log_error("failed to set test result to test [{}], ret: [{}].", testName, ret);
+                    log_error("failed to set test result to test [{}], ret: [{}].", testName, setResultRet);
+                }
+                else if (testWasRun)
+                {
+                    auto const ret = m_diagResponse.AddTestRuntime(testName, testDuration);
+                    if (ret != DCGM_ST_OK && ret != DCGM_ST_NOT_SUPPORTED)
+                    {
+                        log_debug("failed to add runtime to test [{}], ret: [{}].", testName, ret);
+                    }
                 }
                 entitySet->UpdateSkippedEntities(entityResults);
 
@@ -1112,6 +1122,7 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
         return;
     }
     bool const gpuSetFound = numGpuEntitySets > 0;
+    auto const testStart   = std::chrono::steady_clock::now();
     size_t gpuIdx          = 0;
     for (const auto &entitySet : entitySets)
     {
@@ -1120,6 +1131,17 @@ void TestFramework<PluginLibT, DynamicLibraryLoaderT, SoftwarePluginFrameworkT, 
             continue;
         }
         m_softwarePluginFrameworks[gpuIdx++]->Run(m_diagResponse, pluginAttr, m_nvvsCommon->parms);
+    }
+
+    if (gpuSetFound)
+    {
+        auto const testDuration
+            = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - testStart);
+        auto const ret = m_diagResponse.AddTestRuntime(SW_PLUGIN_NAME, testDuration);
+        if (ret != DCGM_ST_OK && ret != DCGM_ST_NOT_SUPPORTED)
+        {
+            log_debug("failed to add runtime to test [{}], ret: [{}].", SW_PLUGIN_NAME, ret);
+        }
     }
 
     unsigned int firstError = DCGM_FR_TEST_SKIPPED;

@@ -357,7 +357,7 @@ public:
                 auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->cuDriverGetVersion(std::forward<decltype(driverVersion)>(driverVersion));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~CudaOpsAnyPtr()
@@ -826,7 +826,6 @@ private:
         CUresult (*cuDeviceGet0)(void  *, CUdevice *, int);
         CUresult (*cuDeviceGetUuid_v20)(void  *, CUuuid *, CUdevice);
         CUresult (*cuDriverGetVersion0)(void  *, int *);
-
     };
 
     VTable const *m_pVTable;

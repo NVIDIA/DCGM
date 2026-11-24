@@ -97,40 +97,53 @@ enum loggerCategory_t
     FILE_LOGGER,
 };
 
-#define DCGM_LOG_VERBOSE_TO(logger) PLOG_(logger, plog::verbose)
-#define DCGM_LOG_DEBUG_TO(logger)   PLOG_(logger, plog::debug)
-#define DCGM_LOG_INFO_TO(logger)    PLOG_(logger, plog::info)
-#define DCGM_LOG_WARNING_TO(logger) PLOG_(logger, plog::warning)
-#define DCGM_LOG_ERROR_TO(logger)   PLOG_(logger, plog::error)
-#define DCGM_LOG_FATAL_TO(logger)   PLOG_(logger, plog::fatal)
+bool DcgmLoggingIsReady();
 
-#define DCGM_LOG_VERBOSE PLOG_(BASE_LOGGER, plog::verbose)
-#define DCGM_LOG_DEBUG   PLOG_(BASE_LOGGER, plog::debug)
-#define DCGM_LOG_INFO    PLOG_(BASE_LOGGER, plog::info)
-#define DCGM_LOG_WARNING PLOG_(BASE_LOGGER, plog::warning)
-#define DCGM_LOG_ERROR   PLOG_(BASE_LOGGER, plog::error)
-#define DCGM_LOG_FATAL   PLOG_(BASE_LOGGER, plog::fatal)
+#define IF_DCGM_LOG_(logger, severity)                                                                  \
+    if (!DcgmLoggingIsReady() || !plog::get<logger>() || !plog::get<logger>()->checkSeverity(severity)) \
+    {                                                                                                   \
+        ;                                                                                               \
+    }                                                                                                   \
+    else
 
-#define IF_DCGM_LOG_VERBOSE IF_PLOG_(BASE_LOGGER, plog::verbose)
-#define IF_DCGM_LOG_DEBUG   IF_PLOG_(BASE_LOGGER, plog::debug)
-#define IF_DCGM_LOG_INFO    IF_PLOG_(BASE_LOGGER, plog::info)
-#define IF_DCGM_LOG_WARNING IF_PLOG_(BASE_LOGGER, plog::warning)
-#define IF_DCGM_LOG_ERROR   IF_PLOG_(BASE_LOGGER, plog::error)
-#define IF_DCGM_LOG_FATAL   IF_PLOG_(BASE_LOGGER, plog::fatal)
+#define DCGM_LOG_(logger, severity)                      \
+    IF_DCGM_LOG_(logger, severity)(*plog::get<logger>()) \
+        += plog::Record(severity, PLOG_GET_FUNC(), __LINE__, PLOG_GET_FILE(), PLOG_GET_THIS(), logger).ref()
 
-#define DCGM_LOG_SYSLOG_DEBUG    PLOG_(SYSLOG_LOGGER, plog::verbose)
-#define DCGM_LOG_SYSLOG_INFO     PLOG_(SYSLOG_LOGGER, plog::debug)
-#define DCGM_LOG_SYSLOG_NOTICE   PLOG_(SYSLOG_LOGGER, plog::info)
-#define DCGM_LOG_SYSLOG_WARNING  PLOG_(SYSLOG_LOGGER, plog::warning)
-#define DCGM_LOG_SYSLOG_ERROR    PLOG_(SYSLOG_LOGGER, plog::error)
-#define DCGM_LOG_SYSLOG_CRITICAL PLOG_(SYSLOG_LOGGER, plog::fatal)
+#define DCGM_LOG_VERBOSE_TO(logger) DCGM_LOG_(logger, plog::verbose)
+#define DCGM_LOG_DEBUG_TO(logger)   DCGM_LOG_(logger, plog::debug)
+#define DCGM_LOG_INFO_TO(logger)    DCGM_LOG_(logger, plog::info)
+#define DCGM_LOG_WARNING_TO(logger) DCGM_LOG_(logger, plog::warning)
+#define DCGM_LOG_ERROR_TO(logger)   DCGM_LOG_(logger, plog::error)
+#define DCGM_LOG_FATAL_TO(logger)   DCGM_LOG_(logger, plog::fatal)
 
-#define IF_DCGM_LOG_SYSLOG_DEBUG    IF_PLOG_(SYSLOG_LOGGER, plog::verbose)
-#define IF_DCGM_LOG_SYSLOG_INFO     IF_PLOG_(SYSLOG_LOGGER, plog::debug)
-#define IF_DCGM_LOG_SYSLOG_NOTICE   IF_PLOG_(SYSLOG_LOGGER, plog::info)
-#define IF_DCGM_LOG_SYSLOG_WARNING  IF_PLOG_(SYSLOG_LOGGER, plog::warning)
-#define IF_DCGM_LOG_SYSLOG_ERROR    IF_PLOG_(SYSLOG_LOGGER, plog::error)
-#define IF_DCGM_LOG_SYSLOG_CRITICAL IF_PLOG_(SYSLOG_LOGGER, plog::fatal)
+#define DCGM_LOG_VERBOSE DCGM_LOG_(BASE_LOGGER, plog::verbose)
+#define DCGM_LOG_DEBUG   DCGM_LOG_(BASE_LOGGER, plog::debug)
+#define DCGM_LOG_INFO    DCGM_LOG_(BASE_LOGGER, plog::info)
+#define DCGM_LOG_WARNING DCGM_LOG_(BASE_LOGGER, plog::warning)
+#define DCGM_LOG_ERROR   DCGM_LOG_(BASE_LOGGER, plog::error)
+#define DCGM_LOG_FATAL   DCGM_LOG_(BASE_LOGGER, plog::fatal)
+
+#define IF_DCGM_LOG_VERBOSE IF_DCGM_LOG_(BASE_LOGGER, plog::verbose)
+#define IF_DCGM_LOG_DEBUG   IF_DCGM_LOG_(BASE_LOGGER, plog::debug)
+#define IF_DCGM_LOG_INFO    IF_DCGM_LOG_(BASE_LOGGER, plog::info)
+#define IF_DCGM_LOG_WARNING IF_DCGM_LOG_(BASE_LOGGER, plog::warning)
+#define IF_DCGM_LOG_ERROR   IF_DCGM_LOG_(BASE_LOGGER, plog::error)
+#define IF_DCGM_LOG_FATAL   IF_DCGM_LOG_(BASE_LOGGER, plog::fatal)
+
+#define DCGM_LOG_SYSLOG_DEBUG    DCGM_LOG_(SYSLOG_LOGGER, plog::verbose)
+#define DCGM_LOG_SYSLOG_INFO     DCGM_LOG_(SYSLOG_LOGGER, plog::debug)
+#define DCGM_LOG_SYSLOG_NOTICE   DCGM_LOG_(SYSLOG_LOGGER, plog::info)
+#define DCGM_LOG_SYSLOG_WARNING  DCGM_LOG_(SYSLOG_LOGGER, plog::warning)
+#define DCGM_LOG_SYSLOG_ERROR    DCGM_LOG_(SYSLOG_LOGGER, plog::error)
+#define DCGM_LOG_SYSLOG_CRITICAL DCGM_LOG_(SYSLOG_LOGGER, plog::fatal)
+
+#define IF_DCGM_LOG_SYSLOG_DEBUG    IF_DCGM_LOG_(SYSLOG_LOGGER, plog::verbose)
+#define IF_DCGM_LOG_SYSLOG_INFO     IF_DCGM_LOG_(SYSLOG_LOGGER, plog::debug)
+#define IF_DCGM_LOG_SYSLOG_NOTICE   IF_DCGM_LOG_(SYSLOG_LOGGER, plog::info)
+#define IF_DCGM_LOG_SYSLOG_WARNING  IF_DCGM_LOG_(SYSLOG_LOGGER, plog::warning)
+#define IF_DCGM_LOG_SYSLOG_ERROR    IF_DCGM_LOG_(SYSLOG_LOGGER, plog::error)
+#define IF_DCGM_LOG_SYSLOG_CRITICAL IF_DCGM_LOG_(SYSLOG_LOGGER, plog::fatal)
 
 namespace details
 {
@@ -227,7 +240,7 @@ inline void log(format_string<TArgs...> format, TArgs &&...args)
     // instead of __LINE__, __FILE__, etc. macros.
     // The args types should be in agreement with the format_string types, so we have to use
     // type_identity to convert the types accordingly.
-    if (plog::get<TLogger>() && plog::get<TLogger>()->checkSeverity(TSeverity))
+    if (DcgmLoggingIsReady() && plog::get<TLogger>() && plog::get<TLogger>()->checkSeverity(TSeverity))
     {
         (*plog::get<TLogger>()) += plog::Record(TSeverity,
                                                 format.loc.function_name(),
@@ -364,9 +377,19 @@ using hostEngineAppenderCallbackFp_t = void (*)(const DcgmNs::Logging::Record *)
  */
 typedef void (*dcgmLoggerCallback_f)(const void *);
 
-void DcgmLoggingInit(const char *logFile,
-                     const DcgmLoggingSeverity_t severity,
-                     const DcgmLoggingSeverity_t consoleSeverity);
+void DcgmLoggingInit(char const *logFile,
+                     DcgmLoggingSeverity_t const severity,
+                     DcgmLoggingSeverity_t const consoleSeverity);
+void DcgmLoggingInit(char const *logFile,
+                     DcgmLoggingSeverity_t const severity,
+                     DcgmLoggingSeverity_t const consoleSeverity,
+                     dcgmReturn_t &result);
+/**
+ * Return the absolute pathname passed to the file appender at initialization.
+ *
+ * @return Configured log pathname, or an empty string when logging to the console.
+ */
+std::string GetConfiguredLogFilePath();
 std::string LoggerToString(int logger, const std::string &defaultLogger);
 std::string LoggingSeverityToString(int inputSeverity, const char *defaultSeverity);
 DcgmLoggingSeverity_t LoggingSeverityFromString(const char *severityStr, DcgmLoggingSeverity_t defaultSeverity);

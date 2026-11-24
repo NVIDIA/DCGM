@@ -278,9 +278,18 @@ typedef struct
 
 #define dcgm_core_msg_get_entity_group_entities_version2 \
     MAKE_DCGM_VERSION(dcgm_core_msg_get_entity_group_entities_v2, 2)
-#define dcgm_core_msg_get_entity_group_entities_version dcgm_core_msg_get_entity_group_entities_version2
 
-typedef dcgm_core_msg_get_entity_group_entities_v2 dcgm_core_msg_get_entity_group_entities_t;
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmGetEntityGroupEntities_v3 entities;
+} dcgm_core_msg_get_entity_group_entities_v3;
+
+#define dcgm_core_msg_get_entity_group_entities_version3 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_get_entity_group_entities_v3, 3)
+#define dcgm_core_msg_get_entity_group_entities_version dcgm_core_msg_get_entity_group_entities_version3
+
+typedef dcgm_core_msg_get_entity_group_entities_v3 dcgm_core_msg_get_entity_group_entities_t;
 
 typedef struct
 {
@@ -966,6 +975,7 @@ DCGM_CASSERT(dcgm_core_msg_add_remove_entity_version1 == (long)0x1000028, 1);
 DCGM_CASSERT(dcgm_core_msg_group_destroy_version1 == (long)0x1000020, 1);
 DCGM_CASSERT(dcgm_core_msg_get_entity_group_entities_version1 == (long)0x1000128, 1);
 DCGM_CASSERT(dcgm_core_msg_get_entity_group_entities_version2 == (long)0x2001028, 2);
+DCGM_CASSERT(dcgm_core_msg_get_entity_group_entities_version3 == (long)0x3008028, 3);
 DCGM_CASSERT(dcgm_core_msg_group_get_all_ids_version1 == (long)0x1000120, 1);
 DCGM_CASSERT(dcgm_core_msg_group_get_info_version1 == (long)0x1000338, 1);
 DCGM_CASSERT(dcgm_core_msg_group_get_info_version2 == (long)0x2002138, 2);

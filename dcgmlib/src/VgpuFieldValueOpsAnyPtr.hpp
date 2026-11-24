@@ -141,7 +141,7 @@ public:
                 auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->NvmlReturnToDcgmReturn(std::forward<decltype(nvmlReturn)>(nvmlReturn));
             },
-            };
+        };
         m_pVTable = &vTable;
     }
     ~VgpuFieldValueOpsAnyPtr()
@@ -340,7 +340,6 @@ private:
         void (*Free0)(void  *, void *);
         dcgmReturn_t (*AppendEntityBlob0)(void  *, DcgmCacheManager &, dcgmcm_update_thread_t &, void *, int, timelib64_t, timelib64_t);
         dcgmReturn_t (*NvmlReturnToDcgmReturn0)(void  *, nvmlReturn_t);
-
     };
 
     VTable const *m_pVTable;

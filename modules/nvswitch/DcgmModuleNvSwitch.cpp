@@ -376,7 +376,7 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessGetSwitchIds(dcgm_nvswitch_msg_get_switc
 /*************************************************************************/
 dcgmReturn_t DcgmModuleNvSwitch::ProcessGetLinkIds(dcgm_nvswitch_msg_get_links_v1 *msg)
 {
-    msg->linkCount = DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH;
+    msg->linkCount = DCGM_NVLINK_MAX_LINKS;
     return m_nvswitchMgr.GetNvLinkList(msg->linkCount, msg->linkIds, msg->flags);
 }
 

@@ -466,7 +466,7 @@ dcgmReturn_t DcgmPolicyManager::ImportPolicies(std::string const &path)
     // Import replaces the registry, so keep a full snapshot for rollback.
     auto previousPolicies = SnapshotPolicies();
     DcgmPolicyPersistence importPersistence(m_registry, path);
-    auto ret = importPersistence.LoadPolicies();
+    auto ret = importPersistence.LoadPolicies(true);
     if (ret != DCGM_ST_OK)
     {
         log_warning("Field policy import from '{}' failed: {}", path, ret);

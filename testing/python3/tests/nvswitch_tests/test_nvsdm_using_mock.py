@@ -37,6 +37,26 @@ def test_nvsdm_list_switches(handle):
 
 # NO HARDWARE
 
+@test_utils.run_with_nvsdm_mock_config("five_switches_with_256_ports.yaml")
+@test_utils.run_with_standalone_host_engine()
+def test_nvsdm_large_fabric_link_enumeration(handle):
+    switch_ids = dcgm_agent.dcgmGetEntityGroupEntities(
+        handle, dcgm_fields.DCGM_FE_SWITCH, 0)
+    expected_link_count = (
+        len(switch_ids) * dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
+    assert expected_link_count > dcgm_structs.DCGM_GROUP_MAX_ENTITIES_V2
+
+    link_ids = dcgm_agent.dcgmGetEntityGroupEntities(
+        handle, dcgm_fields.DCGM_FE_LINK, 0)
+
+    assert len(link_ids) == expected_link_count, (
+        f"Expected {expected_link_count} links, got {len(link_ids)}")
+    assert len(set(link_ids)) == expected_link_count, (
+        "Expected every large-fabric link entity ID to be unique")
+
+
+# NO HARDWARE
+
 @test_utils.run_with_nvsdm_mock_config("one_cx.yaml")
 @test_utils.run_with_standalone_host_engine()
 def test_nvsdm_list_ib_cx(handle):

@@ -420,6 +420,15 @@ public:
     dcgmReturn_t GetServiceAccount(std::string &serviceAccount) const;
 
     /**
+     * Get the absolute pathname of the configured hostengine file log.
+     *
+     * @param[out] logFile Configured log pathname on success.
+     * @return DCGM_ST_OK on success; DCGM_ST_BADPARAM if no file log is configured;
+     *         another DCGM status if the core request fails.
+     */
+    dcgmReturn_t GetConfiguredLogFilePath(std::string &logFile) const;
+
+    /**
      * @brief Reserve resources for a module
      * @param[out] token Token for the reservation, used to free resources
      * @return DCGM_ST_OK if successful, DCGM_ST_IN_USE if resources are already reserved

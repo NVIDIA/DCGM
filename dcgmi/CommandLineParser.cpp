@@ -2430,6 +2430,29 @@ dcgmReturn_t CommandLineParser::ProcessMnDiagCommandLine(int argc,
 
 dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *const *argv, DcgmNs::DcgmOpsAnyPtr dcgmOps)
 {
+    class DiagOutput : public DCGMOutput
+    {
+    public:
+        explicit DiagOutput(TCLAP::Arg const &retiredLogFile)
+            : m_retiredLogFile(retiredLogFile)
+        {}
+
+        void failure(TCLAP::CmdLineInterface &cmd, TCLAP::ArgException &error) override
+        {
+            std::string const argId = error.argId();
+            if (m_retiredLogFile.isSet() || argId == "Argument: (--debugLogFile)"
+                || argId.starts_with("Argument: --debugLogFile="))
+            {
+                throw TCLAP::CmdLineParseException(
+                    "--debugLogFile is no longer supported; use --log-filename with a filename only");
+            }
+            DCGMOutput::failure(cmd, error);
+        }
+
+    private:
+        TCLAP::Arg const &m_retiredLogFile;
+    };
+
     // Check for stop diag request
     char const *value = std::getenv(STOP_DIAG_ENV_VARIABLE_NAME);
     if (value != nullptr)
@@ -2440,10 +2463,13 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
 
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "diag";
-    DCGMOutput helpOutput;
+    TCLAP::ValueArg<std::string> retiredLogFile("", "debugLogFile", "", false, "", "pathname");
+    DiagOutput helpOutput(retiredLogFile);
 
     DCGMSubsystemCmdLine cmd(
         std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    cmd.add(retiredLogFile);
+    helpOutput.hideArg("debugLogFile");
     cmd.setOutput(&helpOutput);
 
     // args are displayed in reverse order to this list
@@ -2505,14 +2531,14 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     TCLAP::SwitchArg verbose("v", "verbose", "Show information and warnings for each test.", cmd, false);
     TCLAP::SwitchArg statsOnFail(
         "", "statsonfail", "Only output the statistics files if there was a failure", cmd, false);
-    TCLAP::ValueArg<std::string> debugLogFile("",
-                                              "debugLogFile",
-                                              "Encrypted log file for debug information. If a \
-            debug level has been specified then \"nvvs.log\" is the default log file.",
-                                              false,
-                                              "",
-                                              "debug file",
-                                              cmd);
+    TCLAP::ValueArg<std::string> logFilename("",
+                                             "log-filename",
+                                             "Filename for the diagnostic debug log. The file is written in the nvvs "
+                                             "directory next to the hostengine log. Use '-' for console logging.",
+                                             false,
+                                             "",
+                                             "filename",
+                                             cmd);
     TCLAP::ValueArg<std::string> statsPath("",
                                            "statspath",
                                            "Write the plugin statistics to the given path \
@@ -2525,7 +2551,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                             "debugLevel",
                                             "Debug level (One of " DCGM_LOGGING_SEVERITY_OPTIONS
                                             "). Default: " DCGM_LOGGING_DEFAULT_NVVS_SEVERITY ". The logfile \
-            can be specified by the --debugLogFile parameter.",
+            can be specified by the --log-filename parameter.",
                                             false,
                                             "",
                                             "debug level",
@@ -2639,7 +2665,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     helpOutput.addToGroup("1", &expectedNumEntities);
     helpOutput.addToGroup("1", &verbose);
     helpOutput.addToGroup("1", &statsOnFail);
-    helpOutput.addToGroup("1", &debugLogFile);
+    helpOutput.addToGroup("1", &logFilename);
     helpOutput.addToGroup("1", &statsPath);
     helpOutput.addToGroup("1", &json);
     helpOutput.addToGroup("1", &training);
@@ -2653,6 +2679,12 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     helpOutput.addToGroup("1", &ignoreErrorCodes);
 
     cmd.parse(argc, argv);
+
+    if (retiredLogFile.isSet())
+    {
+        throw TCLAP::CmdLineParseException(
+            "--debugLogFile is no longer supported; use --log-filename with a filename only");
+    }
 
     if (training.isSet())
     {
@@ -2702,9 +2734,10 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         }
     }
 
-    if (debugLogFile.getValue().size() > DCGM_PATH_LEN - 1)
+    if (logFilename.isSet() && logFilename.getValue() != "-"
+        && !dcgm_diag_common_is_valid_log_filename(logFilename.getValue()))
     {
-        throw TCLAP::CmdLineParseException("debugLogFile has to be under 128 characters");
+        throw TCLAP::CmdLineParseException("log-filename must be a basename under 128 characters");
     }
 
     if (statsPath.getValue().size() > DCGM_PATH_LEN - 1)
@@ -2802,7 +2835,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                                 gpuList.getValue(),
                                                 verbose.getValue(),
                                                 statsOnFail.getValue(),
-                                                debugLogFile.getValue(),
+                                                logFilename.getValue(),
                                                 statsPath.getValue(),
                                                 severityInt,
                                                 clocksEventMaskStr,
@@ -2820,6 +2853,11 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     if (result == DCGM_ST_BADPARAM)
     {
         throw TCLAP::CmdLineParseException(error);
+    }
+
+    if (logFilename.isSet())
+    {
+        drd.version = dcgmRunDiag_version11;
     }
 
     bool hostAddressWasOverridden = hostAddress.isSet();

@@ -53,13 +53,16 @@ target_link_libraries(dcgmlibtests PRIVATE
         dcgmtest_interface
         common_interface
         dcgm_interface
+        health_interface
         policy_interface
+        diag_interface
         test-utils
 )
 
 target_link_libraries(dcgmlibtests
     PRIVATE
         -Wl,--whole-archive
+            mock_objects
             modules_objects
             dcgm_common
             dcgm_logging
@@ -69,6 +72,7 @@ target_link_libraries(dcgmlibtests
             sdk_nvml_essentials_objects
             sdk_nvml_loader
         -Wl,--no-whole-archive
+        dcgm_module_transport
         dcgm
         Catch2::Catch2WithMain
         Threads::Threads

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,11 +120,36 @@ std::string helperGetLogSettingFromArgAndEnv(const std::string &arg,
     return defaultValue;
 }
 
-void DcgmLoggingInit(const char *logFile,
-                     const DcgmLoggingSeverity_t severity,
-                     const DcgmLoggingSeverity_t consoleSeverity)
+bool DcgmLoggingIsReady()
+{
+    return DcgmLogging::IsReady();
+}
+
+void DcgmLoggingInit(char const *logFile,
+                     DcgmLoggingSeverity_t const severity,
+                     DcgmLoggingSeverity_t const consoleSeverity)
 {
     DcgmLogging::init(logFile, severity, consoleSeverity);
+}
+
+void DcgmLoggingInit(char const *logFile,
+                     DcgmLoggingSeverity_t const severity,
+                     DcgmLoggingSeverity_t const consoleSeverity,
+                     dcgmReturn_t &result)
+{
+    try
+    {
+        result = DcgmLogging::init(logFile, severity, consoleSeverity);
+    }
+    catch (std::exception const &)
+    {
+        result = DCGM_ST_INIT_ERROR;
+    }
+}
+
+std::string GetConfiguredLogFilePath()
+{
+    return DcgmLogging::getConfiguredLogFilePath();
 }
 
 std::string LoggerToString(int logger, const std::string &defaultLogger)

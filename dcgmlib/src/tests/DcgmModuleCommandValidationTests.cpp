@@ -19,6 +19,8 @@
 #include <DcgmModuleCommandValidation.h>
 #include <DcgmProtocol.h>
 #include <dcgm_core_structs.h>
+#include <dcgm_diag_structs.h>
+#include <dcgm_health_structs.h>
 #include <dcgm_policy_structs.h>
 
 #include <array>
@@ -59,6 +61,46 @@ TEST_CASE("DcgmModuleCommandValidation: full-sized exact-version command dispatc
     REQUIRE(buffer.size() == sizeof(dcgm_core_msg_get_gpu_status_t));
     auto const *header = reinterpret_cast<dcgm_module_command_header_t const *>(buffer.data());
     REQUIRE(header->length == sizeof(dcgm_core_msg_get_gpu_status_t));
+}
+
+TEST_CASE("DcgmModuleCommandValidation: version 13 diagnostic uses the version 12 message size")
+{
+    auto buffer = MakeModuleCommand(
+        DcgmModuleIdDiag, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version13, sizeof(dcgm_diag_msg_run_v12));
+
+    auto const validation = PrepareModuleCommandForDispatch(buffer, DCGM_PROTO_MAX_MESSAGE_SIZE);
+
+    CHECK(validation.status == DCGM_ST_OK);
+    CHECK(validation.shouldDispatch);
+    CHECK(validation.dispatchBufferLength == sizeof(dcgm_diag_msg_run_v12));
+}
+
+TEST_CASE("DcgmModuleCommandValidation: prior diagnostic run messages are rejected")
+{
+    struct VersionAndSize
+    {
+        unsigned int version;
+        std::size_t size;
+    };
+    for (auto const [version, size] : { VersionAndSize { dcgm_diag_msg_run_version5, sizeof(dcgm_diag_msg_run_v5) },
+                                        VersionAndSize { dcgm_diag_msg_run_version6, sizeof(dcgm_diag_msg_run_v6) },
+                                        VersionAndSize { dcgm_diag_msg_run_version7, sizeof(dcgm_diag_msg_run_v7) },
+                                        VersionAndSize { dcgm_diag_msg_run_version8, sizeof(dcgm_diag_msg_run_v8) },
+                                        VersionAndSize { dcgm_diag_msg_run_version9, sizeof(dcgm_diag_msg_run_v9) },
+                                        VersionAndSize { dcgm_diag_msg_run_version10, sizeof(dcgm_diag_msg_run_v10) },
+                                        VersionAndSize { dcgm_diag_msg_run_version11, sizeof(dcgm_diag_msg_run_v11) },
+                                        VersionAndSize { dcgm_diag_msg_run_version12, sizeof(dcgm_diag_msg_run_v12) } })
+    {
+        DYNAMIC_SECTION("version " << (version >> 24U))
+        {
+            auto buffer           = MakeModuleCommand(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN, version, size);
+            auto const validation = PrepareModuleCommandForDispatch(buffer, DCGM_PROTO_MAX_MESSAGE_SIZE);
+            CHECK(validation.status == DCGM_ST_VER_MISMATCH);
+            CHECK_FALSE(validation.shouldDispatch);
+            CHECK(validation.shouldRespond);
+            CHECK(buffer.size() == size);
+        }
+    }
 }
 
 TEST_CASE("DcgmModuleCommandValidation: truncated exact-version command is rejected")
@@ -166,6 +208,39 @@ TEST_CASE("DcgmModuleCommandValidation: field-policy commands dispatch")
         REQUIRE(validation.shouldDispatch);
         REQUIRE_FALSE(validation.shouldRespond);
         REQUIRE(validation.dispatchBufferLength == command.size);
+    }
+}
+
+TEST_CASE("DcgmModuleCommandValidation: health capability commands dispatch")
+{
+    SECTION("Get supported systems")
+    {
+        auto buffer = MakeModuleCommand(DcgmModuleIdHealth,
+                                        DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS,
+                                        dcgm_health_msg_get_supported_systems_version1,
+                                        sizeof(dcgm_health_msg_get_supported_systems_t));
+
+        auto const validation = PrepareModuleCommandForDispatch(buffer, DCGM_PROTO_MAX_MESSAGE_SIZE);
+
+        REQUIRE(validation.status == DCGM_ST_OK);
+        REQUIRE(validation.shouldDispatch);
+        REQUIRE_FALSE(validation.shouldRespond);
+        REQUIRE(validation.dispatchBufferLength == sizeof(dcgm_health_msg_get_supported_systems_t));
+    }
+
+    SECTION("Set systems v3")
+    {
+        auto buffer = MakeModuleCommand(DcgmModuleIdHealth,
+                                        DCGM_HEALTH_SR_SET_SYSTEMS_V3,
+                                        dcgm_health_msg_set_systems_version3,
+                                        sizeof(dcgm_health_msg_set_systems_v3));
+
+        auto const validation = PrepareModuleCommandForDispatch(buffer, DCGM_PROTO_MAX_MESSAGE_SIZE);
+
+        REQUIRE(validation.status == DCGM_ST_OK);
+        REQUIRE(validation.shouldDispatch);
+        REQUIRE_FALSE(validation.shouldRespond);
+        REQUIRE(validation.dispatchBufferLength == sizeof(dcgm_health_msg_set_systems_v3));
     }
 }
 

@@ -21,7 +21,7 @@
 
 #include "DcgmBuildInfo.hpp"
 #include "DcgmFvBuffer.h"
-#include "DcgmLogging.h"
+#include "DcgmLoggingImpl.h"
 #include "DcgmModuleApi.h"
 #include "DcgmPolicyRequest.h"
 #include "DcgmSettings.h"
@@ -412,26 +412,6 @@ dcgmReturn_t processModuleCommandAtEmbeddedHostEngine(dcgm_module_command_header
     return ret;
 }
 
-
-/*****************************************************************************/
-dcgmReturn_t processModuleCommandAtHostEngine(dcgmHandle_t pDcgmHandle,
-                                              dcgm_module_command_header_t *moduleCommand,
-                                              size_t maxResponseSize               = 0,
-                                              std::unique_ptr<DcgmRequest> request = nullptr,
-                                              unsigned int timeout                 = 60000)
-{
-    if (pDcgmHandle != (dcgmHandle_t)DCGM_EMBEDDED_HANDLE) /* Remote DCGM */
-    {
-        // coverity[overrun]
-        return processModuleCommandAtRemoteHostEngine(
-            pDcgmHandle, moduleCommand, std::move(request), timeout, maxResponseSize);
-    }
-    else /* Implies Embedded HE mode. ISV Case */
-    {
-        // coverity[overrun]
-        return processModuleCommandAtEmbeddedHostEngine(moduleCommand, std::move(request));
-    }
-}
 
 /*****************************************************************************/
 static dcgmReturn_t tsapiEngineGroupCreate(dcgmHandle_t pDcgmHandle,
@@ -3259,7 +3239,7 @@ dcgmReturn_t tsapiFieldGroupGetAll(dcgmHandle_t pDcgmHandle, dcgmAllFieldGroup_t
 
 dcgmReturn_t helperHealthSet(dcgmHandle_t dcgmHandle, dcgmHealthSetParams_v2 *healthSetParams)
 {
-    dcgm_health_msg_set_systems_t msg;
+    dcgm_health_msg_set_systems_v2 msg;
     dcgmReturn_t dcgmReturn;
 
     if (healthSetParams == nullptr)
@@ -3278,12 +3258,36 @@ dcgmReturn_t helperHealthSet(dcgmHandle_t dcgmHandle, dcgmHealthSetParams_v2 *he
     msg.header.length     = sizeof(msg);
     msg.header.moduleId   = DcgmModuleIdHealth;
     msg.header.subCommand = DCGM_HEALTH_SR_SET_SYSTEMS_V2;
-    msg.header.version    = dcgm_health_msg_set_systems_version;
+    msg.header.version    = dcgm_health_msg_set_systems_version2;
     msg.healthSet         = *healthSetParams;
 
     // coverity[overrun-buffer-arg]
     dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
     return dcgmReturn;
+}
+
+dcgmReturn_t helperHealthSetV3(dcgmHandle_t dcgmHandle, dcgmHealthSetParams_v2 const *healthSetParams)
+{
+    if (healthSetParams == nullptr)
+    {
+        log_error("Null healthSetParams");
+        return DCGM_ST_BADPARAM;
+    }
+    if (healthSetParams->version != dcgmHealthSetParams_version2)
+    {
+        log_error("Version mismatch {:#x} != {:#x}", healthSetParams->version, dcgmHealthSetParams_version2);
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    dcgm_health_msg_set_systems_v3 msg {};
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdHealth;
+    msg.header.subCommand = DCGM_HEALTH_SR_SET_SYSTEMS_V3;
+    msg.header.version    = dcgm_health_msg_set_systems_version3;
+    msg.healthSet         = *healthSetParams;
+
+    // coverity[overrun-buffer-arg]
+    return dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
 }
 
 dcgmReturn_t helperHealthGet(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t *systems)
@@ -3306,77 +3310,42 @@ dcgmReturn_t helperHealthGet(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, dcgm
 
     // coverity[overrun-buffer-arg]
     dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        /* Leave caller-owned systems unchanged when transport fails. */
+        return dcgmReturn;
+    }
 
     *systems = msg.systems;
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t helperHealthGetSupportedSystems(dcgmHandle_t dcgmHandle, dcgmHealthSupportedSystems_t *supportedSystems)
+{
+    if (supportedSystems == nullptr)
+    {
+        log_error("Null supportedSystems");
+        return DCGM_ST_BADPARAM;
+    }
+    if (supportedSystems->version != dcgmHealthSupportedSystems_version)
+    {
+        log_error("Version mismatch {:#x} != {:#x}", supportedSystems->version, dcgmHealthSupportedSystems_version);
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    dcgm_health_msg_get_supported_systems_t msg {};
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdHealth;
+    msg.header.subCommand = DCGM_HEALTH_SR_GET_SUPPORTED_SYSTEMS;
+    msg.header.version    = dcgm_health_msg_get_supported_systems_version1;
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t const dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+    if (dcgmReturn == DCGM_ST_OK)
+    {
+        *supportedSystems = msg.supportedSystems;
+    }
     return dcgmReturn;
-}
-
-template <typename MsgType>
-    requires std::is_same_v<MsgType, dcgm_diag_msg_run_v12> || std::is_same_v<MsgType, dcgm_diag_msg_run_v11>
-             || std::is_same_v<MsgType, dcgm_diag_msg_run_v10> || std::is_same_v<MsgType, dcgm_diag_msg_run_v9>
-             || std::is_same_v<MsgType, dcgm_diag_msg_run_v8> || std::is_same_v<MsgType, dcgm_diag_msg_run_v7>
-             || std::is_same_v<MsgType, dcgm_diag_msg_run_v6> || std::is_same_v<MsgType, dcgm_diag_msg_run_v5>
-static inline dcgm_module_command_header_t *helperInitDiagMsgRun(MsgType *msg,
-                                                                 unsigned int const msgVersion,
-                                                                 dcgmPolicyAction_t action)
-{
-    memset(msg, 0, sizeof(*msg));
-    msg->header.length  = sizeof(*msg);
-    msg->header.version = msgVersion;
-    msg->action         = action;
-
-    switch (msg->header.version)
-    {
-        case dcgm_diag_msg_run_version12:
-            msg->diagResponse.version = dcgmDiagResponse_version12;
-            break;
-        case dcgm_diag_msg_run_version11:
-        case dcgm_diag_msg_run_version10:
-            msg->diagResponse.version = dcgmDiagResponse_version11;
-            break;
-        case dcgm_diag_msg_run_version9:
-        case dcgm_diag_msg_run_version8:
-            msg->diagResponse.version = dcgmDiagResponse_version10;
-            break;
-        case dcgm_diag_msg_run_version7:
-            msg->diagResponse.version = dcgmDiagResponse_version9;
-            break;
-        case dcgm_diag_msg_run_version6:
-            msg->diagResponse.version = dcgmDiagResponse_version8;
-            break;
-        case dcgm_diag_msg_run_version5:
-            msg->diagResponse.version = dcgmDiagResponse_version7;
-            break;
-        default:
-            log_error("Unexpected run diag version: [{:x}], treating as [{:x}].",
-                      msg->header.version,
-                      dcgm_diag_msg_run_version12);
-            msg->diagResponse.version = dcgmDiagResponse_version12;
-            break;
-    }
-
-    return &(msg->header);
-}
-
-static unsigned int GetTimeoutSeconds(dcgmRunDiag_v10 *drd)
-{
-    if (drd->version == dcgmRunDiag_version10)
-    {
-        return drd->timeoutSeconds;
-    }
-    else if (drd->version == dcgmRunDiag_version9)
-    {
-        return (reinterpret_cast<dcgmRunDiag_v9 *>(drd))->timeoutSeconds;
-    }
-    else if (drd->version == dcgmRunDiag_version8)
-    {
-        return (reinterpret_cast<dcgmRunDiag_v8 *>(drd))->timeoutSeconds;
-    }
-    else if (drd->version == dcgmRunDiag_version7)
-    {
-        return (reinterpret_cast<dcgmRunDiag_v7 *>(drd))->timeoutSeconds;
-    }
-    return 0;
 }
 
 dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
@@ -3386,210 +3355,30 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
 {
     if (!drd || !response)
     {
-        log_error("drd {} or response {} was NULL.", (void *)drd, (void *)response);
         return DCGM_ST_BADPARAM;
     }
 
-    auto msg12 = std::make_unique<dcgm_diag_msg_run_v12>();
-    auto msg11 = std::make_unique<dcgm_diag_msg_run_v11>();
-    auto msg10 = std::make_unique<dcgm_diag_msg_run_v10>();
-    auto msg9  = std::make_unique<dcgm_diag_msg_run_v9>();
-    auto msg8  = std::make_unique<dcgm_diag_msg_run_v8>();
-    auto msg7  = std::make_unique<dcgm_diag_msg_run_v7>();
-    auto msg6  = std::make_unique<dcgm_diag_msg_run_v6>();
-    auto msg5  = std::make_unique<dcgm_diag_msg_run_v5>();
-
-    switch (drd->version)
+    if ((drd->version != dcgmRunDiag_version10 && drd->version != dcgmRunDiag_version11)
+        || response->version != dcgmDiagResponse_version12)
     {
-        case dcgmRunDiag_version10:
-        case dcgmRunDiag_version9:
-        case dcgmRunDiag_version8:
-        case dcgmRunDiag_version7:
-            break;
-        default:
-            // unknown drd version
-            log_error("dcgmRunDiag version mismatch {:X} != {:X} and isn't in accepted list",
-                      drd->version,
-                      dcgmRunDiag_version10);
-            return DCGM_ST_VER_MISMATCH;
+        return DCGM_ST_VER_MISMATCH;
     }
 
-    dcgm_module_command_header_t *header;
+    auto msg               = std::make_unique<dcgm_diag_msg_run_v12>();
+    msg->header.length     = sizeof(*msg);
+    msg->header.version    = dcgm_diag_msg_run_version13;
+    msg->header.moduleId   = DcgmModuleIdDiag;
+    msg->header.subCommand = DCGM_DIAG_SR_RUN;
+    msg->action            = action;
+    memcpy(&msg->runDiag, drd, sizeof(msg->runDiag));
+    msg->diagResponse.version = dcgmDiagResponse_version12;
 
-    switch (response->version)
-    {
-        case dcgmDiagResponse_version12:
-            if (drd->version == dcgmRunDiag_version10)
-            {
-                header = helperInitDiagMsgRun(msg12.get(), dcgm_diag_msg_run_version12, action);
-                memcpy(&msg12->runDiag, drd, sizeof(dcgmRunDiag_v10));
-            }
-            else if (drd->version == dcgmRunDiag_version9)
-            {
-                header = helperInitDiagMsgRun(msg10.get(), dcgm_diag_msg_run_version10, action);
-                memcpy(&msg10->runDiag, drd, sizeof(dcgmRunDiag_v9));
-            }
-            else
-            {
-                log_error("Unexpected run diag version: [{:x}], expected versions: [{:x}, {:x}].",
-                          drd->version,
-                          dcgmRunDiag_version10,
-                          dcgmRunDiag_version9);
-                return DCGM_ST_VER_MISMATCH;
-            }
-            break;
-        case dcgmDiagResponse_version11:
-            if (drd->version == dcgmRunDiag_version10)
-            {
-                header = helperInitDiagMsgRun(msg11.get(), dcgm_diag_msg_run_version11, action);
-                memcpy(&msg11->runDiag, drd, sizeof(dcgmRunDiag_v10));
-            }
-            else if (drd->version == dcgmRunDiag_version9)
-            {
-                header = helperInitDiagMsgRun(msg10.get(), dcgm_diag_msg_run_version10, action);
-                memcpy(&msg10->runDiag, drd, sizeof(dcgmRunDiag_v9));
-            }
-            else
-            {
-                log_error("Unexpected run diag version: [{:x}], expected versions: [{:x}, {:x}].",
-                          drd->version,
-                          dcgmRunDiag_version10,
-                          dcgmRunDiag_version9);
-                return DCGM_ST_VER_MISMATCH;
-            }
-            break;
-
-        case dcgmDiagResponse_version10:
-            if (drd->version == dcgmRunDiag_version8)
-            {
-                header = helperInitDiagMsgRun(msg9.get(), dcgm_diag_msg_run_version9, action);
-                memcpy(&msg9->runDiag, drd, sizeof(dcgmRunDiag_v8));
-            }
-            else if (drd->version == dcgmRunDiag_version7)
-            {
-                header = helperInitDiagMsgRun(msg8.get(), dcgm_diag_msg_run_version8, action);
-                memcpy(&msg8->runDiag, drd, sizeof(dcgmRunDiag_v7));
-            }
-            else
-            {
-                log_error("Unexpected run diag version: [{:x}], expected versions: [{:x}, {:x}].",
-                          drd->version,
-                          dcgmRunDiag_version8,
-                          dcgmRunDiag_version7);
-                return DCGM_ST_VER_MISMATCH;
-            }
-            break;
-        case dcgmDiagResponse_version9:
-            header = helperInitDiagMsgRun(msg7.get(), dcgm_diag_msg_run_version7, action);
-            if (drd->version != dcgmRunDiag_version7)
-            {
-                log_error("Unexpected run diag version: [{:x}], expected version: [{:x}].",
-                          drd->version,
-                          dcgmRunDiag_version7);
-                return DCGM_ST_VER_MISMATCH;
-            }
-            memcpy(&msg7->runDiag, drd, sizeof(dcgmRunDiag_v7));
-            break;
-
-        case dcgmDiagResponse_version8:
-            header = helperInitDiagMsgRun(msg6.get(), dcgm_diag_msg_run_version6, action);
-            if (drd->version != dcgmRunDiag_version7)
-            {
-                log_error("Unexpected run diag version: [{:x}], expected version: [{:x}].",
-                          drd->version,
-                          dcgmRunDiag_version7);
-                return DCGM_ST_VER_MISMATCH;
-            }
-            memcpy(&msg6->runDiag, drd, sizeof(dcgmRunDiag_v7));
-            break;
-
-        case dcgmDiagResponse_version7:
-            header = helperInitDiagMsgRun(msg5.get(), dcgm_diag_msg_run_version5, action);
-            if (drd->version != dcgmRunDiag_version7)
-            {
-                log_error("Unexpected run diag version: [{:x}], expected version: [{:x}].",
-                          drd->version,
-                          dcgmRunDiag_version7);
-                return DCGM_ST_VER_MISMATCH;
-            }
-            memcpy(&msg5->runDiag, drd, sizeof(dcgmRunDiag_v7));
-            break;
-
-        default:
-            log_error("response->version 0x{:x} doesn't match a valid version", response->version);
-            return DCGM_ST_VER_MISMATCH;
-    }
-
-    header->moduleId   = DcgmModuleIdDiag;
-    header->subCommand = DCGM_DIAG_SR_RUN;
-
-    // Compatibility requirement
-    static_assert(sizeof(msg11->diagResponse) <= sizeof(msg12->diagResponse));
-    static_assert(sizeof(msg10->diagResponse) <= sizeof(msg11->diagResponse));
-    static_assert(sizeof(msg9->diagResponse) <= sizeof(msg10->diagResponse));
-    static_assert(sizeof(msg8->diagResponse) <= sizeof(msg9->diagResponse));
-    static_assert(sizeof(msg7->diagResponse) <= sizeof(msg8->diagResponse));
-    static_assert(sizeof(msg6->diagResponse) <= sizeof(msg7->diagResponse));
-    static_assert(sizeof(msg5->diagResponse) <= sizeof(msg6->diagResponse));
-
-    unsigned int const timeoutSeconds        = GetTimeoutSeconds(drd);
     constexpr unsigned int secToMsMultiplier = 1000;
     // coverity[overrun-buffer-arg]
-    dcgmReturn_t dcgmReturn = dcgmModuleSendBlockingFixedRequest(
-        dcgmHandle, header, sizeof(*msg12), nullptr, timeoutSeconds * secToMsMultiplier);
-
-    switch (response->version)
-    {
-        case dcgmDiagResponse_version12:
-            if (drd->version == dcgmRunDiag_version10)
-            {
-                memcpy(response, &msg12->diagResponse, sizeof(msg12->diagResponse));
-            }
-            else if (drd->version == dcgmRunDiag_version9)
-            {
-                memcpy(response, &msg10->diagResponse, sizeof(msg10->diagResponse));
-            }
-            break;
-        case dcgmDiagResponse_version11:
-            if (drd->version == dcgmRunDiag_version10)
-            {
-                memcpy(response, &msg11->diagResponse, sizeof(msg11->diagResponse));
-            }
-            else if (drd->version == dcgmRunDiag_version9)
-            {
-                memcpy(response, &msg10->diagResponse, sizeof(msg10->diagResponse));
-            }
-            break;
-
-        case dcgmDiagResponse_version10:
-            if (drd->version == dcgmRunDiag_version8)
-            {
-                memcpy(response, &msg9->diagResponse, sizeof(msg9->diagResponse));
-            }
-            else if (drd->version == dcgmRunDiag_version7)
-            {
-                memcpy(response, &msg8->diagResponse, sizeof(msg8->diagResponse));
-            }
-            break;
-
-        case dcgmDiagResponse_version9:
-            memcpy(response, &msg7->diagResponse, sizeof(msg7->diagResponse));
-            break;
-
-        case dcgmDiagResponse_version8:
-            memcpy(response, &msg6->diagResponse, sizeof(msg6->diagResponse));
-            break;
-
-        case dcgmDiagResponse_version7:
-            memcpy(response, &msg5->diagResponse, sizeof(msg5->diagResponse));
-            break;
-
-        default:
-            DCGM_LOG_ERROR << "Unexpected response->version 0x" << std::hex << response->version;
-            return DCGM_ST_GENERIC_ERROR;
-    }
-
-    return dcgmReturn;
+    auto const ret = dcgmModuleSendBlockingFixedRequest(
+        dcgmHandle, &msg->header, sizeof(*msg), nullptr, drd->timeoutSeconds * secToMsMultiplier);
+    memcpy(response, &msg->diagResponse, sizeof(*response));
+    return ret;
 }
 
 dcgmReturn_t helperStopDiag(dcgmHandle_t dcgmHandle)
@@ -4087,7 +3876,7 @@ dcgmReturn_t tsapiGetEntityGroupEntities(dcgmHandle_t dcgmHandle,
                                          int *numEntities,
                                          unsigned int flags)
 {
-    if (!entities || !numEntities)
+    if (!entities || !numEntities || *numEntities < 1)
     {
         return DCGM_ST_BADPARAM;
     }
@@ -4852,9 +4641,20 @@ static dcgmReturn_t tsapiEngineHealthSet_v2(dcgmHandle_t pDcgmHandle, dcgmHealth
     return helperHealthSet(pDcgmHandle, params);
 }
 
+static dcgmReturn_t tsapiEngineHealthSet_v3(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 const *params)
+{
+    return helperHealthSetV3(pDcgmHandle, params);
+}
+
 static dcgmReturn_t tsapiEngineHealthGet(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t *systems)
 {
     return helperHealthGet(pDcgmHandle, groupId, systems);
+}
+
+static dcgmReturn_t tsapiEngineHealthGetSupportedSystems(dcgmHandle_t pDcgmHandle,
+                                                         dcgmHealthSupportedSystems_t *supportedSystems)
+{
+    return helperHealthGetSupportedSystems(pDcgmHandle, supportedSystems);
 }
 
 static dcgmReturn_t tsapiEngineHealthCheck(dcgmHandle_t pDcgmHandle,
@@ -5355,6 +5155,10 @@ static dcgmReturn_t tsapiEngineGetWorkloadPowerProfileInfo(dcgmHandle_t pDcgmHan
         /* Copy the response back over the request */
         memcpy(profilesInfo, &msg.pp.profilesInfo, sizeof(dcgmWorkloadPowerProfileProfilesInfo_v1));
         memcpy(profilesStatus, &msg.pp.profilesStatus, sizeof(dcgmDeviceWorkloadPowerProfilesStatus_v1));
+    }
+    else
+    {
+        return dcgmReturn;
     }
 
     return (dcgmReturn_t)msg.cmdRet;
@@ -5950,6 +5754,11 @@ dcgmReturn_t tsapiHostengineEnvironmentVariableInfo(dcgmHandle_t dcgmHandle, dcg
 /*****************************************************************************/
 dcgmReturn_t tsapiHostengineSetLoggingSeverity(dcgmHandle_t dcgmHandle, dcgmSettingsSetLoggingSeverity_t *logging)
 {
+    if (logging == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
     if (logging->version != dcgmSettingsSetLoggingSeverity_version2)
     {
         DCGM_LOG_ERROR << "dcgmHostengineSetLoggingSeverity version mismatch " << logging->version
@@ -6365,15 +6174,6 @@ dcgmReturn_t StartEmbeddedV2(dcgmStartEmbeddedV2Params_v1 &params)
         }
     }
 
-    dcgmGlobalsLock();
-
-    /* Check again after lock */
-    if (!g_dcgmGlobals.isInitialized)
-    {
-        dcgmGlobalsUnlock();
-        return DCGM_ST_UNINITIALIZED;
-    }
-
     /* Initialize the logger */
     std::string paramsLogFile;
     if (params.logFile != nullptr)
@@ -6395,10 +6195,39 @@ dcgmReturn_t StartEmbeddedV2(dcgmStartEmbeddedV2Params_v1 &params)
         loggingSeverityArg, DCGM_LOGGING_DEFAULT_HOSTENGINE_SEVERITY, DCGM_ENV_LOG_PREFIX);
 
     DcgmLoggingSeverity_t loggingSeverity = LoggingSeverityFromString(logSeverity.c_str(), DcgmLoggingSeverityError);
-    DcgmLoggingInit(logFile.c_str(), loggingSeverity, DcgmLoggingSeverityNone);
+    DcgmLogging::PreparedStatePtr preparedLogging;
+    dcgmReturn_t loggingResult = DCGM_ST_OK;
+    try
+    {
+        loggingResult
+            = DcgmLogging::Prepare(logFile.c_str(), loggingSeverity, DcgmLoggingSeverityNone, preparedLogging);
+    }
+    catch (std::exception const &)
+    {
+        loggingResult = DCGM_ST_INIT_ERROR;
+    }
+    if (loggingResult != DCGM_ST_OK)
+    {
+        return loggingResult;
+    }
+
+    dcgmGlobalsLock();
+
+    /* Check again after lock */
+    if (!g_dcgmGlobals.isInitialized)
+    {
+        dcgmGlobalsUnlock();
+        return DCGM_ST_UNINITIALIZED;
+    }
+
+    bool const loggingAlreadyInitialized = DcgmLoggingIsReady();
+    DcgmLogging::Commit(preparedLogging, true);
+
     /* Set severity explicitly in case logging is already initialized and ignoring logFile + loggingSeverity */
-    SetLoggerSeverity(BASE_LOGGER, loggingSeverity);
-    RouteLogToBaseLogger(SYSLOG_LOGGER);
+    if (loggingAlreadyInitialized)
+    {
+        SetLoggerSeverity(BASE_LOGGER, loggingSeverity);
+    }
     log_debug("Initialized base logger");
     DCGM_LOG_SYSLOG_DEBUG << "Initialized syslog logger";
 
@@ -7039,6 +6868,11 @@ dcgmReturn_t DCGM_PUBLIC_API tsapiNvswitchGetBackend(dcgmHandle_t pDcgmHandle,
                                                      unsigned int backendNameLength)
 {
     dcgm_core_msg_nvswitch_get_backend_t msg {};
+
+    if (!active || !backendName)
+    {
+        return DCGM_ST_BADPARAM;
+    }
 
     if (sizeof(msg.backendName) > backendNameLength)
     {

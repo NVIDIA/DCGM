@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,13 +35,14 @@
 #include <cstdio>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
+#include <filesystem>
 #include <iomanip>
 #include <memory>
 #include <mutex>
 #include <plog/Appenders/ConsoleAppender.h>
 #include <plog/Appenders/RollingFileAppender.h>
 #include <syslog.h>
-#include <vector>
+#include <utility>
 
 /**
  * How to use this class
@@ -175,30 +176,153 @@ public:
 
 class DcgmLogging
 {
+    class DeferredAppender final : public plog::IAppender
+    {
+    public:
+        void SetAppender(plog::IAppender *appender)
+        {
+            m_appender.store(appender, std::memory_order_release);
+        }
+
+        void write(plog::Record const &record) override
+        {
+            auto *appender = m_appender.load(std::memory_order_acquire);
+            if (appender != nullptr)
+            {
+                appender->write(record);
+            }
+        }
+
+    private:
+        std::atomic<plog::IAppender *> m_appender {};
+    };
+
 public:
+    class PreparedState
+    {
+        friend class DcgmLogging;
+
+    public:
+        PreparedState(PreparedState const &)            = delete;
+        PreparedState &operator=(PreparedState const &) = delete;
+
+    private:
+        std::string m_configuredPath;
+        DcgmLoggingSeverity_t m_severity;
+        DcgmLoggingSeverity_t m_consoleSeverity;
+        std::unique_ptr<plog::IAppender> m_ownedAppender;
+        plog::IAppender *m_appender;
+
+        PreparedState(DcgmLoggingSeverity_t const severity, DcgmLoggingSeverity_t const consoleSeverity)
+            : m_severity(severity)
+            , m_consoleSeverity(consoleSeverity)
+            , m_appender(&consoleAppender)
+        {}
+
+        dcgmReturn_t Init(char const *logFile)
+        {
+            m_configuredPath = logFile;
+            if (m_configuredPath != DCGM_LOGGING_CONSTANT_HYPHEN)
+            {
+                std::error_code error;
+                auto const absolutePath = std::filesystem::absolute(m_configuredPath, error);
+                if (error)
+                {
+                    return DCGM_ST_INIT_ERROR;
+                }
+                m_configuredPath = absolutePath.string();
+                m_ownedAppender  = std::make_unique<plog::RollingFileAppender<DcgmLogFormatter<PlogSeverityMapper>>>(
+                    m_configuredPath.c_str());
+                m_appender = m_ownedAppender.get();
+            }
+            return DCGM_ST_OK;
+        }
+    };
+
+    using PreparedStatePtr = std::unique_ptr<PreparedState>;
+
     DcgmLogging(const DcgmLogging &other)            = delete;
     DcgmLogging &operator=(const DcgmLogging &other) = delete;
 
-    static void init(const char *logFile,
-                     const DcgmLoggingSeverity_t severity,
-                     const DcgmLoggingSeverity_t consoleSeverity = DcgmLoggingSeverityNone)
+    static dcgmReturn_t init(const char *logFile,
+                             const DcgmLoggingSeverity_t severity,
+                             const DcgmLoggingSeverity_t consoleSeverity = DcgmLoggingSeverityNone)
     {
-        if (!singletonInstance.m_loggingInitialized.load(std::memory_order_relaxed))
+        PreparedStatePtr preparedState;
+        auto const result = Prepare(logFile, severity, consoleSeverity, preparedState);
+        if (result != DCGM_ST_OK || preparedState == nullptr)
+        {
+            return result;
+        }
         {
             std::lock_guard<std::mutex> guard(singletonInstance.m_loggerMutex);
-            if (!singletonInstance.m_loggingInitialized.load(std::memory_order_relaxed))
-            {
-                singletonInstance.Initialize(logFile, severity, consoleSeverity);
-                return;
-            }
+            Commit(preparedState);
         }
-        DCGM_LOG_DEBUG << "Logger already initialized -- skipped second initialization";
+        return DCGM_ST_OK;
+    }
+
+    static dcgmReturn_t Prepare(char const *logFile,
+                                DcgmLoggingSeverity_t const severity,
+                                DcgmLoggingSeverity_t const consoleSeverity,
+                                PreparedStatePtr &preparedState)
+    {
+        if (singletonInstance.m_loggerReady.load(std::memory_order_acquire))
+        {
+            return DCGM_ST_OK;
+        }
+
+        auto candidate = std::unique_ptr<PreparedState>(new PreparedState(severity, consoleSeverity));
+        singletonInstance.EnsureInfrastructure();
+        auto const result = candidate->Init(logFile);
+        if (result != DCGM_ST_OK)
+        {
+            return result;
+        }
+        preparedState = std::move(candidate);
+        return DCGM_ST_OK;
+    }
+
+    static void Commit(PreparedStatePtr &preparedState, bool const routeSyslogToBase = false)
+    {
+        if (singletonInstance.m_loggerReady.load(std::memory_order_acquire))
+        {
+            if (routeSyslogToBase)
+            {
+                singletonInstance.m_syslogBaseRoute.SetAppender(plog::get<BASE_LOGGER>());
+            }
+            return;
+        }
+        if (preparedState == nullptr)
+        {
+            return;
+        }
+
+        plog::get<FILE_LOGGER>()->setMaxSeverity(static_cast<plog::Severity>(preparedState->m_severity));
+        plog::get<BASE_LOGGER>()->setMaxSeverity(static_cast<plog::Severity>(preparedState->m_severity));
+        plog::get<SYSLOG_LOGGER>()->setMaxSeverity(static_cast<plog::Severity>(preparedState->m_severity));
+        plog::get<CONSOLE_LOGGER>()->setMaxSeverity(static_cast<plog::Severity>(preparedState->m_consoleSeverity));
+
+        auto *appender                    = preparedState->m_appender;
+        singletonInstance.m_preparedState = std::move(preparedState);
+        singletonInstance.m_fileAppender.SetAppender(appender);
+        if (routeSyslogToBase)
+        {
+            singletonInstance.m_syslogBaseRoute.SetAppender(plog::get<BASE_LOGGER>());
+        }
+        singletonInstance.m_fileLoggerInitialized.store(true, std::memory_order_release);
+        singletonInstance.m_loggerReady.store(true, std::memory_order_release);
+    }
+
+    static bool IsReady()
+    {
+        return singletonInstance.m_loggerReady.load(std::memory_order_acquire);
     }
 
     static void initLogToHostengine(const DcgmLoggingSeverity_t severity)
     {
         plog::init<BASE_LOGGER>((plog::Severity)severity, &hostengineAppender);
         plog::init<SYSLOG_LOGGER>((plog::Severity)severity, &syslogAppender);
+        singletonInstance.m_loggerReady.store(true, std::memory_order_release);
     }
 
     static void setHostEngineCallback(hostEngineAppenderCallbackFp_t callback)
@@ -216,10 +340,20 @@ public:
         return singletonInstance;
     }
 
+    static std::string getConfiguredLogFilePath()
+    {
+        if (!IsReady() || !singletonInstance.m_fileLoggerInitialized.load(std::memory_order_acquire)
+            || singletonInstance.m_preparedState->m_configuredPath == DCGM_LOGGING_CONSTANT_HYPHEN)
+        {
+            return {};
+        }
+        return singletonInstance.m_preparedState->m_configuredPath;
+    }
+
     template <loggerCategory_t logger = BASE_LOGGER>
     static plog::Logger<logger> *getLoggerAddress()
     {
-        return plog::get<logger>();
+        return IsReady() ? plog::get<logger>() : nullptr;
     }
 
     static std::string loggerToString(int logger, const std::string &defaultLogger)
@@ -318,14 +452,14 @@ public:
     template <loggerCategory_t logger = BASE_LOGGER>
     static DcgmLoggingSeverity_t getLoggerSeverity()
     {
-        return (DcgmLoggingSeverity_t)plog::get<logger>()->getMaxSeverity();
+        return IsReady() ? (DcgmLoggingSeverity_t)plog::get<logger>()->getMaxSeverity() : DcgmLoggingSeverityNone;
     }
 
     // See specializations below for special cases
     template <loggerCategory_t logger>
     static int setLoggerSeverity(int severity)
     {
-        if (severity < plog::none || severity > plog::verbose)
+        if (!IsReady() || severity < plog::none || severity > plog::verbose)
         {
             // invalid severity
             return 1;
@@ -407,6 +541,10 @@ public:
                 return m_record->message;
             }
         };
+        if (!IsReady())
+        {
+            return;
+        }
         ForwardedPlogRecord plogRecord(record);
         plog::get<logger>()->write(plogRecord);
     }
@@ -427,46 +565,22 @@ public:
 
 private:
     static DcgmLogging singletonInstance;
-    // Not really unique_ptr as they are used in plog as well. We are using
-    // unique_ptr to manage lifetime only so we don't have to write a destructor
-    std::vector<std::unique_ptr<plog::IAppender>> m_appenders;
-    std::atomic<bool> m_loggingInitialized = false;
-    std::mutex m_severityMutex;
+    DeferredAppender m_fileAppender;
+    DeferredAppender m_syslogBaseRoute;
+    PreparedStatePtr m_preparedState;
+    std::atomic<bool> m_loggerReady { false };
     std::mutex m_loggerMutex;
-    bool m_fileLoggerInitialized = false;
-    DcgmLogging()                = default;
+    std::mutex m_severityMutex;
+    std::atomic<bool> m_fileLoggerInitialized { false };
+    DcgmLogging() = default;
 
-    void Initialize(const char *logFile,
-                    const DcgmLoggingSeverity_t severity,
-                    const DcgmLoggingSeverity_t consoleSeverity)
+    void EnsureInfrastructure()
     {
-        InitLogger<FILE_LOGGER>(logFile, (plog::Severity)severity);
-        m_fileLoggerInitialized = true;
-        // BASE_LOGGER always redirects to FILE_LOGGER
-        plog::init<BASE_LOGGER>((plog::Severity)severity, plog::get<FILE_LOGGER>());
-        plog::init<SYSLOG_LOGGER>((plog::Severity)severity, &syslogAppender);
-        plog::init<CONSOLE_LOGGER>((plog::Severity)consoleSeverity, &consoleAppender);
-
-        m_loggingInitialized = true;
-    }
-
-    template <loggerCategory_t logger = BASE_LOGGER>
-    int InitLogger(const char *logFile, plog::Severity severity)
-    {
-        plog::IAppender *appender;
-
-        if (strncmp(DCGM_LOGGING_CONSTANT_HYPHEN, logFile, sizeof(DCGM_LOGGING_CONSTANT_HYPHEN)) == 0)
-        {
-            appender = &consoleAppender;
-        }
-        else
-        {
-            appender = new plog::RollingFileAppender<DcgmLogFormatter<PlogSeverityMapper>>(logFile);
-            m_appenders.push_back(std::unique_ptr<plog::IAppender>(appender));
-        }
-
-        plog::init<logger>(severity, appender);
-        return 0;
+        static auto &fileLogger                     = plog::init<FILE_LOGGER>(plog::none, &m_fileAppender);
+        [[maybe_unused]] static auto &baseLogger    = plog::init<BASE_LOGGER>(plog::none, &fileLogger);
+        static auto &syslogLogger                   = plog::init<SYSLOG_LOGGER>(plog::none, &syslogAppender);
+        [[maybe_unused]] static auto &syslogRoute   = syslogLogger.addAppender(&m_syslogBaseRoute);
+        [[maybe_unused]] static auto &consoleLogger = plog::init<CONSOLE_LOGGER>(plog::none, &consoleAppender);
     }
 };
 
@@ -474,7 +588,7 @@ private:
 template <>
 inline int DcgmLogging::setLoggerSeverity<BASE_LOGGER>(int severity)
 {
-    if (severity < plog::none || severity > plog::verbose)
+    if (!IsReady() || severity < plog::none || severity > plog::verbose)
     {
         // invalid severity
         return 1;
@@ -484,7 +598,7 @@ inline int DcgmLogging::setLoggerSeverity<BASE_LOGGER>(int severity)
     // FILE logger does not exist in modules which redirect their logs to
     // hostengine core. Check that we have initilized it (i.e. running in
     // hostengine) before changing FILE severity
-    if (getInstance().m_fileLoggerInitialized)
+    if (getInstance().m_fileLoggerInitialized.load(std::memory_order_acquire))
     {
         plog::get<FILE_LOGGER>()->setMaxSeverity((plog::Severity)severity);
     }

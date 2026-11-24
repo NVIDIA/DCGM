@@ -439,16 +439,22 @@ public:
 
     struct HealthState
     {
-        dcgmReturn_t getReturn      = DCGM_ST_OK;
-        dcgmReturn_t setReturn      = DCGM_ST_OK;
-        dcgmReturn_t checkReturn    = DCGM_ST_OK;
-        int getCallCount            = 0;
-        int setCallCount            = 0;
-        int checkCallCount          = 0;
-        dcgmHandle_t lastHandle     = 0;
-        dcgmGpuGrp_t lastGroupId    = 0;
-        dcgmHealthSystems_t systems = static_cast<dcgmHealthSystems_t>(0);
+        dcgmReturn_t getReturn          = DCGM_ST_OK;
+        dcgmReturn_t setReturn          = DCGM_ST_OK;
+        dcgmReturn_t strictSetReturn    = DCGM_ST_OK;
+        dcgmReturn_t getSupportedReturn = DCGM_ST_OK;
+        dcgmReturn_t checkReturn        = DCGM_ST_OK;
+        int getCallCount                = 0;
+        int setCallCount                = 0;
+        int strictSetCallCount          = 0;
+        int getSupportedCallCount       = 0;
+        int checkCallCount              = 0;
+        dcgmHandle_t lastHandle         = 0;
+        dcgmGpuGrp_t lastGroupId        = 0;
+        dcgmHealthSystems_t systems     = static_cast<dcgmHealthSystems_t>(0);
         dcgmHealthSetParams_v2 lastSetParams {};
+        dcgmHealthSetParams_v2 lastStrictSetParams {};
+        dcgmHealthSupportedSystems_t supportedSystems {};
         dcgmHealthResponse_t response {};
     };
 
@@ -753,6 +759,9 @@ public:
                                          unsigned int *count);
     dcgmReturn_t dcgmHealthGet(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t *systems);
     dcgmReturn_t dcgmHealthSet_v2(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 *params);
+    dcgmReturn_t dcgmHealthSet_v3(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 const *params);
+    dcgmReturn_t dcgmHealthGetSupportedSystems(dcgmHandle_t pDcgmHandle,
+                                               dcgmHealthSupportedSystems_t *supportedSystems);
     dcgmReturn_t dcgmHealthCheck(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_t *results);
     dcgmReturn_t dcgmWatchPidFields(dcgmHandle_t pDcgmHandle,
                                     dcgmGpuGrp_t groupId,

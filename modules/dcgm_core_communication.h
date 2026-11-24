@@ -73,6 +73,7 @@ typedef enum
     DcgmCoreReqIdChildProcessManagerReset         = 61, // ChildProcessManager::Reset()
     DcgmCoreReqIdGetCudaVersion                   = 62, // DcgmCoreProxy::GetCudaVersion()
     DcgmCoreReqIdGetGpuStatus                     = 63, // DcgmCacheManager::GetGpuStatus()
+    DcgmCoreReqIdGetConfiguredLogFilePath         = 64, // DcgmCoreProxy::GetConfiguredLogFilePath()
     DcgmCoreReqIdCount                                  // Always keep this one last
 } dcgmCoreReqCmd_t;
 
@@ -785,6 +786,14 @@ typedef struct
 #define dcgmCoreGetServiceAccount_version1 MAKE_DCGM_VERSION(dcgmCoreGetServiceAccount_v1, 1)
 #define dcgmCoreGetServiceAccount_version  dcgmCoreGetServiceAccount_version1
 typedef dcgmCoreGetServiceAccount_v1 dcgmCoreGetServiceAccount_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    char logFile[DCGM_PATH_LEN_V2];
+} dcgmCoreGetConfiguredLogFilePath_v1;
+
+#define dcgmCoreGetConfiguredLogFilePath_version1 MAKE_DCGM_VERSION(dcgmCoreGetConfiguredLogFilePath_v1, 1)
 
 typedef struct
 {

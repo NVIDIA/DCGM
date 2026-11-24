@@ -19,6 +19,7 @@
 #include "dcgm_structs_internal.h"
 
 #include <CpuHelpers.h>
+#include <DcgmDiagRuntimeInfo.hpp>
 #include <DcgmStringHelpers.h>
 #include <PluginStrings.h>
 #include <dcgm_errors.h>
@@ -176,6 +177,25 @@ dcgmReturn_t MergeEudResponse(DiagResponseType &dest, DiagResponseType const &sr
             if (src.info[i].testId != *srcEudIdxOpt)
             {
                 continue;
+            }
+
+            if (DcgmNs::IsDiagTestRuntimeInfo(src.info[i]))
+            {
+                auto destInfoIndices = std::span(dest.tests[destEudTestId].infoIndices,
+                                                 std::min<size_t>(dest.tests[destEudTestId].numInfo,
+                                                                  std::size(dest.tests[destEudTestId].infoIndices)));
+                auto const destRuntimeIt
+                    = std::ranges::find_if(destInfoIndices, [&dest, destEudTestId](unsigned int infoIndex) {
+                          return infoIndex < std::min<size_t>(dest.numInfo, std::size(dest.info))
+                                 && dest.info[infoIndex].testId == destEudTestId
+                                 && DcgmNs::IsDiagTestRuntimeInfo(dest.info[infoIndex]);
+                      });
+                if (destRuntimeIt != destInfoIndices.end())
+                {
+                    dest.info[*destRuntimeIt]        = src.info[i];
+                    dest.info[*destRuntimeIt].testId = destEudTestId;
+                    continue;
+                }
             }
 
             if (dest.numInfo >= std::size(dest.info)

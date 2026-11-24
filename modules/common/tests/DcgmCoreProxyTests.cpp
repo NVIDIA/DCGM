@@ -428,6 +428,7 @@ namespace
 {
 struct ExtendedCorePostState : CorePostState
 {
+    std::string configuredLogFile;
     dcgmReturn_t responseRet       = DCGM_ST_OK;
     unsigned int uintAnswer        = 0;
     DcgmEntityStatus_t gpuStatus   = DcgmEntityStatusOk;
@@ -681,6 +682,17 @@ dcgmReturn_t PostExtendedCore(dcgm_module_command_header_t *header, void *poster
             msg->response = state.migHierarchy;
             break;
         }
+        case DcgmCoreReqIdGetConfiguredLogFilePath:
+        {
+            auto *msg = reinterpret_cast<dcgmCoreGetConfiguredLogFilePath_v1 *>(header);
+            if (state.configuredLogFile.size() >= sizeof(msg->logFile))
+            {
+                return DCGM_ST_BADPARAM;
+            }
+            SafeCopyTo(msg->logFile, state.configuredLogFile.c_str());
+            break;
+        }
+
         case DcgmCoreReqGetServiceAccount:
         {
             auto *msg = reinterpret_cast<dcgmCoreGetServiceAccount_t *>(header);
@@ -1190,6 +1202,37 @@ SCENARIO("DcgmCoreProxy forwards sample and status query requests", "[core][comm
                 CHECK(cudaRet == DCGM_ST_CONNECTION_NOT_VALID);
                 CHECK(cudaVersion == unchangedCudaVersion);
             }
+        }
+    }
+}
+
+class ConfiguredLogPathTestFixture
+{
+protected:
+    ExtendedCorePostState state;
+    dcgmCoreCallbacks_t callbacks = MakeCallbacks(state, PostExtendedCore);
+    DcgmCoreProxy proxy { callbacks };
+};
+
+SCENARIO_METHOD(ConfiguredLogPathTestFixture, "DcgmCoreProxy: configured log path query carries paths up to 255 bytes")
+{
+    for (size_t const length : { 1, 127, 128, 150, 254, 255, 256, 257 })
+    {
+        CAPTURE(length);
+        state.configuredLogFile = "/" + std::string(length - 1, 'a');
+        std::string result      = "unchanged";
+
+        auto const status = proxy.GetConfiguredLogFilePath(result);
+
+        if (length < 256)
+        {
+            CHECK(status == DCGM_ST_OK);
+            CHECK(result == state.configuredLogFile);
+        }
+        else
+        {
+            CHECK(status == DCGM_ST_BADPARAM);
+            CHECK(result == "unchanged");
         }
     }
 }

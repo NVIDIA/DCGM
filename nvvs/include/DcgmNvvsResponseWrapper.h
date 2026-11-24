@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #include <any>
 #include <cassert>
+#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
@@ -61,6 +62,18 @@ public:
                                std::string_view testName,
                                dcgmDiagEntityResults_v2 const &entityResults,
                                std::optional<std::any> const &pluginSpecificData);
+    /**
+     * Append elapsed runtime to an existing test's informational messages.
+     *
+     * The runtime is appended only when the most recently added test has the requested name.
+     *
+     * @param[in] testName Name expected for the most recently added test.
+     * @param[in] duration Elapsed test duration; negative values are formatted as zero.
+     * @return @c DCGM_ST_OK when appended; @c DCGM_ST_BADPARAM when the latest test is absent or has another name;
+     *         @c DCGM_ST_INSUFFICIENT_SIZE when info capacity is full; @c DCGM_ST_NOT_SUPPORTED for response versions
+     *         7 through 10; or @c DCGM_ST_VER_MISMATCH when the response version is invalid.
+     */
+    [[nodiscard]] dcgmReturn_t AddTestRuntime(std::string_view testName, std::chrono::milliseconds duration);
     dcgmReturn_t SetTestSkipped(std::string_view pluginName, std::string_view testName);
     void SetSystemError(std::string const &msg, unsigned int code);
     bool TestSlotsFull() const;

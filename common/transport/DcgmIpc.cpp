@@ -205,7 +205,7 @@ dcgmReturn_t DcgmIpc::Init(InitParams initParams,
     (void)evthread_use_pthreads();
 
     /* Enable libevent logging if we're at debug or higher */
-    IF_PLOG_(BASE_LOGGER, plog::verbose)
+    IF_DCGM_LOG_VERBOSE
     {
         event_set_log_callback(DcgmIpcEventLogCB);
         event_enable_debug_logging(EVENT_DBG_ALL);

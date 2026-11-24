@@ -18,6 +18,18 @@
 from test_utils import trampoline
 
 
+def test_dcgm_health_supported_systems():
+    trampoline()
+
+
+def test_dcgm_health_set_v3_rejects_unsupported_systems():
+    trampoline()
+
+
+def test_dcgm_health_set_v3_rejects_invalid_group():
+    trampoline()
+
+
 def test_dcgmi_health_check_nvlink_arch_specific_fields():
     trampoline()
 

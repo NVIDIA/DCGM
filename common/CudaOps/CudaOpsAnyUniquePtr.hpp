@@ -26,6 +26,7 @@
 #error "Could not find CudaOps header"
 #endif
 #include "CudaOpsAnyPtr.hpp"
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -1373,7 +1374,6 @@ private:
         CUresult (*cuDeviceGet0)(void  *, CUdevice *, int);
         CUresult (*cuDeviceGetUuid_v20)(void  *, CUuuid *, CUdevice);
         CUresult (*cuDriverGetVersion0)(void  *, int *);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*CudaOpsMoveConstruct)(void *, void *);
         void (*CudaOpsMoveAssign)(void *, void *);

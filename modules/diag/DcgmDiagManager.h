@@ -17,6 +17,7 @@
 
 #include <set>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 #include "DcgmDiagCallers.h"
@@ -103,14 +104,36 @@ public:
                                           dcgmPolicyAction_t action,
                                           dcgm_connection_id_t connectionId);
 
-    /* perform the specified validation */
-    dcgmReturn_t RunDiag(dcgmRunDiag_v10 *drd, DcgmDiagResponseWrapper &response, dcgm_connection_id_t connectionId);
+    /**
+     * Perform the specified validation.
+     * @param[in,out] drd Diagnostic request; NVVS and EUD handling may update it.
+     * @param[in,out] response Diagnostic results.
+     * @param[in] connectionId Calling connection.
+     * @param[in] debugLogPath Diagnostic log path. If empty, use drd->debugLogFile; if both are empty, omit the log.
+     * @return DCGM_ST_OK on success; DCGM_ST_GROUP_IS_EMPTY, DCGM_ST_GROUP_INCOMPATIBLE, DCGM_ST_BADPARAM,
+     *         DCGM_ST_CALLER_ALREADY_STOPPED, or an error returned by group queries, running-state checks, NVVS, or
+     * EUD.
+     */
+    dcgmReturn_t RunDiag(dcgmRunDiag_v10 *drd,
+                         DcgmDiagResponseWrapper &response,
+                         dcgm_connection_id_t connectionId,
+                         std::string_view debugLogPath = {});
 
-    /* possibly run the DCGM diagnostic and perform an action */
+    /**
+     * Run the diagnostic and requested policy action.
+     * @param[in,out] drd Diagnostic request; group resolution and diagnostic handling may update it.
+     * @param[in] action Policy action to perform.
+     * @param[in,out] response Diagnostic results.
+     * @param[in] connectionId Calling connection.
+     * @param[in] debugLogPath Diagnostic log path. If empty, use drd->debugLogFile; if both are empty, omit the log.
+     * @return DCGM_ST_OK on success; DCGM_ST_CALLER_ALREADY_STOPPED, or an error returned by resource initialization,
+     *         group queries, running-state checks, policy action, or RunDiag.
+     */
     dcgmReturn_t RunDiagAndAction(dcgmRunDiag_v10 *drd,
                                   dcgmPolicyAction_t action,
                                   DcgmDiagResponseWrapper &response,
-                                  dcgm_connection_id_t connectionId);
+                                  dcgm_connection_id_t connectionId,
+                                  std::string_view debugLogPath = {});
 
     /*
      * Stops a running diagnostic if any. Does not stop diagnostics that are not launched by nv-hostengine .
@@ -147,7 +170,8 @@ public:
                                     dcgm_connection_id_t connectionId,
                                     std::string const &fakeGpuIds               = "",
                                     std::string const &entityIds                = "",
-                                    ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes);
+                                    ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes,
+                                    std::string_view debugLogPath               = {});
 
     /* Should not be made public... for testing purposes only */
     dcgmReturn_t PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr);
@@ -177,7 +201,8 @@ public:
                                    ConfigFileGuard &configFileGuard,
                                    std::string const &fakeGpuIds               = "",
                                    std::string const &entityIds                = "",
-                                   ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes);
+                                   ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes,
+                                   std::string_view debugLogPath               = {});
 
     /* perform external command - switched to public for testing*/
     dcgmReturn_t PerformExternalCommand(std::vector<std::string> &args,
@@ -280,7 +305,8 @@ protected:
     void AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
                                      dcgmRunDiag_v10 *drd,
                                      std::string const &fakeGpuIds,
-                                     std::string const &entityIds) const;
+                                     std::string const &entityIds,
+                                     std::string_view debugLogPath = {}) const;
 
     /*
      * Kill an active NVVS process within the specified number of retries.
@@ -328,7 +354,8 @@ protected:
                                                                std::unordered_set<std::string_view> const &testNames,
                                                                dcgmReturn_t lastRunRet,
                                                                DcgmDiagResponseWrapper &response,
-                                                               dcgm_connection_id_t connectionId);
+                                                               dcgm_connection_id_t connectionId,
+                                                               std::string_view debugLogPath);
 
     /**
      * Update the diag status field in the Cache Manager.

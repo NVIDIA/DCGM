@@ -762,6 +762,13 @@ DCGM_ENTRY_POINT(dcgmHealthSet_v2,
                  pDcgmHandle,
                  params)
 
+DCGM_ENTRY_POINT(dcgmHealthSet_v3,
+                 tsapiEngineHealthSet_v3,
+                 (dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 const *params),
+                 "({} {})",
+                 pDcgmHandle,
+                 params)
+
 DCGM_ENTRY_POINT(dcgmHealthGet,
                  tsapiEngineHealthGet,
                  (dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t *systems),
@@ -769,6 +776,13 @@ DCGM_ENTRY_POINT(dcgmHealthGet,
                  pDcgmHandle,
                  groupId,
                  systems)
+
+DCGM_ENTRY_POINT(dcgmHealthGetSupportedSystems,
+                 tsapiEngineHealthGetSupportedSystems,
+                 (dcgmHandle_t pDcgmHandle, dcgmHealthSupportedSystems_t *supportedSystems),
+                 "({} {})",
+                 pDcgmHandle,
+                 supportedSystems)
 
 DCGM_ENTRY_POINT(dcgmHealthCheck,
                  tsapiEngineHealthCheck,

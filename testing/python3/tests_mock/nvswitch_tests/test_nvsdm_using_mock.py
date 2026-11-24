@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,6 +17,10 @@ from test_utils import trampoline
 
 
 def test_nvsdm_list_switches():
+    trampoline()
+
+
+def test_nvsdm_large_fabric_link_enumeration():
     trampoline()
 
 

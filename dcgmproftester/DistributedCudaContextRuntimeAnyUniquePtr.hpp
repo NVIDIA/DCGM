@@ -26,6 +26,7 @@
 #error "Could not find DistributedCudaContextRuntime header"
 #endif
 #include "DistributedCudaContextRuntimeAnyPtr.hpp"
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -35,11 +36,11 @@
 // clang-format off
 
 // GCOVR_EXCL_START
-
 namespace DcgmNs
 {
 namespace ProfTester
 {
+
 class DistributedCudaContextRuntimeAnyUniquePtr
 {
 public:
@@ -282,7 +283,6 @@ private:
         pid_t (*Fork0)(void  *);
         pid_t (*WaitPid0)(void  *, pid_t, int *, int);
         int (*Kill0)(void  *, pid_t, int);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*DistributedCudaContextRuntimeMoveConstruct)(void *, void *);
         void (*DistributedCudaContextRuntimeMoveAssign)(void *, void *);
@@ -296,9 +296,9 @@ private:
     VTable const *m_pVTable;
     alignas(StorageAlign) std::byte m_storage[StorageSize];
 };
-
 } // namespace ProfTester
 } // namespace DcgmNs
+
 // GCOVR_EXCL_STOP
 
 // clang-format on

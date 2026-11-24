@@ -21,6 +21,8 @@
 #include <MockDcgmOps.h>
 #include <Topo.h>
 
+#include <json/json.h>
+
 #include <array>
 #include <string>
 
@@ -87,6 +89,15 @@ public:
     Topo topo;
     dcgmHandle_t handle = static_cast<dcgmHandle_t>(0x98);
 };
+
+Json::Value ParseJsonOutput(std::string const &jsonText)
+{
+    Json::Value root;
+    Json::Reader reader;
+    INFO(jsonText);
+    REQUIRE(reader.parse(jsonText, root));
+    return root;
+}
 } //namespace
 
 SCENARIO("Topo: formats CPU affinity helper output")
@@ -265,6 +276,64 @@ SCENARIO_METHOD(TopoTestFixture, "Topo: displays topology API results")
             CHECK(capture.str().find("not supported") != std::string::npos);
         }
 
+        SECTION("DisplayGPUTopology returns DCGM errors")
+        {
+            mockDcgmOps.m_topologyState.deviceReturn = DCGM_ST_BADPARAM;
+            CoutCapture capture;
+
+            CHECK(topo.DisplayGPUTopology(handle, 3, false) == DCGM_ST_BADPARAM);
+            CHECK(mockDcgmOps.m_topologyState.deviceCallCount == 1);
+            CHECK(mockDcgmOps.m_topologyState.lastGpuId == 3);
+            CHECK(capture.str().find("unable to get topology for GPU 3") != std::string::npos);
+        }
+
+        SECTION("DisplayGPUTopology renders JSON output")
+        {
+            constexpr unsigned int c_requestedGpuId = 0;
+            constexpr unsigned int c_peerGpuId      = 1;
+            auto const toGpuKey                     = "To GPU " + std::to_string(c_peerGpuId);
+
+            CoutCapture capture;
+
+            CHECK(topo.DisplayGPUTopology(handle, c_requestedGpuId, true) == DCGM_ST_OK);
+            CHECK(mockDcgmOps.m_topologyState.deviceCallCount == 1);
+            CHECK(mockDcgmOps.m_topologyState.lastGpuId == c_requestedGpuId);
+
+            auto const root = ParseJsonOutput(capture.str());
+            REQUIRE(root.isMember("header"));
+            REQUIRE(root["header"].isArray());
+            REQUIRE(root["header"].size() == 2);
+            CHECK(root["header"][0].asString() == "Topology Information");
+            CHECK(root["header"][1].asString() == "GPU ID: " + std::to_string(c_requestedGpuId));
+
+            REQUIRE(root.isMember("body"));
+            auto const &body = root["body"];
+            REQUIRE(body.isMember("CPU Core Affinity"));
+            CHECK(body["CPU Core Affinity"]["value"].asString() == "0 - 3");
+
+            REQUIRE(body.isMember(toGpuKey));
+            CHECK(body[toGpuKey]["value"].asString() == "Connected via a CPU-level link");
+            REQUIRE(body[toGpuKey].isMember("overflow"));
+            REQUIRE(body[toGpuKey]["overflow"].isArray());
+            REQUIRE(body[toGpuKey]["overflow"].size() == 1);
+            CHECK(body[toGpuKey]["overflow"][0].asString().find("two NVLINKs") != std::string::npos);
+        }
+
+        SECTION("DisplayGPUTopology wraps long CPU affinity strings")
+        {
+            for (unsigned long &mask : (*mockDcgmOps.m_topologyState.deviceTopology).cpuAffinityMask)
+            {
+                mask = 0x5555555555555555UL;
+            }
+            CoutCapture capture;
+
+            CHECK(topo.DisplayGPUTopology(handle, 0, false) == DCGM_ST_OK);
+            auto output = capture.str();
+            CHECK(output.find("CPU Core Affinity") != std::string::npos);
+            CHECK(output.find("0, 2, 4") != std::string::npos);
+            CHECK(output.find("126") != std::string::npos);
+        }
+
         SECTION("DisplayGroupTopology renders group topology")
         {
             CoutCapture capture;
@@ -286,6 +355,28 @@ SCENARIO_METHOD(TopoTestFixture, "Topo: displays topology API results")
             CHECK(topo.DisplayGroupTopology(handle, 6, false) == DCGM_ST_GENERIC_ERROR);
             CHECK(mockDcgmOps.m_topologyState.groupCallCount == 0);
             CHECK(capture.str().find("The Group is not found") != std::string::npos);
+        }
+
+        SECTION("DisplayGroupTopology returns unsupported from DCGM")
+        {
+            mockDcgmOps.m_topologyState.groupReturn = DCGM_ST_NOT_SUPPORTED;
+            CoutCapture capture;
+
+            CHECK(topo.DisplayGroupTopology(handle, 6, false) == DCGM_ST_NOT_SUPPORTED);
+            CHECK(mockDcgmOps.m_groupInfoState.callCount == 1);
+            CHECK(mockDcgmOps.m_topologyState.groupCallCount == 1);
+            CHECK(capture.str().find("not supported") != std::string::npos);
+        }
+
+        SECTION("DisplayGroupTopology returns DCGM errors")
+        {
+            mockDcgmOps.m_topologyState.groupReturn = DCGM_ST_BADPARAM;
+            CoutCapture capture;
+
+            CHECK(topo.DisplayGroupTopology(handle, 6, true) == DCGM_ST_BADPARAM);
+            CHECK(mockDcgmOps.m_topologyState.groupCallCount == 1);
+            CHECK(mockDcgmOps.m_topologyState.lastGroupId == 6);
+            CHECK(capture.str().find("unable to get topology for Group") != std::string::npos);
         }
     }
 }

@@ -26,6 +26,7 @@
 #error "Could not find CudaWorkerThreadFactory header"
 #endif
 #include "CudaWorkerThreadFactoryAnyPtr.hpp"
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -233,7 +234,6 @@ private:
     {
         // Declare type's functions
         CudaWorkerThreadAnyUniquePtr (*Create0)(void const *);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*CudaWorkerThreadFactoryMoveConstruct)(void *, void *);
         void (*CudaWorkerThreadFactoryMoveAssign)(void *, void *);

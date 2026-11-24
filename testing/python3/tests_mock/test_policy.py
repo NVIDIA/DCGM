@@ -113,6 +113,10 @@ def test_dcgm_field_policy_import():
     trampoline()
 
 
+def test_dcgmi_field_policy_import_rejects_invalid_yaml():
+    trampoline()
+
+
 @test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_nvml_injected_gpus()

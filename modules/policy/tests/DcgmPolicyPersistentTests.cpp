@@ -247,7 +247,7 @@ TEST_CASE("DcgmPolicyPersistence")
         REQUIRE(policies[0].GetThreshold() == Catch::Approx(300.123456789));
     }
 
-    SECTION("Load policies - malformed policy node does not skip later valid nodes")
+    SECTION("Load policies - malformed policy node rejects file with invalid entries")
     {
         TestPolicyPersistence fixture;
 
@@ -273,11 +273,8 @@ TEST_CASE("DcgmPolicyPersistence")
         file.close();
 
         DcgmPolicyPersistence persistence(fixture.m_registry, fixture.m_testFile);
-        REQUIRE(persistence.LoadPolicies() == DCGM_ST_OK);
-
-        auto policies = GetAllPoliciesOrFail(fixture.m_registry);
-        REQUIRE(policies.size() == 1);
-        REQUIRE(policies[0].GetFieldId() == 155);
+        REQUIRE(persistence.LoadPolicies() == DCGM_ST_BADPARAM);
+        REQUIRE(GetAllPoliciesOrFail(fixture.m_registry).empty());
     }
 
     SECTION("Load policies - missing entities key means all GPUs")
@@ -556,16 +553,113 @@ TEST_CASE("DcgmPolicyPersistence")
         REQUIRE(GetAllPoliciesOrFail(fixture.m_registry).empty());
     }
 
-    SECTION("Empty policies save and load")
+    SECTION("Mixed valid and invalid entries rejects file")
+    {
+        TestPolicyPersistence fixture;
+
+        REQUIRE(fixture.m_registry.AddPolicy(DcgmPolicy(999,
+                                                        "Existing Policy",
+                                                        0.0,
+                                                        1.0,
+                                                        DCGM_POLICY_OP_GT,
+                                                        std::vector<dcgmGroupEntityPair_t> {},
+                                                        DCGM_POLICY_CHANNEL_CONSOLE,
+                                                        DCGM_POLICY_STATE_ENABLED,
+                                                        60))
+                == DCGM_ST_OK);
+
+        std::ofstream file(fixture.m_testFile);
+        file << R"(schema_version: 1
+policies:
+  - fieldId: 150
+    name: "Valid Policy"
+    operator: "GREATER_THAN"
+    threshold: 85.0
+    entities: []
+    channels: ["CONSOLE"]
+    status: "ENABLED"
+    rateLimitSeconds: 60
+  - fieldId: 155
+    name: "Invalid Policy"
+    operator: "INVALID_OPERATOR"
+    threshold: 90.0
+    entities: []
+    channels: ["CONSOLE"]
+    status: "ENABLED"
+    rateLimitSeconds: 60
+)";
+        file.close();
+
+        DcgmPolicyPersistence persistence(fixture.m_registry, fixture.m_testFile);
+        REQUIRE(persistence.LoadPolicies() == DCGM_ST_BADPARAM);
+        REQUIRE(fixture.m_registry.HasPolicy(999));
+        REQUIRE(GetAllPoliciesOrFail(fixture.m_registry).size() == 1);
+    }
+
+    SECTION("Load policies rejects missing policies key")
+    {
+        TestPolicyPersistence fixture;
+
+        std::ofstream file(fixture.m_testFile);
+        file << R"(schema_version: 1
+)";
+        file.close();
+
+        DcgmPolicyPersistence persistence(fixture.m_registry, fixture.m_testFile);
+        REQUIRE(persistence.LoadPolicies() == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Load policies rejects non-sequence policies key")
+    {
+        TestPolicyPersistence fixture;
+
+        std::ofstream file(fixture.m_testFile);
+        file << R"(schema_version: 1
+policies: {}
+)";
+        file.close();
+
+        DcgmPolicyPersistence persistence(fixture.m_registry, fixture.m_testFile);
+        REQUIRE(persistence.LoadPolicies() == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Load policies accepts empty policies sequence")
+    {
+        TestPolicyPersistence fixture;
+
+        std::ofstream file(fixture.m_testFile);
+        file << R"(schema_version: 1
+policies: []
+)";
+        file.close();
+
+        DcgmPolicyPersistence persistence(fixture.m_registry, fixture.m_testFile);
+        REQUIRE(persistence.LoadPolicies() == DCGM_ST_OK);
+        REQUIRE(GetAllPoliciesOrFail(fixture.m_registry).empty());
+    }
+
+    SECTION("Load policies rejects empty policies sequence for import validation")
+    {
+        TestPolicyPersistence fixture;
+
+        std::ofstream file(fixture.m_testFile);
+        file << R"(schema_version: 1
+policies: []
+)";
+        file.close();
+
+        DcgmPolicyPersistence persistence(fixture.m_registry, fixture.m_testFile);
+        REQUIRE(persistence.LoadPolicies(true) == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Empty policies save round-trips empty sequence")
     {
         TestPolicyPersistence fixture;
 
         DcgmPolicyPersistence persistence(fixture.m_registry, fixture.m_testFile);
 
-        // Save empty registry
         REQUIRE(persistence.SavePolicies() == DCGM_ST_OK);
-
-        // Load back should work but registry stays empty
+        REQUIRE(std::filesystem::exists(fixture.m_testFile));
         REQUIRE(persistence.LoadPolicies() == DCGM_ST_OK);
         REQUIRE(GetAllPoliciesOrFail(fixture.m_registry).empty());
     }

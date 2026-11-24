@@ -1604,6 +1604,42 @@ TEST_CASE("DcgmHostEngineHandler: GetAllEntitiesOfEntityGroup DCGM_FE_LINK")
         REQUIRE(entities[1].entityGroupId == DCGM_FE_LINK);
         REQUIRE(entities[1].entityId == 42u);
     }
+
+    SECTION("The maximum number of NvSwitch links is returned")
+    {
+        constexpr unsigned int linkCount = DCGM_NVLINK_MAX_LINKS;
+        handler.m_moduleCommandHooks[{ DcgmModuleIdNvSwitch, DCGM_NVSWITCH_SR_GET_LINK_IDS }]
+            = [linkCount](dcgm_module_command_header_t *hdr) -> dcgmReturn_t {
+            auto *msg      = reinterpret_cast<dcgm_nvswitch_msg_get_links_t *>(hdr);
+            msg->linkCount = linkCount;
+            for (unsigned int i = 0; i < linkCount; ++i)
+            {
+                msg->linkIds[i] = 2000u + i;
+            }
+            return DCGM_ST_OK;
+        };
+
+        std::vector<dcgmGroupEntityPair_t> entities;
+        REQUIRE(handler.GetAllEntitiesOfEntityGroup(0, DCGM_FE_LINK, entities) == DCGM_ST_OK);
+        REQUIRE(entities.size() == linkCount);
+        REQUIRE(entities.front().entityGroupId == DCGM_FE_LINK);
+        REQUIRE(entities.front().entityId == 2000u);
+        REQUIRE(entities.back().entityId == 2000u + linkCount - 1);
+    }
+
+    SECTION("More than the maximum number of NvSwitch links is rejected")
+    {
+        handler.m_moduleCommandHooks[{ DcgmModuleIdNvSwitch, DCGM_NVSWITCH_SR_GET_LINK_IDS }]
+            = [](dcgm_module_command_header_t *hdr) -> dcgmReturn_t {
+            auto *msg      = reinterpret_cast<dcgm_nvswitch_msg_get_links_t *>(hdr);
+            msg->linkCount = DCGM_NVLINK_MAX_LINKS + 1;
+            return DCGM_ST_OK;
+        };
+
+        std::vector<dcgmGroupEntityPair_t> entities;
+        CHECK(handler.GetAllEntitiesOfEntityGroup(0, DCGM_FE_LINK, entities) == DCGM_ST_BADPARAM);
+        CHECK(entities.empty());
+    }
 }
 
 TEST_CASE("DcgmHostEngineHandler: GetAllEntitiesOfEntityGroup DCGM_FE_CONNECTX")
@@ -3669,35 +3705,21 @@ TEST_CASE("DcgmHostEngineHandler: ProcessModuleCommandMsg")
         REQUIRE(handler.m_ipcSends.empty());
     }
 
-    SECTION("Truncated exact-version diag DIAG_SR_RUN variants: bad parameter, no dispatch")
+    SECTION("Truncated current-version diag DIAG_SR_RUN: bad parameter, no dispatch")
     {
-        struct RunVersion
-        {
-            unsigned int version;
-            std::size_t size;
+        TestDcgmHostEngineHandler handler;
+        bool hookCalled                                                      = false;
+        handler.m_moduleCommandHooks[{ DcgmModuleIdDiag, DCGM_DIAG_SR_RUN }] = [&](dcgm_module_command_header_t *) {
+            hookCalled = true;
+            return DCGM_ST_OK;
         };
 
-        RunVersion const versions[] = {
-            { dcgm_diag_msg_run_version12, sizeof(dcgm_diag_msg_run_v12) },
-            { dcgm_diag_msg_run_version11, sizeof(dcgm_diag_msg_run_v11) },
-        };
+        auto msg = MakeModuleCmdMsgWithLength(
+            DcgmModuleIdDiag, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version13, sizeof(dcgm_diag_msg_run_v12) - 1);
 
-        for (auto const &version : versions)
-        {
-            TestDcgmHostEngineHandler handler;
-            bool hookCalled                                                      = false;
-            handler.m_moduleCommandHooks[{ DcgmModuleIdDiag, DCGM_DIAG_SR_RUN }] = [&](dcgm_module_command_header_t *) {
-                hookCalled = true;
-                return DCGM_ST_OK;
-            };
-
-            auto msg
-                = MakeModuleCmdMsgWithLength(DcgmModuleIdDiag, DCGM_DIAG_SR_RUN, version.version, version.size - 1);
-
-            REQUIRE(handler.ProcessModuleCommandMsg(1, std::move(msg)) == DCGM_ST_BADPARAM);
-            REQUIRE_FALSE(hookCalled);
-            REQUIRE(handler.m_ipcSends.empty());
-        }
+        CHECK(handler.ProcessModuleCommandMsg(1, std::move(msg)) == DCGM_ST_BADPARAM);
+        CHECK_FALSE(hookCalled);
+        CHECK(handler.m_ipcSends.empty());
     }
 
     SECTION("Full-sized exact-version core GET_GPU_STATUS dispatches")

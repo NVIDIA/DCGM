@@ -150,6 +150,24 @@ def _run_dcgmi_policy_expect_failure(args, expectedText):
     assert expectedText in "\n".join(stdoutLines + stderrLines)
 
 
+def _field_policy_import_dir_or_skip():
+    importDir = "/var/log/nvidia-dcgm"
+    if not os.path.isdir(importDir) or not os.access(importDir, os.W_OK):
+        test_utils.skip_test(
+            "This test requires a writable /var/log/nvidia-dcgm")
+    return importDir
+
+
+def _write_field_policy_import_yaml(importDir, yamlContents):
+    importPath = os.path.join(
+        importDir,
+        "dcgmi_field_policy_import_invalid_%s.yaml" % uuid.uuid4().hex,
+    )
+    with open(importPath, "w") as yamlFile:
+        yamlFile.write(yamlContents)
+    return importPath
+
+
 def _dcgmi_policy_create_args(fieldId, name, threshold, entities, operator=">", channels="console", rateLimitSec=1):
     return [
         "--create", "--field", str(
@@ -1714,6 +1732,118 @@ policies:
     finally:
         if os.path.exists(importPath):
             os.remove(importPath)
+
+
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(40)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgmi_field_policy_import_rejects_invalid_yaml(handle, gpuIds):
+    """
+    Verifies dcgmi import failures leave existing field policies unchanged.
+    """
+    importDir = _field_policy_import_dir_or_skip()
+    policyName = "dcgmi_import_guard_policy"
+    createOutput = _create_dcgmi_policy(
+        dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
+        policyName,
+        70,
+        gpuIds[0],
+        rateLimitSec=2)
+    policyId = createOutput["policyId"]
+
+    invalidCases = [
+        ("schema_version: 1\n", "missing policies key"),
+        ("schema_version: 1\npolicies: {}\n", "non-sequence policies"),
+        ("schema_version: 1\npolicies: []\n", "empty policies sequence"),
+    ]
+
+    validPolicyEntry = """  - fieldId: %d
+    name: "replacement_policy"
+    operator: "GREATER_THAN"
+    threshold: 90.0
+    entities:
+      - { entityGroupId: %d, entityId: %d }
+    channels: ["CONSOLE"]
+    status: "ENABLED"
+    rateLimitSeconds: 60
+""" % (dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
+       dcgm_fields.DCGM_FE_GPU,
+       gpuIds[0])
+
+    mixedValidInvalidYaml = """schema_version: 1
+policies:
+%s  - fieldId: %d
+    name: "bad_power_policy"
+    operator: "INVALID_OPERATOR"
+    threshold: 300.0
+    entities: []
+    channels: ["CONSOLE"]
+    status: "ENABLED"
+    rateLimitSeconds: 60
+""" % (validPolicyEntry, dcgm_fields.DCGM_FI_DEV_POWER_USAGE)
+
+    createdImportPaths = []
+    try:
+        for yamlContents, _caseLabel in invalidCases:
+            importPath = _write_field_policy_import_yaml(
+                importDir, yamlContents)
+            createdImportPaths.append(importPath)
+            retValue, stdoutLines, stderrLines = test_utils.run_dcgmi_command(
+                ["policy", "--import", importPath], validate=True)
+            output = "\n".join(stdoutLines + stderrLines)
+            assert retValue != c_ubyte(dcgm_structs.DCGM_ST_OK).value, \
+                "dcgmi policy import unexpectedly succeeded: stdout=%s stderr=%s" % (
+                    stdoutLines, stderrLines)
+            assert "Cannot import field policies" in output
+            assert "Check nv-hostengine logs for policy parse details" in output
+
+            listOutput = _run_dcgmi_policy_json(["--list"])
+            matchingPolicies = [
+                policy for policy in listOutput
+                if policy["policyId"] == policyId
+            ]
+            assert len(matchingPolicies) == 1, \
+                "existing policy was removed by invalid import"
+            assert matchingPolicies[0]["name"] == policyName
+
+        importPath = _write_field_policy_import_yaml(
+            importDir, mixedValidInvalidYaml)
+        createdImportPaths.append(importPath)
+        retValue, stdoutLines, stderrLines = test_utils.run_dcgmi_command(
+            ["policy", "--import", importPath], validate=True)
+        output = "\n".join(stdoutLines + stderrLines)
+        assert retValue != c_ubyte(dcgm_structs.DCGM_ST_OK).value, \
+            "dcgmi policy import unexpectedly succeeded: stdout=%s stderr=%s" % (
+                stdoutLines, stderrLines)
+        assert "Cannot import field policies" in output
+        assert "Check nv-hostengine logs for policy parse details" in output
+
+        listOutput = _run_dcgmi_policy_json(["--list"])
+        matchingPolicies = [
+            policy for policy in listOutput
+            if policy["policyId"] == policyId
+        ]
+        assert len(matchingPolicies) == 1, \
+            "existing policy was removed by invalid import"
+        assert matchingPolicies[0]["name"] == policyName
+
+        replacementPolicies = [
+            policy for policy in listOutput
+            if policy["name"] == "replacement_policy"
+        ]
+        assert replacementPolicies == [], \
+            "invalid import must not partially replace registry"
+    finally:
+        for importPath in createdImportPaths:
+            if os.path.exists(importPath):
+                os.remove(importPath)
+        _run_dcgmi_policy([
+            "--delete",
+            "--field", str(dcgm_fields.DCGM_FI_DEV_GPU_TEMP),
+            "--policy-id", str(policyId),
+        ])
 
 
 # NO HARDWARE

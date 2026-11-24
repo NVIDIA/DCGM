@@ -2086,6 +2086,101 @@ TEST_CASE_METHOD(CommandLineParserTestFixture, "CommandLineParser: ProcessDiagCo
     }
 }
 
+SCENARIO_METHOD(CommandLineParserTestFixture, "CommandLineParser: diag accepts the long log filename option")
+{
+    ScopedCommandExecutor executeHook;
+
+    WHEN("a diagnostic is requested with a log filename")
+    {
+        std::vector<char const *> const argv { "dcgmi",          "diag",     "--run",        "1",
+                                               "--log-filename", "nvvs.log", "--debugLevel", "DEBUG" };
+
+        THEN("the long option is accepted")
+        {
+            RequireParserOkAndExecuted(executeHook, TestCommandLineParser::ProcessDiagCommandLine, argv);
+        }
+    }
+    WHEN("a diagnostic is requested with console logging")
+    {
+        std::vector<char const *> const argv { "dcgmi", "diag", "--run", "1", "--log-filename", "-" };
+        THEN("the console sentinel is accepted")
+        {
+            RequireParserOkAndExecuted(executeHook, TestCommandLineParser::ProcessDiagCommandLine, argv);
+        }
+    }
+}
+
+SCENARIO_METHOD(CommandLineParserTestFixture, "CommandLineParser: diag rejects paths as log filenames")
+{
+    std::vector<std::string> const invalidNames {
+        "/tmp/escape.log", "../escape.log", "sub/escape.log", "..\\escape.log", ".", "..", "a..b", "", "-bad.log", "--",
+        "-/file.log",      "./-",           "/tmp/-"
+    };
+
+    for (auto const &name : invalidNames)
+    {
+        DYNAMIC_SECTION("log filename '" << name << "'")
+        {
+            std::vector<char const *> const argv { "dcgmi", "diag", "--run", "1", "--log-filename", name.c_str() };
+            RequireParserThrows(TestCommandLineParser::ProcessDiagCommandLine, argv);
+        }
+    }
+}
+
+SCENARIO_METHOD(CommandLineParserTestFixture, "CommandLineParser: diag explains the removed debug log path option")
+{
+    ScopedCommandExecutor executeHook;
+    std::vector<std::vector<char const *>> const cases {
+        { "dcgmi", "diag", "--run", "1", "--debugLogFile", "/tmp/escape.log" },
+        { "dcgmi", "diag", "--run", "1", "--debugLogFile", "../escape.log" },
+        { "dcgmi", "diag", "--run", "1", "--debugLogFile" },
+        { "dcgmi", "diag", "--run", "1", "--debugLogFile=/tmp/escape.log" }
+    };
+    for (auto const &argv : cases)
+    {
+        DYNAMIC_SECTION("retired option ending in " << argv.back())
+        {
+            try
+            {
+                TestCommandLineParser::ProcessDiagCommandLine(static_cast<int>(argv.size()), argv.data(), dcgmOps);
+                FAIL("Expected the old diagnostic log path option to be rejected");
+            }
+            catch (TCLAP::CmdLineParseException const &exception)
+            {
+                CHECK(exception.error()
+                      == "--debugLogFile is no longer supported; use --log-filename with a filename only");
+            }
+            CHECK(executeHook.CallCount() == 0);
+        }
+    }
+}
+
+SCENARIO_METHOD(CommandLineParserTestFixture, "CommandLineParser: diag accepts retired option text as a value")
+{
+    ScopedCommandExecutor executeHook;
+
+    for (auto const *value : { "--debugLogFile", "--debugLogFile=literal" })
+    {
+        DYNAMIC_SECTION(value)
+        {
+            std::vector<char const *> const argv { "dcgmi", "diag", "--run", "1", "--statspath", value };
+            RequireParserOkAndExecuted(executeHook, TestCommandLineParser::ProcessDiagCommandLine, argv);
+        }
+    }
+}
+
+SCENARIO_METHOD(CommandLineParserTestFixture, "CommandLineParser: diag help omits the removed log path option")
+{
+    std::vector<char const *> const argv { "dcgmi", "diag", "--help" };
+    CoutCapture capture;
+
+    CHECK_THROWS_AS(TestCommandLineParser::ProcessDiagCommandLine(static_cast<int>(argv.size()), argv.data(), dcgmOps),
+                    TCLAP::ExitException);
+    std::string const output = capture.str();
+    CHECK(output.find("--log-filename") != std::string::npos);
+    CHECK(output.find("--debugLogFile") == std::string::npos);
+}
+
 TEST_CASE_METHOD(CommandLineParserTestFixture, "CommandLineParser: ProcessDiagCommandLine server-validated arguments")
 {
     struct ServerArgsTestCase

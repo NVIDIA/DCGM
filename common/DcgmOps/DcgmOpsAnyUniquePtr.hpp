@@ -26,6 +26,7 @@
 #error "Could not find DcgmOps header"
 #endif
 #include "DcgmOpsAnyPtr.hpp"
+
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -35,9 +36,9 @@
 // clang-format off
 
 // GCOVR_EXCL_START
-
 namespace DcgmNs
 {
+
 class DcgmOpsAnyUniquePtr
 {
 public:
@@ -361,6 +362,51 @@ public:
                     auto *pT      = pUnique->get();
                     return pT->dcgmPolicyRegister_v2(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(groupId)>(groupId), std::forward<decltype(condition)>(condition), std::forward<decltype(callback)>(callback), std::forward<decltype(userData)>(userData));
                 },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, const char * name, double threshold, dcgmPolicyOperator_t policyOperator, const dcgmGroupEntityPair_t * entities, unsigned int entityCount, unsigned int channelMask, unsigned int enabled, unsigned int rateLimitSec, uint64_t * policyId) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyCreate(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(name)>(name), std::forward<decltype(threshold)>(threshold), std::forward<decltype(policyOperator)>(policyOperator), std::forward<decltype(entities)>(entities), std::forward<decltype(entityCount)>(entityCount), std::forward<decltype(channelMask)>(channelMask), std::forward<decltype(enabled)>(enabled), std::forward<decltype(rateLimitSec)>(rateLimitSec), std::forward<decltype(policyId)>(policyId));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, const dcgmPolicyInfo_t * policy) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyModify(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(policy)>(policy));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId, unsigned int deleteAll) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyDelete(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId), std::forward<decltype(deleteAll)>(deleteAll));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyEnable(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyDisable(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId, dcgmPolicyInfo_t * policy) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyGetOne(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId), std::forward<decltype(policy)>(policy));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, dcgmPolicyInfo_t * policies, unsigned int * count) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyGetAll(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(policies)>(policies), std::forward<decltype(count)>(count));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, const char * path) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyImport(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(path)>(path));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, int64_t sinceTimestamp, dcgm_policy_violation_t * violations, unsigned int * count) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyGetViolations(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(sinceTimestamp)>(sinceTimestamp), std::forward<decltype(violations)>(violations), std::forward<decltype(count)>(count));
+                },
                 [](void  *pStorage, dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t * systems) -> dcgmReturn_t {
                     auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
                     auto *pT      = pUnique->get();
@@ -370,6 +416,16 @@ public:
                     auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
                     auto *pT      = pUnique->get();
                     return pT->dcgmHealthSet_v2(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(params)>(params));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, const dcgmHealthSetParams_v2 * params) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmHealthSet_v3(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(params)>(params));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, dcgmHealthSupportedSystems_t * supportedSystems) -> dcgmReturn_t {
+                    auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmHealthGetSupportedSystems(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(supportedSystems)>(supportedSystems));
                 },
                 [](void  *pStorage, dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_t * results) -> dcgmReturn_t {
                     auto *pUnique = std::launder(reinterpret_cast< std::unique_ptr<T, Deleter> *>(pStorage));
@@ -857,6 +913,51 @@ public:
                     auto *pT      = pUnique->get();
                     return pT->dcgmPolicyRegister_v2(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(groupId)>(groupId), std::forward<decltype(condition)>(condition), std::forward<decltype(callback)>(callback), std::forward<decltype(userData)>(userData));
                 },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, const char * name, double threshold, dcgmPolicyOperator_t policyOperator, const dcgmGroupEntityPair_t * entities, unsigned int entityCount, unsigned int channelMask, unsigned int enabled, unsigned int rateLimitSec, uint64_t * policyId) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyCreate(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(name)>(name), std::forward<decltype(threshold)>(threshold), std::forward<decltype(policyOperator)>(policyOperator), std::forward<decltype(entities)>(entities), std::forward<decltype(entityCount)>(entityCount), std::forward<decltype(channelMask)>(channelMask), std::forward<decltype(enabled)>(enabled), std::forward<decltype(rateLimitSec)>(rateLimitSec), std::forward<decltype(policyId)>(policyId));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, const dcgmPolicyInfo_t * policy) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyModify(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(policy)>(policy));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId, unsigned int deleteAll) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyDelete(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId), std::forward<decltype(deleteAll)>(deleteAll));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyEnable(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyDisable(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId, dcgmPolicyInfo_t * policy) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyGetOne(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId), std::forward<decltype(policy)>(policy));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, dcgmPolicyInfo_t * policies, unsigned int * count) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyGetAll(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(policies)>(policies), std::forward<decltype(count)>(count));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, const char * path) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyImport(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(path)>(path));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, int64_t sinceTimestamp, dcgm_policy_violation_t * violations, unsigned int * count) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmPolicyGetViolations(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(sinceTimestamp)>(sinceTimestamp), std::forward<decltype(violations)>(violations), std::forward<decltype(count)>(count));
+                },
                 [](void  *pStorage, dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t * systems) -> dcgmReturn_t {
                     auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
                     auto *pT      = pUnique->get();
@@ -866,6 +967,16 @@ public:
                     auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
                     auto *pT      = pUnique->get();
                     return pT->dcgmHealthSet_v2(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(params)>(params));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, const dcgmHealthSetParams_v2 * params) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmHealthSet_v3(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(params)>(params));
+                },
+                [](void  *pStorage, dcgmHandle_t pDcgmHandle, dcgmHealthSupportedSystems_t * supportedSystems) -> dcgmReturn_t {
+                    auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
+                    auto *pT      = pUnique->get();
+                    return pT->dcgmHealthGetSupportedSystems(std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(supportedSystems)>(supportedSystems));
                 },
                 [](void  *pStorage, dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_t * results) -> dcgmReturn_t {
                     auto *pUnique = *std::launder(reinterpret_cast<std::unique_ptr<T, Deleter> **>(pStorage));
@@ -1355,6 +1466,42 @@ public:
     {
         return m_pVTable->dcgmPolicyRegister_v20(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(groupId)>(groupId), std::forward<decltype(condition)>(condition), std::forward<decltype(callback)>(callback), std::forward<decltype(userData)>(userData));
     }
+    dcgmReturn_t dcgmPolicyCreate(dcgmHandle_t pDcgmHandle, unsigned short fieldId, const char * name, double threshold, dcgmPolicyOperator_t policyOperator, const dcgmGroupEntityPair_t * entities, unsigned int entityCount, unsigned int channelMask, unsigned int enabled, unsigned int rateLimitSec, uint64_t * policyId)
+    {
+        return m_pVTable->dcgmPolicyCreate0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(name)>(name), std::forward<decltype(threshold)>(threshold), std::forward<decltype(policyOperator)>(policyOperator), std::forward<decltype(entities)>(entities), std::forward<decltype(entityCount)>(entityCount), std::forward<decltype(channelMask)>(channelMask), std::forward<decltype(enabled)>(enabled), std::forward<decltype(rateLimitSec)>(rateLimitSec), std::forward<decltype(policyId)>(policyId));
+    }
+    dcgmReturn_t dcgmPolicyModify(dcgmHandle_t pDcgmHandle, const dcgmPolicyInfo_t * policy)
+    {
+        return m_pVTable->dcgmPolicyModify0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(policy)>(policy));
+    }
+    dcgmReturn_t dcgmPolicyDelete(dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId, unsigned int deleteAll)
+    {
+        return m_pVTable->dcgmPolicyDelete0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId), std::forward<decltype(deleteAll)>(deleteAll));
+    }
+    dcgmReturn_t dcgmPolicyEnable(dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId)
+    {
+        return m_pVTable->dcgmPolicyEnable0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId));
+    }
+    dcgmReturn_t dcgmPolicyDisable(dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId)
+    {
+        return m_pVTable->dcgmPolicyDisable0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId));
+    }
+    dcgmReturn_t dcgmPolicyGetOne(dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId, dcgmPolicyInfo_t * policy)
+    {
+        return m_pVTable->dcgmPolicyGetOne0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(fieldId)>(fieldId), std::forward<decltype(policyId)>(policyId), std::forward<decltype(policy)>(policy));
+    }
+    dcgmReturn_t dcgmPolicyGetAll(dcgmHandle_t pDcgmHandle, dcgmPolicyInfo_t * policies, unsigned int * count)
+    {
+        return m_pVTable->dcgmPolicyGetAll0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(policies)>(policies), std::forward<decltype(count)>(count));
+    }
+    dcgmReturn_t dcgmPolicyImport(dcgmHandle_t pDcgmHandle, const char * path)
+    {
+        return m_pVTable->dcgmPolicyImport0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(path)>(path));
+    }
+    dcgmReturn_t dcgmPolicyGetViolations(dcgmHandle_t pDcgmHandle, int64_t sinceTimestamp, dcgm_policy_violation_t * violations, unsigned int * count)
+    {
+        return m_pVTable->dcgmPolicyGetViolations0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(sinceTimestamp)>(sinceTimestamp), std::forward<decltype(violations)>(violations), std::forward<decltype(count)>(count));
+    }
     dcgmReturn_t dcgmHealthGet(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t * systems)
     {
         return m_pVTable->dcgmHealthGet0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(groupId)>(groupId), std::forward<decltype(systems)>(systems));
@@ -1362,6 +1509,14 @@ public:
     dcgmReturn_t dcgmHealthSet_v2(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 * params)
     {
         return m_pVTable->dcgmHealthSet_v20(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(params)>(params));
+    }
+    dcgmReturn_t dcgmHealthSet_v3(dcgmHandle_t pDcgmHandle, const dcgmHealthSetParams_v2 * params)
+    {
+        return m_pVTable->dcgmHealthSet_v30(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(params)>(params));
+    }
+    dcgmReturn_t dcgmHealthGetSupportedSystems(dcgmHandle_t pDcgmHandle, dcgmHealthSupportedSystems_t * supportedSystems)
+    {
+        return m_pVTable->dcgmHealthGetSupportedSystems0(m_storage, std::forward<decltype(pDcgmHandle)>(pDcgmHandle), std::forward<decltype(supportedSystems)>(supportedSystems));
     }
     dcgmReturn_t dcgmHealthCheck(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_t * results)
     {
@@ -1540,8 +1695,19 @@ private:
         dcgmReturn_t (*dcgmPolicyGet0)(void  *, dcgmHandle_t, dcgmGpuGrp_t, int, dcgmPolicy_t *, dcgmStatus_t);
         dcgmReturn_t (*dcgmPolicyUnregister0)(void  *, dcgmHandle_t, dcgmGpuGrp_t, dcgmPolicyCondition_t);
         dcgmReturn_t (*dcgmPolicyRegister_v20)(void  *, dcgmHandle_t, dcgmGpuGrp_t, dcgmPolicyCondition_t, fpRecvUpdates, uint64_t);
+        dcgmReturn_t (*dcgmPolicyCreate0)(void  *, dcgmHandle_t, unsigned short, const char *, double, dcgmPolicyOperator_t, const dcgmGroupEntityPair_t *, unsigned int, unsigned int, unsigned int, unsigned int, uint64_t *);
+        dcgmReturn_t (*dcgmPolicyModify0)(void  *, dcgmHandle_t, const dcgmPolicyInfo_t *);
+        dcgmReturn_t (*dcgmPolicyDelete0)(void  *, dcgmHandle_t, unsigned short, uint64_t, unsigned int);
+        dcgmReturn_t (*dcgmPolicyEnable0)(void  *, dcgmHandle_t, unsigned short, uint64_t);
+        dcgmReturn_t (*dcgmPolicyDisable0)(void  *, dcgmHandle_t, unsigned short, uint64_t);
+        dcgmReturn_t (*dcgmPolicyGetOne0)(void  *, dcgmHandle_t, unsigned short, uint64_t, dcgmPolicyInfo_t *);
+        dcgmReturn_t (*dcgmPolicyGetAll0)(void  *, dcgmHandle_t, dcgmPolicyInfo_t *, unsigned int *);
+        dcgmReturn_t (*dcgmPolicyImport0)(void  *, dcgmHandle_t, const char *);
+        dcgmReturn_t (*dcgmPolicyGetViolations0)(void  *, dcgmHandle_t, int64_t, dcgm_policy_violation_t *, unsigned int *);
         dcgmReturn_t (*dcgmHealthGet0)(void  *, dcgmHandle_t, dcgmGpuGrp_t, dcgmHealthSystems_t *);
         dcgmReturn_t (*dcgmHealthSet_v20)(void  *, dcgmHandle_t, dcgmHealthSetParams_v2 *);
+        dcgmReturn_t (*dcgmHealthSet_v30)(void  *, dcgmHandle_t, const dcgmHealthSetParams_v2 *);
+        dcgmReturn_t (*dcgmHealthGetSupportedSystems0)(void  *, dcgmHandle_t, dcgmHealthSupportedSystems_t *);
         dcgmReturn_t (*dcgmHealthCheck0)(void  *, dcgmHandle_t, dcgmGpuGrp_t, dcgmHealthResponse_t *);
         dcgmReturn_t (*dcgmWatchPidFields0)(void  *, dcgmHandle_t, dcgmGpuGrp_t, long long, double, int);
         dcgmReturn_t (*dcgmGetPidInfo0)(void  *, dcgmHandle_t, dcgmGpuGrp_t, dcgmPidInfo_t *);
@@ -1570,7 +1736,6 @@ private:
         dcgmReturn_t (*dcgmGetVgpuDeviceAttributes0)(void  *, dcgmHandle_t, unsigned int, dcgmVgpuDeviceAttributes_t *);
         dcgmReturn_t (*dcgmGetVgpuInstanceAttributes0)(void  *, dcgmHandle_t, unsigned int, dcgmVgpuInstanceAttributes_t *);
         dcgmErrorSeverity_t (*dcgmErrorGetPriorityByCode0)(void  *, unsigned int);
-
         // These function names include the type to avoid potential conflicts with the type's functions
         void (*DcgmOpsMoveConstruct)(void *, void *);
         void (*DcgmOpsMoveAssign)(void *, void *);
@@ -1584,8 +1749,8 @@ private:
     VTable const *m_pVTable;
     alignas(StorageAlign) std::byte m_storage[StorageSize];
 };
-
 } // namespace DcgmNs
+
 // GCOVR_EXCL_STOP
 
 // clang-format on

@@ -532,6 +532,7 @@ void MockDcgmOps::ResetApiState()
     m_discoveryState.nvLinkStatus.version   = dcgmNvLinkStatus_version5;
     m_topologyState.groupTopology.version   = dcgmGroupTopology_version;
     m_healthState.response.version          = dcgmHealthResponse_version;
+    m_healthState.supportedSystems.version  = dcgmHealthSupportedSystems_version;
     m_processStatsState.pidInfo.version     = dcgmPidInfo_version;
     m_processStatsState.jobInfo.version     = dcgmJobInfo_version;
     m_introspectState.memory.version        = dcgmIntrospectMemory_version1;
@@ -2064,6 +2065,40 @@ dcgmReturn_t MockDcgmOps::dcgmHealthSet_v2(dcgmHandle_t pDcgmHandle, dcgmHealthS
     m_healthState.lastGroupId   = params->groupId;
     m_healthState.lastSetParams = *params;
     return m_healthState.setReturn;
+}
+
+dcgmReturn_t MockDcgmOps::dcgmHealthSet_v3(dcgmHandle_t pDcgmHandle, dcgmHealthSetParams_v2 const *params)
+{
+    m_healthState.strictSetCallCount++;
+    m_healthState.lastHandle = pDcgmHandle;
+
+    if (params == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    m_healthState.lastGroupId         = params->groupId;
+    m_healthState.lastStrictSetParams = *params;
+    return m_healthState.strictSetReturn;
+}
+
+dcgmReturn_t MockDcgmOps::dcgmHealthGetSupportedSystems(dcgmHandle_t pDcgmHandle,
+                                                        dcgmHealthSupportedSystems_t *supportedSystems)
+{
+    m_healthState.getSupportedCallCount++;
+    m_healthState.lastHandle = pDcgmHandle;
+
+    if (supportedSystems == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    if (m_healthState.getSupportedReturn != DCGM_ST_OK)
+    {
+        return m_healthState.getSupportedReturn;
+    }
+
+    *supportedSystems = m_healthState.supportedSystems;
+    return DCGM_ST_OK;
 }
 
 dcgmReturn_t MockDcgmOps::dcgmHealthCheck(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_t *results)

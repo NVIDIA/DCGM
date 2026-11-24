@@ -535,7 +535,8 @@ static constexpr char const *NVVS_HANGDETECT_EXPIRY_SEC = "NVVS_HANGDETECT_EXPIR
 void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
                                                   dcgmRunDiag_v10 *drd,
                                                   std::string const &fakeGpuIds,
-                                                  std::string const &entityIds) const
+                                                  std::string const &entityIds,
+                                                  std::string_view debugLogPath) const
 {
     if (drd->flags & DCGM_RUN_FLAGS_STATSONFAIL)
     {
@@ -547,11 +548,16 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
         cmdArgs.push_back("-v");
     }
 
-    if (strlen(drd->debugLogFile) > 0)
+    // drd->debugLogFile is unvalidated; only DcgmModuleDiag::ProcessRun_v13 (in-process) sanitizes it
+    // into debugLogPath before calling this. Do not add another caller without doing the same.
+    if (debugLogPath.empty())
+    {
+        debugLogPath = drd->debugLogFile;
+    }
+    if (!debugLogPath.empty())
     {
         cmdArgs.push_back("-l");
-        std::string debugArg(drd->debugLogFile);
-        cmdArgs.push_back(std::move(debugArg));
+        cmdArgs.emplace_back(debugLogPath);
     }
 
     if (strlen(drd->statsPath) > 0)
@@ -657,7 +663,8 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
                                                 ConfigFileGuard &configFileGuard,
                                                 std::string const &fakeGpuIds,
                                                 std::string const &entityIds,
-                                                ExecuteWithServiceAccount useServiceAccount)
+                                                ExecuteWithServiceAccount useServiceAccount,
+                                                std::string_view debugLogPath)
 {
     dcgmReturn_t ret;
 
@@ -692,7 +699,7 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
         return ret;
     }
 
-    AddMiscellaneousNvvsOptions(cmdArgs, drd, fakeGpuIds, entityIds);
+    AddMiscellaneousNvvsOptions(cmdArgs, drd, fakeGpuIds, entityIds, debugLogPath);
 
     return DCGM_ST_OK;
 }
@@ -705,13 +712,14 @@ dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
                                                  dcgm_connection_id_t connectionId,
                                                  std::string const &fakeGpuIds,
                                                  std::string const &entityIds,
-                                                 ExecuteWithServiceAccount useServiceAccount)
+                                                 ExecuteWithServiceAccount useServiceAccount,
+                                                 std::string_view debugLogPath)
 {
     std::vector<std::string> args;
     ConfigFileGuard configFileGuard;
 
     if (auto const ret = CreateNvvsCommand(
-            args, drd, response.GetVersion(), configFileGuard, fakeGpuIds, entityIds, useServiceAccount);
+            args, drd, response.GetVersion(), configFileGuard, fakeGpuIds, entityIds, useServiceAccount, debugLogPath);
         ret != DCGM_ST_OK)
     {
         return ret;
@@ -1181,6 +1189,7 @@ auto ExecuteAndParseNvvs(DcgmDiagManager &self,
                          dcgm_connection_id_t connectionId,
                          std::string const &fakeGpuIds,
                          std::string const &entityIds,
+                         std::string_view debugLogPath,
                          DcgmDiagManager::ExecuteWithServiceAccount useServiceAccount
                          = DcgmDiagManager::ExecuteWithServiceAccount::Yes) -> ExecuteAndParseNvvsResult
 {
@@ -1189,7 +1198,7 @@ auto ExecuteAndParseNvvs(DcgmDiagManager &self,
     std::string stderrStr;
 
     result.ret = self.PerformNVVSExecute(
-        &stdoutStr, &stderrStr, drd, response, connectionId, fakeGpuIds, entityIds, useServiceAccount);
+        &stdoutStr, &stderrStr, drd, response, connectionId, fakeGpuIds, entityIds, useServiceAccount, debugLogPath);
     if (result.ret != DCGM_ST_OK)
     {
         auto const msg = fmt::format("Error when executing the diagnostic: {}\n"
@@ -1261,7 +1270,8 @@ bool ExecuteEudPluginsAsRoot(DcgmDiagManager &diagManager,
                              std::string const &fakeGpuIds,
                              std::string const &entityIds,
                              std::vector<std::string> const &testNames,
-                             dcgm_connection_id_t connectionId)
+                             dcgm_connection_id_t connectionId,
+                             std::string_view debugLogPath)
 {
     if (auto serviceAccountCredentials = GetUserCredentials(serviceAccount);
         !serviceAccountCredentials.has_value() || (*serviceAccountCredentials).gid == 0
@@ -1286,6 +1296,7 @@ bool ExecuteEudPluginsAsRoot(DcgmDiagManager &diagManager,
                                        connectionId,
                                        fakeGpuIds,
                                        entityIds,
+                                       debugLogPath,
                                        DcgmDiagManager::ExecuteWithServiceAccount::No);
         ret.ret != DCGM_ST_OK)
     {
@@ -1450,7 +1461,8 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
     std::unordered_set<std::string_view> const &testNames,
     dcgmReturn_t lastRunRet,
     DcgmDiagResponseWrapper &response,
-    dcgm_connection_id_t connectionId)
+    dcgm_connection_id_t connectionId,
+    std::string_view debugLogPath)
 {
     std::vector<std::string> eudRerunTestNames;
     static const std::string EUD_TEST     = "eud";
@@ -1535,8 +1547,15 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
         return { wasExecuted, DCGM_ST_OK };
     }
 
-    if (!ExecuteEudPluginsAsRoot(
-            *this, drd, eudResponse, (*serviceAccount).c_str(), fakeGpuIds, entityIds, eudRerunTestNames, connectionId))
+    if (!ExecuteEudPluginsAsRoot(*this,
+                                 drd,
+                                 eudResponse,
+                                 (*serviceAccount).c_str(),
+                                 fakeGpuIds,
+                                 entityIds,
+                                 eudRerunTestNames,
+                                 connectionId,
+                                 debugLogPath))
     {
         return { wasExecuted, DCGM_ST_OK };
     }
@@ -1566,7 +1585,8 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
 
 dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd,
                                       DcgmDiagResponseWrapper &response,
-                                      dcgm_connection_id_t connectionId)
+                                      dcgm_connection_id_t connectionId,
+                                      std::string_view debugLogPath)
 {
     bool areAllSameSku = true;
     std::vector<unsigned int> gpuIds;
@@ -1677,7 +1697,7 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd,
         return ret;
     }
 
-    auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, connectionId, fakeGpuIds, entityIds);
+    auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, connectionId, fakeGpuIds, entityIds, debugLogPath);
 
     HandleDetachedInaccessibleGpus(response, fakeGpuIds, entityIds);
 
@@ -1723,8 +1743,8 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd,
         return ret;
     }
 
-    auto [eudWasRerun, eudRet]
-        = RerunEudDiagAsRoot(drd, fakeGpuIds, entityIds, testNames, nvvsResults.ret, response, connectionId);
+    auto [eudWasRerun, eudRet] = RerunEudDiagAsRoot(
+        drd, fakeGpuIds, entityIds, testNames, nvvsResults.ret, response, connectionId, debugLogPath);
     if (eudRet != DCGM_ST_OK)
     {
         log_error("failed to rerun eud as root, err: [{}].", eudRet);
@@ -1806,7 +1826,8 @@ unsigned int DcgmDiagManager::GetTestIndex(const std::string &testName)
 dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
                                                dcgmPolicyAction_t action,
                                                DcgmDiagResponseWrapper &response,
-                                               dcgm_connection_id_t connectionId)
+                                               dcgm_connection_id_t connectionId,
+                                               std::string_view debugLogPath)
 {
     dcgmReturn_t dcgmReturn = DCGM_ST_OK; /* Return value from sub-calls */
     dcgmReturn_t retVal     = DCGM_ST_OK; /* Return value from this function */
@@ -1916,7 +1937,7 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
             return ret;
         }
 
-        retValidation = RunDiag(drd, response, connectionId);
+        retValidation = RunDiag(drd, response, connectionId, debugLogPath);
 
         if (retValidation != DCGM_ST_OK)
         {

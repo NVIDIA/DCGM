@@ -21,6 +21,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <memory>
+#include <string>
 
 extern "C" DCGM_PUBLIC_API DcgmModule *dcgm_alloc_module_instance(dcgmCoreCallbacks_t *dcc);
 extern "C" DCGM_PUBLIC_API void dcgm_free_module_instance(DcgmModule *freeMe);
@@ -51,55 +52,13 @@ void PopulateCoreHeader(dcgm_module_command_header_t &header, unsigned int subCo
     header.version    = version;
 }
 
-template <typename T>
-struct RunDiagVersion;
-
-template <>
-struct RunDiagVersion<dcgmRunDiag_v10>
-{
-    static constexpr unsigned int value = dcgmRunDiag_version10;
-};
-
-template <>
-struct RunDiagVersion<dcgmRunDiag_v9>
-{
-    static constexpr unsigned int value = dcgmRunDiag_version9;
-};
-
-template <>
-struct RunDiagVersion<dcgmRunDiag_v8>
-{
-    static constexpr unsigned int value = dcgmRunDiag_version8;
-};
-
-template <>
-struct RunDiagVersion<dcgmRunDiag_v7>
-{
-    static constexpr unsigned int value = dcgmRunDiag_version7;
-};
-
-template <typename T>
-void PopulateNoOpRunDiag(T &runDiag)
-{
-    runDiag.version  = RunDiagVersion<T>::value;
-    runDiag.groupId  = DCGM_GROUP_NULL;
-    runDiag.validate = DCGM_POLICY_VALID_NONE;
-}
-
-template <typename Msg>
-void PopulateNoOpRunMessage(Msg &msg, unsigned int msgVersion)
+void PopulateNoOpRunMessage(dcgm_diag_msg_run_v12 &msg, unsigned int msgVersion)
 {
     PopulateDiagHeader(msg.header, DCGM_DIAG_SR_RUN, msgVersion);
-    msg.action = DCGM_POLICY_ACTION_NONE;
-    PopulateNoOpRunDiag(msg.runDiag);
-}
-
-template <typename Msg>
-dcgmReturn_t ProcessNoOpRunMessage(DcgmModuleDiag &diagModule, unsigned int msgVersion)
-{
-    auto msg = std::make_unique<Msg>();
-    PopulateNoOpRunMessage(*msg, msgVersion);
-    return diagModule.ProcessMessage(&msg->header);
+    msg.action           = DCGM_POLICY_ACTION_NONE;
+    msg.runDiag.version  = dcgmRunDiag_version10;
+    msg.runDiag.groupId  = DCGM_GROUP_NULL;
+    msg.runDiag.validate = DCGM_POLICY_VALID_NONE;
 }
 
 } //namespace
@@ -188,109 +147,118 @@ TEST_CASE("DcgmModuleDiag::ProcessMessage handles routing and pause branches")
     }
 }
 
-TEST_CASE("DcgmModuleDiag::ProcessMessage rejects unsupported run version")
+TEST_CASE("DcgmModuleDiag::ProcessMessage rejects all prior run versions")
 {
     auto dcc = MakeCallbacks();
     DcgmModuleDiag diagModule(dcc);
 
-    dcgm_module_command_header_t header {};
-    PopulateDiagHeader(header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version - 1);
-
-    WHEN("a run command has an unsupported version")
+    for (auto const version : { dcgm_diag_msg_run_version5,
+                                dcgm_diag_msg_run_version6,
+                                dcgm_diag_msg_run_version7,
+                                dcgm_diag_msg_run_version8,
+                                dcgm_diag_msg_run_version9,
+                                dcgm_diag_msg_run_version10,
+                                dcgm_diag_msg_run_version11,
+                                dcgm_diag_msg_run_version12 })
     {
+        auto const wireVersion = version >> 24U;
+        CAPTURE(wireVersion);
+        dcgm_module_command_header_t header {};
+        PopulateDiagHeader(header, DCGM_DIAG_SR_RUN, version);
         auto const result = diagModule.ProcessMessage(&header);
+        CHECK(result == DCGM_ST_VER_MISMATCH);
+    }
+}
 
-        THEN("version mismatch is returned")
+TEST_CASE("DcgmModuleDiag::ProcessMessage accepts a current no-op run request")
+{
+    auto dcc = MakeCallbacks();
+    DcgmModuleDiag diagModule(dcc);
+
+    WHEN("a version 13 no-op run command is processed")
+    {
+        auto msg = std::make_unique<dcgm_diag_msg_run_v12>();
+        PopulateNoOpRunMessage(*msg, dcgm_diag_msg_run_version13);
+        auto const result = diagModule.ProcessMessage(&msg->header);
+        THEN("the no-op request succeeds")
         {
-            CHECK(result == DCGM_ST_VER_MISMATCH);
+            CHECK(result == DCGM_ST_OK);
         }
     }
 }
 
-TEST_CASE("DcgmModuleDiag::ProcessMessage routes no-op run requests for supported versions")
+SCENARIO("DcgmModuleDiag: new run messages reject path components in debug log filenames")
+{
+    unsigned int logPathQueries = 0;
+    auto dcc                    = MakeCallbacks();
+    dcc.poster                  = &logPathQueries;
+    dcc.postfunc                = [](dcgm_module_command_header_t *header, void *poster) -> dcgmReturn_t {
+        if (header->subCommand == DcgmCoreReqIdGetConfiguredLogFilePath)
+        {
+            ++*static_cast<unsigned int *>(poster);
+            return DCGM_ST_NOT_SUPPORTED;
+        }
+        return DCGM_ST_OK;
+    };
+    DcgmModuleDiag diagModule(dcc);
+    auto msg = std::make_unique<dcgm_diag_msg_run_v12>();
+    PopulateNoOpRunMessage(*msg, dcgm_diag_msg_run_version13);
+    WHEN("a filename with path components is processed")
+    {
+        SafeCopyTo(msg->runDiag.debugLogFile, "../escape.log");
+        auto const result = diagModule.ProcessMessage(&msg->header);
+
+        THEN("the filename is rejected")
+        {
+            CHECK(result == DCGM_ST_BADPARAM);
+            CHECK(logPathQueries == 0);
+        }
+    }
+    WHEN("a valid filename is processed")
+    {
+        SafeCopyTo(msg->runDiag.debugLogFile, "safe.log");
+        auto const result = diagModule.ProcessMessage(&msg->header);
+        THEN("the configured-path query failure is propagated")
+        {
+            CHECK(result == DCGM_ST_NOT_SUPPORTED);
+            CHECK(logPathQueries == 1);
+        }
+    }
+    WHEN("the console logging sentinel is processed")
+    {
+        SafeCopyTo(msg->runDiag.debugLogFile, "-");
+        auto const result = diagModule.ProcessMessage(&msg->header);
+        THEN("the request succeeds without querying the configured log path")
+        {
+            CHECK(result == DCGM_ST_OK);
+            CHECK(logPathQueries == 0);
+        }
+    }
+    WHEN("a value resembling the console sentinel is processed")
+    {
+        for (auto const *filename : { "--", "-file.log", "-/file.log", "./-", "/tmp/-" })
+        {
+            CAPTURE(filename);
+            SafeCopyTo(msg->runDiag.debugLogFile, filename);
+            CHECK(diagModule.ProcessMessage(&msg->header) == DCGM_ST_BADPARAM);
+            CHECK(logPathQueries == 0);
+        }
+    }
+}
+
+SCENARIO("DcgmModuleDiag: older run messages are rejected")
 {
     auto dcc = MakeCallbacks();
     DcgmModuleDiag diagModule(dcc);
-
-    // This covers supported-version routing through ProcessRun(). Conversion correctness needs an
-    // interceptable DcgmDiagManager path because ProcessRun() passes upgraded requests internally.
-    WHEN("a version 12 no-op run command is processed")
+    for (auto const *filename : { "safe.log", "/tmp/legacy.log" })
     {
-        auto const result = ProcessNoOpRunMessage<dcgm_diag_msg_run_v12>(diagModule, dcgm_diag_msg_run_version12);
-
-        THEN("the no-op request succeeds")
+        auto msg = std::make_unique<dcgm_diag_msg_run_v12>();
+        PopulateNoOpRunMessage(*msg, dcgm_diag_msg_run_version12);
+        SafeCopyTo(msg->runDiag.debugLogFile, filename);
+        auto const result = diagModule.ProcessMessage(&msg->header);
+        DYNAMIC_SECTION("version 12 with filename " << filename)
         {
-            CHECK(result == DCGM_ST_OK);
-        }
-    }
-
-    WHEN("a version 11 no-op run command is processed")
-    {
-        auto const result = ProcessNoOpRunMessage<dcgm_diag_msg_run_v11>(diagModule, dcgm_diag_msg_run_version11);
-
-        THEN("the no-op request succeeds")
-        {
-            CHECK(result == DCGM_ST_OK);
-        }
-    }
-
-    WHEN("a version 10 no-op run command is processed")
-    {
-        auto const result = ProcessNoOpRunMessage<dcgm_diag_msg_run_v10>(diagModule, dcgm_diag_msg_run_version10);
-
-        THEN("the no-op request succeeds")
-        {
-            CHECK(result == DCGM_ST_OK);
-        }
-    }
-
-    WHEN("a version 9 no-op run command is processed")
-    {
-        auto const result = ProcessNoOpRunMessage<dcgm_diag_msg_run_v9>(diagModule, dcgm_diag_msg_run_version9);
-
-        THEN("the no-op request succeeds")
-        {
-            CHECK(result == DCGM_ST_OK);
-        }
-    }
-
-    WHEN("a version 8 no-op run command is processed")
-    {
-        auto const result = ProcessNoOpRunMessage<dcgm_diag_msg_run_v8>(diagModule, dcgm_diag_msg_run_version8);
-
-        THEN("the no-op request succeeds")
-        {
-            CHECK(result == DCGM_ST_OK);
-        }
-    }
-
-    WHEN("a version 7 no-op run command is processed")
-    {
-        auto const result = ProcessNoOpRunMessage<dcgm_diag_msg_run_v7>(diagModule, dcgm_diag_msg_run_version7);
-
-        THEN("the no-op request succeeds")
-        {
-            CHECK(result == DCGM_ST_OK);
-        }
-    }
-
-    WHEN("a version 6 no-op run command is processed")
-    {
-        auto const result = ProcessNoOpRunMessage<dcgm_diag_msg_run_v6>(diagModule, dcgm_diag_msg_run_version6);
-
-        THEN("the no-op request succeeds")
-        {
-            CHECK(result == DCGM_ST_OK);
-        }
-    }
-
-    WHEN("a version 5 no-op run command is processed")
-    {
-        auto const result = ProcessNoOpRunMessage<dcgm_diag_msg_run_v5>(diagModule, dcgm_diag_msg_run_version5);
-
-        THEN("the no-op request succeeds")
-        {
-            CHECK(result == DCGM_ST_OK);
+            CHECK(result == DCGM_ST_VER_MISMATCH);
         }
     }
 }
@@ -441,86 +409,15 @@ TEST_CASE("DcgmModuleDiag C API process wrapper handles bad inputs and dispatche
     }
 }
 
-SCENARIO("DcgmModuleDiag supported run wire versions propagate diagnostic resource reservation failures")
+SCENARIO("DcgmModuleDiag current run wire version propagates diagnostic resource reservation failures")
 {
     DcgmNs::Tests::ResourceReservationContext context;
     auto dcc = DcgmNs::Tests::MakeResourceReservationCallbacks(context);
     DcgmModuleDiag diagModule(dcc);
+    auto msg = std::make_unique<dcgm_diag_msg_run_v12>();
+    PopulateDiagHeader(msg->header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version13);
 
-    auto checkRunRequest = [&](dcgm_module_command_header_t &header) {
-        header.connectionId = 17;
-
-        auto const ret = diagModule.ProcessMessage(&header);
-
-        CHECK(ret == DCGM_ST_IN_USE);
-        CHECK(context.reserveCalls == 1);
-        CHECK(context.freeCalls == 0);
-        CHECK(header.moduleId == DcgmModuleIdDiag);
-        CHECK(header.subCommand == DCGM_DIAG_SR_RUN);
-        CHECK(header.connectionId == 17);
-    };
-
-    SECTION("latest v12 run message")
-    {
-        auto msg = std::make_unique<dcgm_diag_msg_run_v12>();
-        PopulateDiagHeader(msg->header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version12);
-
-        checkRunRequest(msg->header);
-    }
-
-    SECTION("v11 run message")
-    {
-        auto msg = std::make_unique<dcgm_diag_msg_run_v11>();
-        PopulateDiagHeader(msg->header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version11);
-
-        checkRunRequest(msg->header);
-    }
-
-    SECTION("v10 run message")
-    {
-        auto msg = std::make_unique<dcgm_diag_msg_run_v10>();
-        PopulateDiagHeader(msg->header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version10);
-
-        checkRunRequest(msg->header);
-    }
-
-    SECTION("v9 run message")
-    {
-        auto msg = std::make_unique<dcgm_diag_msg_run_v9>();
-        PopulateDiagHeader(msg->header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version9);
-
-        checkRunRequest(msg->header);
-    }
-
-    SECTION("v8 run message")
-    {
-        auto msg = std::make_unique<dcgm_diag_msg_run_v8>();
-        PopulateDiagHeader(msg->header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version8);
-
-        checkRunRequest(msg->header);
-    }
-
-    SECTION("v7 run message")
-    {
-        auto msg = std::make_unique<dcgm_diag_msg_run_v7>();
-        PopulateDiagHeader(msg->header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version7);
-
-        checkRunRequest(msg->header);
-    }
-
-    SECTION("v6 run message")
-    {
-        auto msg = std::make_unique<dcgm_diag_msg_run_v6>();
-        PopulateDiagHeader(msg->header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version6);
-
-        checkRunRequest(msg->header);
-    }
-
-    SECTION("v5 run message")
-    {
-        auto msg = std::make_unique<dcgm_diag_msg_run_v5>();
-        PopulateDiagHeader(msg->header, DCGM_DIAG_SR_RUN, dcgm_diag_msg_run_version5);
-
-        checkRunRequest(msg->header);
-    }
+    CHECK(diagModule.ProcessMessage(&msg->header) == DCGM_ST_IN_USE);
+    CHECK(context.reserveCalls == 1);
+    CHECK(context.freeCalls == 0);
 }

@@ -23,6 +23,8 @@
 # dcgmGetPidInfo - Bug found
 # dcgmGroupGetInfo
 # dcgmHealthCheck
+# dcgmHealthGetSupportedSystems
+# dcgmHealthSet_v3
 # dcgmIntrospectGetHostengineCpuUtilization
 # dcgmIntrospectGetHostengineMemoryUsage
 # dcgmJobGetStats
@@ -438,6 +440,40 @@ def helper_dcgm_health_check_validate(handle):
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_health_check_validate(handle):
     helper_dcgm_health_check_validate(handle)
+
+
+def vtDcgmHealthGetSupportedSystems(dcgm_handle, versionTest):
+    supported = dcgm_structs.c_dcgmHealthSupportedSystems_v1()
+    supported.version = versionTest
+    fn = dcgmFP("dcgmHealthGetSupportedSystems")
+    ret = fn(dcgm_handle, byref(supported))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return supported
+
+
+def vtDcgmHealthSet_v3(dcgm_handle, groupId, versionTest):
+    params = dcgm_structs.c_dcgmHealthSetParams_v2()
+    params.version = versionTest
+    params.groupId = groupId
+    fn = dcgmFP("dcgmHealthSet_v3")
+    ret = fn(dcgm_handle, byref(params))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+@test_utils.run_with_embedded_host_engine()
+def test_dcgm_health_capability_versions(handle):
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_EMPTY, "health-capability-versions")
+
+    for versionTest in (0, 50):
+        with test_utils.assert_raises(
+                dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
+            vtDcgmHealthGetSupportedSystems(handle, versionTest)
+
+        with test_utils.assert_raises(
+                dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
+            vtDcgmHealthSet_v3(handle, groupId, versionTest)
 
 
 def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
